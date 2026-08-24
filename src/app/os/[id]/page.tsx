@@ -7,7 +7,7 @@ import { ordemServico as osTable } from "@/db/schema";
 
 import { kWp } from "../../formatar";
 import { concluirOs, iniciarOs, marcarItem } from "../actions";
-import { PRIORIDADE_ROTULO, STATUS_ROTULO, TIPO_ROTULO } from "../page";
+import { PRIORIDADE_ROTULO, STATUS_ROTULO, TIPO_ROTULO } from "../rotulos";
 
 export const dynamic = "force-dynamic";
 

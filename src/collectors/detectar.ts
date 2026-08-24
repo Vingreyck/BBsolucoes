@@ -1,6 +1,6 @@
 import "dotenv/config";
 
-import { eq, isNull, sql } from "drizzle-orm";
+import { and, eq, isNull, sql } from "drizzle-orm";
 
 import { db, schema } from "../db";
 
@@ -65,6 +65,45 @@ async function main() {
   if (!empresa) {
     console.error("Nenhuma empresa no banco. Rode `npm run db:seed` primeiro.");
     process.exit(1);
+  }
+
+  /**
+   * `--reset` apaga os alertas gerados por regra antes de detectar de novo.
+   *
+   * Uma vez resolvido, o alerta não volta — que é o certo em operação, mas
+   * atrapalha na hora de mostrar a tela para alguém. Isto é um parâmetro e não
+   * um comando de shell de propósito: encadear com `&&` quebra no PowerShell,
+   * e o projeto é usado ora no PowerShell, ora no Git Bash.
+   *
+   * Apaga só o que a regra criou e que ninguém pegou para fazer:
+   *
+   * - alerta vindo do portal tem código de fabricante e fica de fora, porque
+   *   esse não dá para regenerar a partir da série;
+   * - alerta que já virou ordem de serviço também fica, porque representa
+   *   trabalho de verdade — apagar deixaria a OS sem o motivo que a originou.
+   */
+  if (process.argv.includes("--reset")) {
+    const apagados = await db
+      .delete(schema.alerta)
+      .where(
+        and(
+          eq(schema.alerta.empresaId, empresa.id),
+          isNull(schema.alerta.codigoFabricante),
+          isNull(schema.alerta.ordemServicoId),
+        ),
+      )
+      .returning({ id: schema.alerta.id });
+
+    const [{ comOs }] = await db
+      .select({ comOs: sql<number>`count(*)::int` })
+      .from(schema.alerta)
+      .where(sql`${schema.alerta.ordemServicoId} is not null`);
+
+    console.log(
+      `--reset: ${apagados.length} alertas de regra apagados.` +
+        (comOs ? ` ${comOs} preservados por já terem ordem de serviço.` : "") +
+        "\n",
+    );
   }
 
   // Só a série diária serve: total mensal não diz em que dia a usina parou.

@@ -4,32 +4,9 @@ import { exigirUsuario } from "@/auth/sessao";
 import { db } from "@/db";
 import { ordemServico as osTable } from "@/db/schema";
 
+import { PRIORIDADE_ROTULO, STATUS_ROTULO, TIPO_ROTULO } from "./rotulos";
+
 export const dynamic = "force-dynamic";
-
-export const STATUS_ROTULO: Record<string, string> = {
-  aberta: "Aberta",
-  agendada: "Agendada",
-  em_andamento: "Em andamento",
-  aguardando_peca: "Aguardando peça",
-  concluida: "Concluída",
-  cancelada: "Cancelada",
-};
-
-export const TIPO_ROTULO: Record<string, string> = {
-  instalacao: "Instalação",
-  preventiva: "Preventiva",
-  corretiva: "Corretiva",
-  limpeza: "Limpeza",
-  garantia: "Garantia",
-  vistoria: "Vistoria",
-};
-
-export const PRIORIDADE_ROTULO: Record<string, string> = {
-  baixa: "Baixa",
-  normal: "Normal",
-  alta: "Alta",
-  urgente: "Urgente",
-};
 
 export default async function ListaOs() {
   await exigirUsuario();
