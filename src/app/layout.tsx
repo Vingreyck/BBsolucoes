@@ -33,6 +33,7 @@ export default async function RootLayout({
             <a href="/">Esteira</a>
             <a href="/usinas">Usinas</a>
             <a href="/alertas">Alertas</a>
+            <a href="/os">OS</a>
             <span className="quem">
               {usuario.nome}
               <span className="papel">{PAPEL_ROTULO[usuario.papel] ?? usuario.papel}</span>

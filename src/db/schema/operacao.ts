@@ -170,7 +170,13 @@ export const ordemServico = pgTable(
     index("os_empresa_status_idx").on(t.empresaId, t.status),
     index("os_responsavel_idx").on(t.responsavelId, t.status),
     index("os_usina_idx").on(t.usinaId),
-    index("os_numero_idx").on(t.empresaId, t.numero),
+    /**
+     * O número da OS é o que o cliente cita ao telefone, então dois chamados
+     * com o mesmo número seria confusão garantida. Como ele é sequencial por
+     * empresa e calculado a partir do maior existente, duas aberturas
+     * simultâneas leriam o mesmo máximo — é este índice que barra a segunda.
+     */
+    uniqueIndex("os_numero_uq").on(t.empresaId, t.numero),
   ],
 );
 

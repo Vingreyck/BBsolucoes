@@ -4,6 +4,7 @@ import { exigirUsuario } from "@/auth/sessao";
 import { db } from "@/db";
 import { alerta as alertaTable } from "@/db/schema";
 
+import { abrirOsDoAlerta } from "../os/actions";
 import { kWp } from "../formatar";
 import { reconhecerAlerta, resolverAlerta } from "./actions";
 
@@ -115,15 +116,22 @@ export default async function Alertas() {
                         </span>
                       </div>
                       <div className="oc-acoes">
+                        {a.ordemServicoId ? (
+                          <a className="botao-link" href={`/os/${a.ordemServicoId}`}>
+                            Ver OS
+                          </a>
+                        ) : (
+                          <form action={abrirOsDoAlerta.bind(null, a.id)}>
+                            <button type="submit" className="primario">Abrir OS</button>
+                          </form>
+                        )}
                         {a.status !== "reconhecido" && (
                           <form action={reconhecerAlerta.bind(null, a.id)}>
                             <button type="submit">Reconhecer</button>
                           </form>
                         )}
                         <form action={resolverAlerta.bind(null, a.id)}>
-                          <button type="submit" className="primario">
-                            Resolver
-                          </button>
+                          <button type="submit">Resolver</button>
                         </form>
                       </div>
                     </li>
