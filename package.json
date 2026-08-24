@@ -1,0 +1,38 @@
+{
+  "name": "bbsolucoes",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "typecheck": "tsc --noEmit",
+    "db:generate": "drizzle-kit generate",
+    "db:migrate": "drizzle-kit migrate",
+    "db:studio": "drizzle-kit studio",
+    "probe:growatt": "tsx src/collectors/probe.ts",
+    "db:seed": "tsx src/db/seed.ts",
+    "diag:growatt": "tsx src/collectors/growatt/diagnostico.ts",
+    "import:growatt": "tsx src/collectors/growatt/importar-planilha.ts",
+    "import:geracao": "tsx src/collectors/growatt/importar-geracao.ts",
+    "import:falhas": "tsx src/collectors/growatt/importar-falhas.ts",
+    "detectar": "tsx src/collectors/detectar.ts"
+  },
+  "dependencies": {
+    "dotenv": "^17.4.2",
+    "drizzle-orm": "^0.44.0",
+    "exceljs": "^4.4.0",
+    "next": "^15.3.0",
+    "postgres": "^3.4.5",
+    "react": "^19.1.0",
+    "react-dom": "^19.1.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.15.0",
+    "@types/react": "^19.1.0",
+    "@types/react-dom": "^19.1.0",
+    "drizzle-kit": "^0.31.0",
+    "tsx": "^4.23.12",
+    "typescript": "^5.8.0"
+  }
+}

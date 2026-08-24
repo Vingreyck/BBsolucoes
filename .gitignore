@@ -1,0 +1,26 @@
+node_modules/
+.next/
+out/
+build/
+dist/
+
+.env
+.env.local
+.env*.local
+
+*.tsbuildinfo
+next-env.d.ts
+
+.DS_Store
+Thumbs.db
+
+probe-*.json
+
+# Exportacoes dos portais: contem dado real de cliente. Repo publico.
+dados/
+*.xlsx
+*.csv
+*.xls
+
+# Permissoes locais do Claude Code, especificas da maquina
+.claude/settings.local.json
