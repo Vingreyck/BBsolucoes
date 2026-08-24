@@ -31,6 +31,7 @@ export default async function RootLayout({
           <nav className="nav">
             <span className="marca">BB Soluções</span>
             <a href="/">Esteira</a>
+            <a href="/usinas">Usinas</a>
             <a href="/alertas">Alertas</a>
             <span className="quem">
               {usuario.nome}
