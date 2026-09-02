@@ -120,7 +120,9 @@ export default async function Esteira() {
                           : "normal";
                       return (
                         <article className={`cartao n-${nivel}`} key={p.id}>
-                          <span className="cliente">{p.cliente.nome}</span>
+                          <a className="cliente" href={`/projeto/${p.id}`}>
+                            {p.cliente.nome}
+                          </a>
                           <span className="meta">
                             {kWp(p.potenciaKwp) ?? "—"}
                             {p.cliente.cidade ? ` · ${p.cliente.cidade}` : ""}

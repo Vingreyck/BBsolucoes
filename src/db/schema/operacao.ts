@@ -87,6 +87,32 @@ export const projeto = pgTable(
       .defaultNow(),
     valor: numeric("valor", { precision: 12, scale: 2 }),
     potenciaKwp: numeric("potencia_kwp", { precision: 10, scale: 3 }),
+
+    /**
+     * Etapa 2, coleta de informações.
+     *
+     * O consumo médio é a base do dimensionamento, e sai da conta de luz — que
+     * traz 13 meses de histórico numa página só. O cliente disse que hoje faz
+     * "a média dos talões" com uma calculadora do setor de engenharia; aqui o
+     * número fica registrado junto do projeto em vez de morrer na planilha.
+     */
+    consumoMedioKwh: numeric("consumo_medio_kwh", { precision: 10, scale: 2 }),
+    concessionaria: text("concessionaria"),
+    /** O que o cliente pediu, incluindo aparelhos que pretende acrescentar. */
+    observacoes: text("observacoes"),
+
+    /**
+     * Etapa 5, vistoria técnica — feita pelo técnico, antes de vender.
+     *
+     * Não confundir com o pedido de vistoria da etapa 11, que é da Energisa
+     * para ligar o sistema. São processos diferentes, com gente diferente, e o
+     * cliente confirmou isso no questionário.
+     */
+    vistoriaEm: timestamp("vistoria_em", { withTimezone: false }),
+    vistoriaPorId: uuid("vistoria_por_id").references(() => usuario.id, {
+      onDelete: "set null",
+    }),
+    vistoriaObservacoes: text("vistoria_observacoes"),
     /** Protocolo do parecer de acesso — o gargalo clássico do setor. */
     protocoloConcessionaria: text("protocolo_concessionaria"),
     /** ART do engenheiro responsável, emitida na etapa de projeto. */

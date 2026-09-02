@@ -1311,3 +1311,81 @@ body {
   color: var(--ink-3);
   min-width: 4.5rem;
 }
+
+/* linha do tempo da esteira */
+.linha-tempo {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 0.5rem;
+}
+
+.linha-tempo li {
+  display: grid;
+  grid-template-columns: 5.5rem 1fr auto;
+  gap: 0.6rem;
+  align-items: baseline;
+  font-size: 0.86rem;
+  padding-bottom: 0.5rem;
+  border-bottom: 1px solid var(--line-soft);
+}
+
+.linha-tempo li:last-child {
+  border-bottom: none;
+}
+
+.linha-tempo .quando {
+  font-size: 0.74rem;
+  color: var(--ink-3);
+  font-variant-numeric: tabular-nums;
+}
+
+.linha-tempo .mudanca {
+  color: var(--ink-2);
+}
+
+.linha-tempo .fraco {
+  font-size: 0.74rem;
+  color: var(--ink-3);
+  text-align: right;
+}
+
+/* comentários */
+.comentarios {
+  list-style: none;
+  margin: 0 0 1rem;
+  padding: 0;
+  display: grid;
+  gap: 0.7rem;
+}
+
+.comentarios li {
+  display: grid;
+  gap: 0.15rem;
+  padding: 0.55rem 0.7rem;
+  background: var(--surface-2);
+  border: 1px solid var(--line-soft);
+  border-radius: 3px;
+}
+
+.comentarios .autor {
+  font-size: 0.74rem;
+  font-weight: 600;
+  color: var(--ink-2);
+}
+
+.comentarios .corpo {
+  font-size: 0.9rem;
+  white-space: pre-wrap;
+}
+
+.cartao a.cliente {
+  color: var(--ink);
+  text-decoration: none;
+}
+
+.cartao a.cliente:hover {
+  color: var(--accent);
+  text-decoration: underline;
+}
