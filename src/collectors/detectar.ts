@@ -157,7 +157,7 @@ async function main() {
 
   const padrao = new Map<string, number>();
   /**
-   * Usina que não tem dias de geração suficientes para formar padrão.
+   * Usina observada tempo suficiente e que mesmo assim quase não gerou.
    *
    * Aqui mora a armadilha: excluir essas usinas da análise, como um filtro de
    * qualidade de dado faria, joga fora exatamente o pior caso — a usina que
@@ -166,17 +166,29 @@ async function main() {
    */
   const semPadrao: { usinaId: string; diasComGeracao: number; diasNoPeriodo: number }[] =
     [];
+  /**
+   * Usina recém-chegada, com poucos dias no banco.
+   *
+   * É diferente de estar parada, e confundir as duas gera o pior tipo de alarme
+   * falso: acusar de morta uma usina que entrou ontem no sistema e está gerando
+   * normalmente. Só se afirma alguma coisa sobre uma usina depois de observá-la
+   * por `DIAS_MINIMOS` dias.
+   */
+  let historicoInsuficiente = 0;
 
   for (const [usinaId, dias] of porUsina) {
     const positivos = [...dias.values()].filter((v) => v > 0);
     if (positivos.length >= DIAS_MINIMOS) {
       padrao.set(usinaId, mediana(positivos));
-    } else {
+    } else if (dias.size >= DIAS_MINIMOS) {
+      // Tempo de observação suficiente, geração quase nenhuma: é achado.
       semPadrao.push({
         usinaId,
         diasComGeracao: positivos.length,
         diasNoPeriodo: dias.size,
       });
+    } else {
+      historicoInsuficiente++;
     }
   }
 
@@ -238,6 +250,12 @@ async function main() {
     console.log(
       `${foraDoPeriodo} leituras ignoradas por serem anteriores à instalação ` +
         `da usina (mais ${CARENCIA_DIAS} dias de carência).`,
+    );
+  }
+  if (historicoInsuficiente) {
+    console.log(
+      `${historicoInsuficiente} usinas com menos de ${DIAS_MINIMOS} dias no banco — ` +
+        "novas demais para julgar, nada afirmado sobre elas.",
     );
   }
   console.log("");

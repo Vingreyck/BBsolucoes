@@ -19,7 +19,8 @@
     "detectar": "tsx src/collectors/detectar.ts",
     "detectar:reset": "tsx src/collectors/detectar.ts --reset",
     "probe:foxess": "tsx src/collectors/foxess/probe.ts",
-    "coletar:foxess": "tsx src/collectors/foxess/coletar.ts"
+    "coletar:foxess": "tsx src/collectors/foxess/coletar.ts",
+    "atualizar": "tsx src/atualizar.ts"
   },
   "dependencies": {
     "dotenv": "^17.4.2",
