@@ -64,7 +64,7 @@ const ETAPAS = [
     ordem: 50,
     papelResponsavel: "tecnico",
     descricao:
-      "Localização, fotos e vídeo: quadro, medidas, frente da residência, local do aparelho e drone no telhado.",
+      "Feita pelo técnico: localização, fotos e vídeo do quadro, medidas, frente da residência, local do aparelho e drone no telhado. É onde o processo mais trava.",
   },
   {
     slug: "documentacao",
@@ -94,13 +94,21 @@ const ETAPAS = [
     papelResponsavel: "engenheiro",
     descricao: "Em caso de obra, a concessionária atesta um novo prazo.",
   },
-  // Espaço reservado em 100: a instalação provavelmente entra aqui.
+  {
+    slug: "execucao",
+    nome: "Execução",
+    ordem: 100,
+    papelResponsavel: "tecnico",
+    descricao:
+      "A obra. É a etapa que mais gera retrabalho, e para onde o projeto volta quando a concessionária reprova.",
+  },
   {
     slug: "pedido_vistoria",
     nome: "Pedido de vistoria",
     ordem: 110,
     papelResponsavel: "engenheiro",
-    descricao: "Ligação do sistema pela concessionária.",
+    descricao:
+      "Vistoria da Energisa para ligar o sistema. Não confundir com a vistoria técnica da etapa 5: são processos diferentes, feitos por gente diferente.",
     prazoPadraoDias: 5,
   },
   {

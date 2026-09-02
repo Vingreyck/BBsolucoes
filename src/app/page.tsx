@@ -80,27 +80,17 @@ export default async function Esteira() {
       </header>
 
       <p className="aviso">
-        As etapas são as 12 que vocês escreveram na reunião. Os clientes e projetos
-        são fictícios, só para a tela ter o que mostrar. Falta confirmar onde entra
-        a <strong>instalação</strong> — o lugar reservado para ela está marcado
-        abaixo, entre a aprovação da concessionária e o pedido de vistoria.
+        As 13 etapas do fluxo, confirmadas com o cliente. Os projetos são fictícios,
+        só para a tela ter o que mostrar. A <strong>Execução</strong> é a etapa que
+        mais gera retrabalho, e para onde o projeto volta quando a concessionária
+        reprova — use a seta para trás.
       </p>
 
       <div className="esteira">
         {etapas.map((e) => {
           const lista = porEtapa.get(e.id) ?? [];
-          const marco = e.ordem === 110;
           return (
             <Fragment key={e.id}>
-              {marco && (
-                <div className="buraco">
-                  <span className="titulo">Instalação?</span>
-                  <p>
-                    Não apareceu na lista. Alguém sobe no telhado entre estas duas
-                    etapas.
-                  </p>
-                </div>
-              )}
               <section className={lista.length ? "coluna" : "coluna vazia"}>
                 <div className="coluna-topo">
                   <span className="ordem">
