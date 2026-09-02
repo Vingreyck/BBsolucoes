@@ -25,7 +25,7 @@ export default async function Login({
   return (
     <main className="login">
       <div className="cartao-login">
-        <h1>BB Soluções</h1>
+        <h1>Selebi</h1>
         <p className="dica">Entre com seu e-mail e senha.</p>
 
         <form action={entrar} className="form-login">

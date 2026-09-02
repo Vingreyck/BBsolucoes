@@ -6,8 +6,8 @@ import { sair } from "./login/actions";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "BB Soluções",
-  description: "Esteira de projetos, ordens de serviço e monitoramento",
+  title: "Selebi",
+  description: "Cadastro, esteira, ordens de serviço e monitoramento solar",
 };
 
 const PAPEL_ROTULO: Record<string, string> = {
@@ -29,7 +29,7 @@ export default async function RootLayout({
         {/* Sem sessão não há navegação: a tela de login fica limpa. */}
         {usuario && (
           <nav className="nav">
-            <span className="marca">BB Soluções</span>
+            <span className="marca">Selebi</span>
             <a href="/">Esteira</a>
             <a href="/usinas">Usinas</a>
             <a href="/cadastro">Nova usina</a>

@@ -17,7 +17,9 @@
     "import:geracao": "tsx src/collectors/growatt/importar-geracao.ts",
     "import:falhas": "tsx src/collectors/growatt/importar-falhas.ts",
     "detectar": "tsx src/collectors/detectar.ts",
-    "detectar:reset": "tsx src/collectors/detectar.ts --reset"
+    "detectar:reset": "tsx src/collectors/detectar.ts --reset",
+    "probe:foxess": "tsx src/collectors/foxess/probe.ts",
+    "coletar:foxess": "tsx src/collectors/foxess/coletar.ts"
   },
   "dependencies": {
     "dotenv": "^17.4.2",

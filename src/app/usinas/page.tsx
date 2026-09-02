@@ -25,16 +25,38 @@ function normalizar(texto: string): string {
     .replace(/[̀-ͯ]/g, "");
 }
 
+/**
+ * Nome de exibição de cada portal. A chave é o valor guardado no banco.
+ *
+ * `sem_portal` não é um fabricante: é a usina que não está em portal nenhum.
+ * O cliente confirmou que essas existem, e elas são as mais perigosas — não
+ * aparecem em lugar nenhum quando param de gerar.
+ */
+const PORTAL_ROTULO: Record<string, string> = {
+  growatt: "Growatt",
+  foxess: "FoxESS",
+  solis: "Solis",
+  hoymiles: "Hoymiles",
+  huawei: "Huawei",
+  solarportal_plus: "SolarPortal+",
+  nep: "NEP",
+  outro: "Outro",
+};
+
 export default async function Usinas({
   searchParams,
 }: {
-  searchParams: Promise<{ busca?: string; filtro?: string }>;
+  searchParams: Promise<{ busca?: string; filtro?: string; portal?: string }>;
 }) {
   await exigirUsuario();
-  const { busca = "", filtro = "" } = await searchParams;
+  const { busca = "", filtro = "", portal = "" } = await searchParams;
 
   const usinas = await db.query.usina.findMany({
-    with: { cliente: true, equipamentos: true },
+    with: {
+      cliente: true,
+      equipamentos: true,
+      vinculosPortal: { with: { contaPortal: true } },
+    },
     orderBy: asc(usinaTable.nome),
   });
 
@@ -42,7 +64,12 @@ export default async function Usinas({
   const series = await db
     .select({
       usinaId: leituraTable.usinaId,
-      dias: sql<number>`count(*)`,
+      /**
+       * Dias distintos, não linhas. Uma usina com quatro microinversores grava
+       * quatro leituras por dia, e contar linhas faria um único dia aparecer
+       * como quatro.
+       */
+      dias: sql<number>`count(distinct (${leituraTable.medidoEm} at time zone 'UTC')::date)`,
       ultima: sql<string>`max(${leituraTable.medidoEm})::date::text`,
       maiorDia: sql<number>`max(${leituraTable.energiaKwh})::float8`,
       total: sql<number>`sum(${leituraTable.energiaKwh})::float8`,
@@ -72,6 +99,9 @@ export default async function Usinas({
       potenciaSuspeita,
       semEquipamento: u.equipamentos.length === 0,
       semSerie: !serie,
+      // Uma usina pode, em tese, estar em mais de um portal. Na prática é um só.
+      // Tipado como string porque o filtro vem da URL, que não conhece o enum.
+      portais: u.vinculosPortal.map((v) => v.contaPortal.fabricante as string),
     };
   });
 
@@ -83,23 +113,40 @@ export default async function Usinas({
       );
       if (!campos.includes(alvo)) return false;
     }
+    if (portal === "sem_portal" && l.portais.length > 0) return false;
+    if (portal && portal !== "sem_portal" && !l.portais.includes(portal)) return false;
     if (filtro === "potencia") return l.potenciaSuspeita;
     if (filtro === "sem-equipamento") return l.semEquipamento;
     if (filtro === "sem-serie") return l.semSerie;
     return true;
   });
 
+  // Contagem por portal, para os botões mostrarem quantas cada um tem.
+  const porPortal = new Map<string, number>();
+  for (const l of linhas) {
+    if (l.portais.length === 0) {
+      porPortal.set("sem_portal", (porPortal.get("sem_portal") ?? 0) + 1);
+    }
+    for (const p of new Set(l.portais)) {
+      porPortal.set(p, (porPortal.get(p) ?? 0) + 1);
+    }
+  }
+  const portaisOrdenados = [...porPortal].sort((a, b) => b[1] - a[1]);
+
   const suspeitas = linhas.filter((l) => l.potenciaSuspeita).length;
   const semEquipamento = linhas.filter((l) => l.semEquipamento).length;
   const semSerie = linhas.filter((l) => l.semSerie).length;
-  const potenciaTotal = linhas.reduce((s, l) => s + (l.potencia ?? 0), 0);
+  const potenciaTotal = filtradas.reduce((s, l) => s + (l.potencia ?? 0), 0);
 
   return (
     <main>
       <header className="topo">
         <h1>Usinas</h1>
         <span className="sub">
-          {linhas.length} cadastradas · {kWp(potenciaTotal)} somados
+          {filtradas.length === linhas.length
+            ? `${linhas.length} cadastradas`
+            : `${filtradas.length} de ${linhas.length}`}{" "}
+          · {kWp(potenciaTotal)}
         </span>
       </header>
 
@@ -113,21 +160,47 @@ export default async function Usinas({
             aria-label="Buscar usina"
           />
           {filtro && <input type="hidden" name="filtro" value={filtro} />}
+          {portal && <input type="hidden" name="portal" value={portal} />}
           <button type="submit">Buscar</button>
         </form>
+      </div>
 
+      <div className="barra-usinas">
+        <span className="rotulo-filtro">Portal</span>
         <nav className="filtros">
-          <Filtro atual={filtro} valor="" busca={busca}>
-            Todas ({linhas.length})
+          <Filtro tipo="portal" atual={portal} valor="" busca={busca} filtro={filtro}>
+            Todos ({linhas.length})
           </Filtro>
-          <Filtro atual={filtro} valor="potencia" busca={busca} perigo>
+          {portaisOrdenados.map(([p, n]) => (
+            <Filtro
+              key={p}
+              tipo="portal"
+              atual={portal}
+              valor={p}
+              busca={busca}
+              filtro={filtro}
+              perigo={p === "sem_portal"}
+            >
+              {p === "sem_portal" ? "Sem portal" : (PORTAL_ROTULO[p] ?? p)} ({n})
+            </Filtro>
+          ))}
+        </nav>
+      </div>
+
+      <div className="barra-usinas">
+        <span className="rotulo-filtro">Cadastro</span>
+        <nav className="filtros">
+          <Filtro atual={filtro} valor="" busca={busca} portal={portal}>
+            Tudo ({linhas.length})
+          </Filtro>
+          <Filtro atual={filtro} valor="potencia" busca={busca} portal={portal} perigo>
             Potência errada ({suspeitas})
           </Filtro>
-          <Filtro atual={filtro} valor="sem-equipamento" busca={busca}>
+          <Filtro atual={filtro} valor="sem-equipamento" busca={busca} portal={portal}>
             Sem equipamento ({semEquipamento})
           </Filtro>
-          <Filtro atual={filtro} valor="sem-serie" busca={busca}>
-            Sem geração importada ({semSerie})
+          <Filtro atual={filtro} valor="sem-serie" busca={busca} portal={portal}>
+            Sem geração ({semSerie})
           </Filtro>
         </nav>
       </div>
@@ -148,6 +221,7 @@ export default async function Usinas({
             <tr>
               <th>Cliente</th>
               <th>Usina</th>
+              <th>Portal</th>
               <th>Cidade</th>
               <th className="num">Potência</th>
               <th className="num">Instalada</th>
@@ -156,10 +230,17 @@ export default async function Usinas({
             </tr>
           </thead>
           <tbody>
-            {filtradas.map(({ usina, serie, potenciaSuspeita, semEquipamento }) => (
+            {filtradas.map(({ usina, serie, potenciaSuspeita, semEquipamento, portais }) => (
               <tr key={usina.id}>
                 <td className="forte">{usina.cliente.nome}</td>
                 <td>{usina.nome}</td>
+                <td className={portais.length ? "" : "fraco"}>
+                  {portais.length
+                    ? [...new Set(portais)]
+                        .map((p) => PORTAL_ROTULO[p] ?? p)
+                        .join(", ")
+                    : "nenhum"}
+                </td>
                 <td>{usina.cidade ?? "—"}</td>
                 <td className={`num ${potenciaSuspeita ? "ruim" : ""}`}>
                   {kWp(usina.potenciaKwp) ?? "—"}
@@ -174,7 +255,9 @@ export default async function Usinas({
                   {usina.equipamentos.length || "—"}
                 </td>
                 <td className="num">
-                  {serie ? `${serie.dias} dias · ${kWh(serie.total)}` : "—"}
+                  {serie
+                    ? `${serie.dias} ${serie.dias === 1 ? "dia" : "dias"} · ${kWh(serie.total)}`
+                    : "—"}
                 </td>
               </tr>
             ))}
@@ -191,22 +274,41 @@ export default async function Usinas({
   );
 }
 
+/**
+ * Um botão de filtro que preserva os outros filtros ativos.
+ *
+ * `tipo` diz qual parâmetro este botão controla; os demais vêm por props e são
+ * mantidos na URL, para que escolher um portal não jogue fora a busca que a
+ * pessoa já tinha digitado.
+ */
 function Filtro({
+  tipo = "filtro",
   atual,
   valor,
   busca,
+  filtro,
+  portal,
   perigo,
   children,
 }: {
+  tipo?: "filtro" | "portal";
   atual: string;
   valor: string;
   busca: string;
+  filtro?: string;
+  portal?: string;
   perigo?: boolean;
   children: React.ReactNode;
 }) {
   const parametros = new URLSearchParams();
   if (busca) parametros.set("busca", busca);
-  if (valor) parametros.set("filtro", valor);
+  if (tipo === "filtro") {
+    if (valor) parametros.set("filtro", valor);
+    if (portal) parametros.set("portal", portal);
+  } else {
+    if (filtro) parametros.set("filtro", filtro);
+    if (valor) parametros.set("portal", valor);
+  }
   const consulta = parametros.toString();
   const ativo = atual === valor;
 

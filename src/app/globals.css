@@ -1302,3 +1302,12 @@ body {
   outline: 2px solid var(--ink);
   outline-offset: 2px;
 }
+
+.rotulo-filtro {
+  font-size: 0.7rem;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+  min-width: 4.5rem;
+}
