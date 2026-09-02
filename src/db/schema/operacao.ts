@@ -89,6 +89,8 @@ export const projeto = pgTable(
     potenciaKwp: numeric("potencia_kwp", { precision: 10, scale: 3 }),
     /** Protocolo do parecer de acesso — o gargalo clássico do setor. */
     protocoloConcessionaria: text("protocolo_concessionaria"),
+    /** ART do engenheiro responsável, emitida na etapa de projeto. */
+    numeroArt: text("numero_art"),
     criadoEm: timestamp("criado_em", { withTimezone: true }).notNull().defaultNow(),
     atualizadoEm: timestamp("atualizado_em", { withTimezone: true })
       .notNull()

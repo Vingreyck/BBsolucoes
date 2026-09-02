@@ -161,6 +161,18 @@ export const usina = pgTable(
     uf: varchar("uf", { length: 2 }),
     latitude: numeric("latitude", { precision: 10, scale: 7 }),
     longitude: numeric("longitude", { precision: 10, scale: 7 }),
+    /**
+     * Até que passo da ficha de cadastro esta usina chegou. 5 = completa.
+     *
+     * A ficha grava a cada passo em vez de só no fim: fechar o navegador no
+     * passo 4 não pode custar o que já foi digitado. E quando vocês quiserem
+     * preencher em dias diferentes — a vistoria hoje, o número de série quando
+     * o inversor chegar — já funciona sem mudar nada.
+     */
+    cadastroPasso: integer("cadastro_passo").notNull().default(5),
+    /** Pasta do cliente no Drive, que hoje é onde os documentos moram. */
+    linkDrive: text("link_drive"),
+    observacoesVistoria: text("observacoes_vistoria"),
     criadoEm: timestamp("criado_em", { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [

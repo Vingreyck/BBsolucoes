@@ -1108,3 +1108,197 @@ body {
 .tabela a:hover {
   text-decoration: underline;
 }
+
+/* ficha de cadastro em passos */
+.ficha {
+  max-width: 720px;
+  margin: 1.25rem clamp(1rem, 3vw, 2rem) 3rem;
+  display: grid;
+  gap: 1rem;
+}
+
+.trilha {
+  background: var(--surface);
+  border: 1px solid var(--line-soft);
+  border-left: 3px solid var(--accent);
+  border-radius: 4px;
+  padding: 0.9rem 1.1rem;
+}
+
+.trilha-topo {
+  margin: 0 0 0.6rem;
+  font-size: 0.86rem;
+  color: var(--ink-2);
+}
+
+.trilha-marcas {
+  list-style: none;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.3rem;
+  margin: 0;
+  padding: 0;
+  counter-reset: passo;
+}
+
+.trilha-marcas li {
+  counter-increment: passo;
+  font-size: 0.75rem;
+  border-radius: 12px;
+  padding: 0.2rem 0.6rem;
+  border: 1px solid var(--line-soft);
+  color: var(--ink-3);
+  background: var(--surface-2);
+}
+
+.trilha-marcas li::before {
+  content: counter(passo) " · ";
+  font-variant-numeric: tabular-nums;
+}
+
+.trilha-marcas li.atual {
+  color: var(--surface-2);
+  background: var(--accent);
+  border-color: var(--accent);
+  font-weight: 600;
+}
+
+.trilha-marcas li.feito {
+  color: var(--ok);
+  border-color: color-mix(in srgb, var(--ok) 40%, transparent);
+}
+
+.trilha-marcas li a {
+  color: inherit;
+  text-decoration: none;
+}
+
+.trilha-marcas li a:hover {
+  text-decoration: underline;
+}
+
+.trilha-resumo {
+  margin: 0.6rem 0 0;
+  font-size: 0.8rem;
+  color: var(--ink-3);
+}
+
+.form-ficha {
+  display: grid;
+  gap: 1rem;
+}
+
+.form-ficha fieldset {
+  margin: 0;
+  border: 1px solid var(--line-soft);
+  border-radius: 4px;
+  background: var(--surface);
+  padding: 1rem 1.15rem 1.15rem;
+  display: grid;
+  gap: 0.75rem;
+}
+
+.form-ficha legend {
+  font-size: 0.72rem;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--accent);
+  padding: 0 0.35rem;
+}
+
+.form-ficha label {
+  display: grid;
+  gap: 0.25rem;
+  font-size: 0.76rem;
+  font-weight: 600;
+  color: var(--ink-2);
+}
+
+.form-ficha .req {
+  color: var(--crit);
+  margin-left: 0.15rem;
+}
+
+.form-ficha input,
+.form-ficha select,
+.form-ficha textarea {
+  font: inherit;
+  font-size: 0.9rem;
+  font-weight: 400;
+  padding: 0.42rem 0.55rem;
+  color: var(--ink);
+  background: var(--surface-2);
+  border: 1px solid var(--line);
+  border-radius: 3px;
+  width: 100%;
+}
+
+.form-ficha textarea {
+  resize: vertical;
+  line-height: 1.5;
+}
+
+.form-ficha input:focus-visible,
+.form-ficha select:focus-visible,
+.form-ficha textarea:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -1px;
+  border-color: var(--accent);
+}
+
+.form-ficha .dupla {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(11rem, 1fr));
+  gap: 0.75rem;
+}
+
+.form-ficha .dupla .curto {
+  max-width: 12rem;
+}
+
+.form-ficha .ajuda {
+  margin: 0;
+  font-size: 0.78rem;
+  color: var(--ink-3);
+  line-height: 1.5;
+}
+
+.ficha-acoes {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+.ficha-acoes .voltar {
+  font-size: 0.86rem;
+  color: var(--ink-2);
+  text-decoration: none;
+}
+
+.ficha-acoes .voltar:hover {
+  color: var(--accent);
+}
+
+.ficha-acoes button {
+  font: inherit;
+  font-size: 0.9rem;
+  font-weight: 600;
+  padding: 0.5rem 1.1rem;
+  margin-left: auto;
+  color: var(--surface-2);
+  background: var(--accent);
+  border: 1px solid var(--accent);
+  border-radius: 3px;
+  cursor: pointer;
+}
+
+.ficha-acoes button:hover {
+  filter: brightness(1.08);
+}
+
+.ficha-acoes button:focus-visible {
+  outline: 2px solid var(--ink);
+  outline-offset: 2px;
+}

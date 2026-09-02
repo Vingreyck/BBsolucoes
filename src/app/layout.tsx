@@ -32,6 +32,7 @@ export default async function RootLayout({
             <span className="marca">BB Soluções</span>
             <a href="/">Esteira</a>
             <a href="/usinas">Usinas</a>
+            <a href="/cadastro">Nova usina</a>
             <a href="/alertas">Alertas</a>
             <a href="/os">OS</a>
             <span className="quem">
