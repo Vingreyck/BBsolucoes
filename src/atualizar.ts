@@ -51,6 +51,14 @@ const ETAPAS: Etapa[] = [
         : { rodar: false, motivo: "FOXESS_API_KEY não está no .env" },
   },
   {
+    nome: "Coleta Solis",
+    script: "src/collectors/solis/coletar.ts",
+    quando: () =>
+      process.env.SOLIS_KEY_ID && process.env.SOLIS_KEY_SECRET
+        ? { rodar: true }
+        : { rodar: false, motivo: "SOLIS_KEY_ID/SOLIS_KEY_SECRET não estão no .env" },
+  },
+  {
     nome: "Detecção de usina parada",
     script: "src/collectors/detectar.ts",
   },

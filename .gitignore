@@ -4,9 +4,10 @@ out/
 build/
 dist/
 
-.env
-.env.local
-.env*.local
+# Tudo que comeca com .env fica de fora, menos o exemplo sem valores.
+# Um .env.bak ou .env.old escapava da regra antiga e ia parar no repo publico.
+.env*
+!.env.example
 
 *.tsbuildinfo
 next-env.d.ts

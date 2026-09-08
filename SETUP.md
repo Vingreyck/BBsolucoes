@@ -129,6 +129,123 @@ nada, para a tabela crescer com o que o parque realmente produz.
 Fonte: *Troubleshooting for Growatt TL&MTL* (Ver 1.3), mais as listas públicas de
 código das séries novas.
 
+## Os sete portais e o estado de cada API
+
+| Portal | Usinas | Caminho oficial | Situação |
+| --- | --- | --- | --- |
+| Growatt | 137 | OpenAPI v1, token auditado | pedido em andamento; hoje entra por planilha |
+| Hoymiles | 4 | API sob contrato, não pública | não pedido; portal velho sai do ar em 31/10/2026 |
+| Solis | 1 | SolisCloud API, ativação pelo suporte | **funcionando** (chave testada em 08/09/2026) |
+| FoxESS | 1 | OpenAPI, chave no OpenPlatform | **funcionando** |
+| SolarPortal+ | 1 | GoodWe SEMS, NDA pelo comercial | não pedido |
+| NEP | 0 | — | conta vazia |
+| Huawei | 16 | FusionSolar Northbound API | API liga; a conta da API não enxerga as usinas |
+
+**Solis, três armadilhas que custaram tempo.** A assinatura é HMAC-SHA1 sobre
+cinco linhas (`POST`, MD5 do corpo, `application/json`, data em GMT, caminho) —
+até aí é seguir a documentação. O que não está escrito em lugar nenhum:
+
+- **Barra no fim da URL base derruba tudo.** O SolisCloud responde HTTP 500
+  dizendo `potentially malicious String "//"`. Parece ataque, é uma barra.
+- **`dayPowerGeneration` não é geração.** É hora de sol pleno: 3,39 numa usina
+  de 11 kWp que gerou 37,3 kWh. O campo certo é `dayEnergy`, e os dois vêm lado
+  a lado no mesmo objeto.
+- **A unidade muda com o tamanho do número.** A mesma usina manda `dayEnergy`
+  em kWh e `allEnergy` em MWh, cada um com seu `...Str`. Ler o número sem ler a
+  unidade erra por mil.
+
+Também vale saber que `machine` traz o modelo de verdade (`S5-GR1P10K`);
+`model` e `productModel` são um código de quatro dígitos que não diz nada.
+
+Três descobertas que economizam pesquisa depois:
+
+**SolarPortal+ é GoodWe.** O nome não aparece em lugar nenhum da tela, mas o site
+se entrega: as chamadas vão para `/web/sems/sems-user/…`, a tradução pede
+`systemName=semsplus`, os scripts vêm de `semsplus.oss-cn-hongkong.aliyuncs.com`,
+o bundle se chama `semsV2.js` e o app Android é `com.goodwe.solarportal`. "Smart
+Energy Management System", o subtítulo do login, é literalmente o que SEMS
+significa. Acesso à API é pedido ao representante comercial da GoodWe, passa por
+NDA, e é liberado como permissão na própria conta SEMS — teto de 3.600
+chamadas/hora. A assinatura digital do NDA exige **passaporte**; RG não serve.
+
+Duas coisas saíram de olhar o front-end do portal, sem login nenhum. A primeira é
+o mapa dos serviços: `sems-user`, `sems-plant`, `sems-report`, `sems-alarm`,
+`sems-remote`, `sems-dashboard-web`, `sems-admin` e `sems-sitemsg`, todos sob
+`/web/sems/<serviço>/api`. A segunda é a que decide: o arquivo de tradução da
+interface tem **12.385 textos e nenhum menu de API**. O único que fala nisso é
+uma mensagem de erro — `api_access_denied`, "Sem permissão para utilizar a API".
+Ou seja, a permissão existe do lado do servidor e **não há como ligá-la sozinho**:
+não é como a FoxESS, onde a chave se gera na hora. Sem o comercial da GoodWe, não
+tem caminho.
+
+Ressalva que vale perguntar junto: os guias de API que circulam na internet são
+do `semsportal.com`, o SEMS antigo (`/api/v1/Common/CrossLogin`). O SolarPortal+
+roda o SEMS novo, de microserviços — pode ser que a chave liberada pelo NDA valha
+para uma plataforma diferente daquela onde a usina da BB está.
+
+**Huawei e FusionSolar são a mesma coisa.** FusionSolar é o nome do portal, Huawei
+é quem o faz — não são dois sistemas a procurar. A Northbound API é a mais bem
+documentada das três, e também a mais apertada: `https://<prefixo>.fusionsolar.
+huawei.com/thirdData/`, uma chamada por minuto por endpoint, sessão única, cinco
+logins a cada dez minutos, erro 407 quando estoura. A conta northbound é separada
+da de login e nasce em *System → Company Management → Northbound Management*, na
+conta do instalador — e é preciso que seja a conta que administra as usinas, não
+qualquer uma.
+
+**A API liga, mas está apontada para uma conta vazia.** A conta northbound
+`Selebi` existe, o login passa e o token vem. As duas rotas de lista respondem
+`success: true, failCode: 0` com lista vazia — não é permissão negada nem rota
+errada.
+
+Só que as usinas existem: o aplicativo do FusionSolar, na mesma empresa, mostra
+**16 instalações** — 15 normais, 1 em falha (Tempernet), nenhuma off-line —
+todas em Itabaiana e São Cristóvão, de 5 a 6 kWp. Isso faz da Huawei o segundo
+maior parque da BB, atrás só da Growatt, e não o portal descartável que a lista
+vazia sugeria.
+
+Aparelho e site mostram coisas diferentes porque uma conta do FusionSolar mora
+num servidor só: `eu5`, `intl` e `la5` são universos separados, e o aplicativo
+guarda o servidor escolhido no primeiro login. O site onde a `Selebi` nasceu é
+`uni005eu5` (empresa "BB Soluções", ainda **não autenticada** — cara de conta
+recém-criada). A conta northbound enxerga as usinas da empresa dela, então
+enquanto as 16 estiverem sob outra conta ou outro servidor, a lista continua
+vazia por mais certa que a integração esteja.
+
+Sai por um dos dois caminhos: criar a conta de API dentro da conta que
+realmente administra as 16, ou trazer as usinas para a empresa "BB Soluções"
+por *Plants → Plant Migration*. Só depois disso vale escrever o `coletar.ts` —
+que aqui ainda não existe de propósito.
+
+O host é a pegadinha. A barra de endereço do portal mostra
+`uni005eu5.fusionsolar.huawei.com`, e esse host devolve **HTML** em
+`/thirdData/login` — o `uni005` é só o front do portal. A API vive no `eu5` puro.
+E a conta da BB é europeia, não latino-americana: `la5` recusa com `20400`, que
+parece senha errada e é host errado. O prefixo certo se descobre testando o
+login, não olhando o navegador.
+
+Duas defesas ficaram dentro do cliente porque a conta é de produção: o token é
+guardado e só se reloga quando o portal manda (`failCode 305`), e um contador
+recusa o sexto login dentro de dez minutos, que é o que trancaria a conta por
+meia hora.
+
+**Hoymiles não tem porta aberta.** A S-Miles Cloud tem API, mas sob contrato — a
+documentação não é pública nem gratuita. O que existe de graça é o que as
+integrações de comunidade fazem: falar com `neapi.hoymiles.com` como se fosse o
+app, login em `/iam/pub/3/auth/login`. É a mesma classe de solução da sessão da
+Growatt, com o mesmo risco de quebrar sem aviso. Para quatro usinas, exportar
+relatório do portal custa menos do que manter isso de pé.
+
+E há prazo: o aviso na tela de login do `previous.hoymiles.com` diz que **a
+versão atual sai do ar em 31/10/2026**, e manda usar `global.hoymiles.com`. Ou
+seja, qualquer coisa amarrada ao portal velho — inclusive as integrações de
+comunidade — tem data para quebrar. Um bom motivo para não construir nada em
+cima dele antes de a plataforma nova assentar.
+
+Contatos que resolvem, quando a hora chegar: Hoymiles Brasil `service.br@
+hoymiles.com`, GoodWe Brasil `servico.br@goodwe.com`, Huawei América Latina
+`la_inverter_support@huawei.com`. A GoodWe pede NDA assinado antes de liberar a
+API — e a assinatura digital exige **passaporte**, RG não serve.
+
 ## A esteira é dado, não código
 
 As 12 etapas do fluxo da BB Soluções vivem na tabela `etapa`, semeadas por
