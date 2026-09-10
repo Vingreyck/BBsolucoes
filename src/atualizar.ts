@@ -43,6 +43,31 @@ const ETAPAS: Etapa[] = [
     },
   },
   {
+    /**
+     * Enquanto o token da OpenAPI não enxerga as usinas, esta exportação é o
+     * que traz inversor, datalogger e — o que mais vale — há quantos dias cada
+     * aparelho está mudo. Sai em Device List → Export data → Export the device
+     * data. Pega sempre o arquivo mais recente da pasta.
+     */
+    nome: "Dispositivos exportados do Growatt",
+    script: "src/collectors/growatt/importar-dispositivos.ts",
+    argumentos: [],
+    quando: () => {
+      if (!existsSync(PASTA_DADOS)) {
+        return { rodar: false, motivo: `a pasta ${PASTA_DADOS}/ não existe` };
+      }
+      const arquivos = readdirSync(PASTA_DADOS)
+        .filter((n) => /^dispositivos.*\.(csv|xlsx)$/i.test(n))
+        .sort();
+      const escolhido = arquivos.at(-1);
+      if (!escolhido) {
+        return { rodar: false, motivo: `nenhum dispositivos*.csv em ${PASTA_DADOS}/` };
+      }
+      ETAPAS[1].argumentos = [`${PASTA_DADOS}/${escolhido}`];
+      return { rodar: true };
+    },
+  },
+  {
     nome: "Coleta FoxESS",
     script: "src/collectors/foxess/coletar.ts",
     quando: () =>

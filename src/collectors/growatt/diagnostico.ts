@@ -198,14 +198,18 @@ async function main() {
 
   console.log(
     "Nenhuma combinação passou.\n\n" +
-      "Isso encerra o caminho da API de sessão para esta conta. A conta de\n" +
-      "distribuidor do OSS existe no sistema, mas não autentica nem na API do\n" +
-      "ShinePhone nem no login do portal web com esta senha.\n\n" +
-      "O caminho que sobra é o oficial, e é o que ia ser usado em produção de\n" +
-      "qualquer forma:\n\n" +
-      "  oss.growatt.com → System set → System management → Add API Request\n\n" +
-      "Se quiser destravar antes de a Growatt responder, teste com a conta de\n" +
-      "um cliente final (ShinePhone), que autentica nesta API sem problema.\n",
+      "Isso encerra o caminho da API de sessão para esta conta, e o motivo não\n" +
+      "é senha errada: o OSS e o ShineServer são dois sistemas separados. A\n" +
+      "conta de distribuidor do OSS não existe no ShineServer, então não\n" +
+      "autentica nem na API do ShinePhone nem em openapi.growatt.com (testado\n" +
+      "nos dois hosts).\n\n" +
+      "O token do distribuidor sai do próprio OSS, num formulário fácil de\n" +
+      "não achar porque o menu chama System Setting, não System set:\n\n" +
+      "  oss.growatt.com → System Setting → System Management\n" +
+      "    → aba \"API management\" → + Add API Request\n\n" +
+      "Aprovado, o token é permanente e chega por e-mail. Aí a API vira\n" +
+      "https://openapi.growatt.com/v1/ com o token no header `token`.\n" +
+      "Se o pedido empacar: br.service@growatt.com.\n",
   );
   process.exit(1);
 }

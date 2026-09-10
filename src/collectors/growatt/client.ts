@@ -173,7 +173,8 @@ export class GrowattSessionClient {
         "Nenhum host da Growatt aceitou a conexão. Todos bloquearam:\n  " +
           recusas.join("\n  ") +
           "\nSe isso persistir, a API de sessão foi cortada de novo e o caminho " +
-          "passa a ser o token da OpenAPI v1 (OSS → System set → System management).",
+          "passa a ser o token da OpenAPI v1, que sai em openapi.growatt.com → " +
+          "nome de usuário → Gerenciamento de conta → API Token.",
         "growatt",
       );
     }

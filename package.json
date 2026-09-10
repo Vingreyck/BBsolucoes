@@ -23,7 +23,9 @@
     "probe:fusionsolar": "tsx src/collectors/fusionsolar/probe.ts",
     "atualizar": "tsx src/atualizar.ts",
     "probe:solis": "tsx src/collectors/solis/probe.ts",
-    "coletar:solis": "tsx src/collectors/solis/coletar.ts"
+    "coletar:solis": "tsx src/collectors/solis/coletar.ts",
+    "probe:growatt-api": "tsx src/collectors/growatt/probe-openapi.ts",
+    "import:dispositivos": "tsx src/collectors/growatt/importar-dispositivos.ts"
   },
   "dependencies": {
     "dotenv": "^17.4.2",
