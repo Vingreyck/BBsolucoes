@@ -547,6 +547,113 @@ exigido**. Sem isso, cliente que fechou semana passada aparece em vermelho igual
 ao que está parado há seis meses — e ninguém abre uma lista onde todo mundo está
 errado.
 
+### O documento pertence à venda, não à pessoa
+
+O Drive **já estava organizado por projeto** e a primeira importação achatou
+isso: 1.640 dos 2.788 arquivos estão dentro de uma subpasta `PE …`, e tudo
+pendurava no cliente. Com pastas `PE Aumento GD` existindo — aumento de sistema
+é venda nova no mesmo cliente —, os dois projetos dividiam uma pilha só e
+ninguém sabia qual ART era de qual.
+
+Hoje `documento.projetoId` aponta para o dossiê. É **nulo de propósito** para
+documento pessoal: CNH e RG são da pessoa, valem para qualquer venda dela, e
+pedir de novo no segundo projeto seria burrice. São 308 arquivos assim.
+
+```bash
+npm run dossies -- --simular
+```
+
+Cria um dossiê por `(cliente, ano do Drive)`. A granularidade é o ano e não a
+subpasta `PE` porque um mesmo negócio pode ter `PE Solar … V2` e `PE Aumento …`
+no mesmo ano; ano é o que a árvore garante.
+
+### A regra que faz a tela parar de gritar
+
+`exigencia_documento` guarda **a partir de qual etapa cada documento é
+cobrado**. Tabela e não código, pelo mesmo motivo de `etapa`: o fluxo é da
+empresa e mudar a regra precisa ser conversa virando dado.
+
+A esteira já respondia essa pergunta e ninguém tinha percebido — as etapas se
+chamam "Vistoria técnica", "Documentação do cliente", "Contrato e procuração",
+"Projeto", "Aprovação da concessionária". O nome da etapa **é** o momento em que
+o papel nasce.
+
+```bash
+npm run seed:exigencias
+```
+
+Semeia a proposta, que é para o dono corrigir olhando — muito mais fácil do que
+responder a pergunta no vazio. Corrigir é `UPDATE`.
+
+**Cuidado com raciocínio circular.** Nos 171 dossiês importados a etapa foi
+deduzida justamente pelos documentos que faltam. Conferir esses documentos
+contra essa etapa acusa todo mundo: a primeira versão da tela marcou 116 de 118
+como atrasados. Por isso a coluna diz **"falta para avançar"**, não "atrasado" —
+mesma informação, sem a acusação. Atraso de verdade só existe depois que alguém
+move a etapa à mão.
+
+O que a tela mostra de útil é o **gargalo**: foto do padrão segura 70 dossiês,
+conta de luz 41, recibo 20. Não são 116 telefonemas, são cinco problemas.
+
+### Arquivo de trabalho não é documento
+
+`documento.status` vale `indefinido`, `trabalho`, `aguardando_assinatura` ou
+`assinado`. Antes disso a informação vivia no nome do arquivo, e o checklist
+dava por cumprido o cliente cujo único memorial era a planilha `.xlsm` do
+engenheiro — eram nove.
+
+| | |
+| --- | --- |
+| `trabalho` | 219 arquivos: `.dwg`, `.xlsm`, `.xls`, `.docx`. Não contam como entregues. |
+| `assinado` | 186, pelo nome dizer |
+| `aguardando_assinatura` | 5 — "sem assinar", "coletar assinatura" |
+| `indefinido` | 2.378, e é a resposta honesta |
+
+`indefinido` é maioria porque só 232 dos 2.900 nomes dizem alguma coisa sobre
+assinatura. Chutar "assinado" para o resto seria dar por conferido o que ninguém
+conferiu, então a tela **não cobra assinatura de documento indefinido** — só
+avisa quando o nome diz explicitamente que falta assinar.
+
+### Quem pode ver, e quem viu
+
+A tabela guarda CNH, RG, CPF, conta de luz e endereço de 169 pessoas.
+
+- **Quem pode**: `adm`, `vendedor` e `engenheiro`. Técnico e estoque não
+  precisam disso para trabalhar — o técnico precisa da OS, o estoque do
+  equipamento. É o princípio da necessidade do art. 6º da LGPD. Esconder o link
+  no menu é cortesia; quem barra é `exigirAcessoDocumentos()`, chamada nas
+  **quatro** portas do servidor: lista, dossiê, download e upload.
+- **Quem viu**: `documento_acesso` registra envio e download com usuário e hora.
+  `documento_id` é `ON DELETE SET NULL` e a descrição fica copiada em texto —
+  auditoria que some junto com o objeto auditado não é auditoria.
+
+### Conectando o Drive
+
+Uma conexão só, **da empresa**, não uma por usuário: ninguém da equipe precisa
+de conta no Google. O Selebi age como `bbsolucoesengenharia` ao criar pasta,
+gravar arquivo e devolver arquivo.
+
+É por isso que **o download passa pelo Selebi** (`/documentos/arquivo/<id>`) e
+não pelo link do Drive: se a tela só mostrasse o link, quem não tem conta Google
+esbarraria na tela de login do Google.
+
+Seis passos no [console do Google](https://console.cloud.google.com), uma vez só
+— estão detalhados no cabeçalho de `src/documentos/autorizar-drive.ts`. Depois:
+
+```bash
+npm run drive:autorizar
+```
+
+Ele sobe um servidor local, recebe o retorno do Google e **imprime o refresh
+token no terminal**, para o dono colar no `.env`. O token não expira e dá acesso
+ao Drive inteiro da empresa — guardar como se guarda senha.
+
+Sem as credenciais o sistema funciona: mostra o dossiê e o link do Drive, e
+avisa na tela que enviar e baixar pelo Selebi ainda não está ligado.
+
+**Sem comprimir.** Decisão explícita do dono e a certa: comprimir PDF escaneado
+é degradar um papel que pode virar prova.
+
 ### As migrations de `documento` são aplicadas à mão
 
 `drizzle/0001-documento.sql` até `0006-protocolo.sql` são escritas à mão e

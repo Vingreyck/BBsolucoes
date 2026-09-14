@@ -54,8 +54,19 @@ export default async function Esteira() {
     );
   }
 
+  /**
+   * O quadro mostra trabalho em aberto.
+   *
+   * Quando os 171 dossiês do Drive entraram, 68 deles vieram concluídos — obra
+   * entregue, usina gerando. Empilhar isso na coluna de Monitoramento
+   * transformaria o quadro num arquivo morto: quem abre a esteira quer ver o
+   * que está na mão de alguém hoje.
+   */
+  const abertos = projetos.filter((p) => p.situacao !== "concluido");
+  const concluidos = projetos.length - abertos.length;
+
   const porEtapa = new Map<string, typeof projetos>();
-  for (const p of projetos) {
+  for (const p of abertos) {
     const lista = porEtapa.get(p.etapaId) ?? [];
     lista.push(p);
     porEtapa.set(p.etapaId, lista);
@@ -70,7 +81,8 @@ export default async function Esteira() {
       <header className="topo">
         <h1>Esteira de projetos</h1>
         <span className="sub">
-          {projetos.length} projetos em {etapas.length} etapas
+          {abertos.length} em aberto
+          {concluidos > 0 && ` · ${concluidos} concluídos`}
         </span>
         {parados.length > 0 && (
           <span className="alerta">
@@ -83,10 +95,20 @@ export default async function Esteira() {
       </header>
 
       <p className="aviso">
-        As 13 etapas do fluxo, confirmadas com o cliente. Os projetos são fictícios,
-        só para a tela ter o que mostrar. A <strong>Execução</strong> é a etapa que
-        mais gera retrabalho, e para onde o projeto volta quando a concessionária
-        reprova — use a seta para trás.
+        As 13 etapas do fluxo, confirmadas com o cliente. A{" "}
+        <strong>Execução</strong> é a etapa que mais gera retrabalho, e para
+        onde o projeto volta quando a concessionária reprova — use a seta para
+        trás.
+      </p>
+
+      <p className="aviso">
+        Os dossiês vindos do Drive entraram com a etapa{" "}
+        <strong>deduzida pelos documentos que existem na pasta</strong>, não
+        informada por ninguém — um dossiê sem a conta de luz foi parar em coleta
+        de informações, um sem foto do padrão em vistoria técnica. Confira antes
+        de cobrar alguém por isso. Os {concluidos} concluídos são os que já têm
+        usina gerando e saem do quadro. Detalhe de cada um em{" "}
+        <a href="/documentos">Dossiês</a>.
       </p>
 
       <div className="esteira">

@@ -151,6 +151,51 @@ function classificar(nome: string) {
 }
 
 /**
+ * Formatos que são o arquivo de trabalho, não o documento entregue.
+ *
+ * `.dwg` só abre no AutoCAD, `.xlsm` é a planilha que **gera** o memorial. Um
+ * documento assinado é sempre PDF ou imagem. São 98 dos 416 "projetos
+ * elétricos" e 29 dos 238 "memoriais" — e 9 clientes cujo único memorial é a
+ * planilha, todos contados como documentação em dia antes disto.
+ */
+const EXTENSOES_DE_TRABALHO = new Set(["dwg", "xlsm", "xls", "xlsx", "docx", "doc"]);
+
+/**
+ * Em que pé está o documento, pelo que o nome do arquivo deixa saber.
+ *
+ * `indefinido` é a resposta para a maior parte do Drive e é a resposta honesta:
+ * 232 arquivos dizem algo sobre assinatura e 2.500 não dizem nada. Chutar
+ * "assinado" para esses seria dar por resolvido o que ninguém conferiu.
+ */
+function situacao(nome: string): (typeof schema.statusDocumento.enumValues)[number] {
+  const limpo = nome.trim().replace(/_/g, " ");
+  const ponto = limpo.lastIndexOf(".");
+  const extensao = ponto < 0 ? "" : limpo.slice(ponto + 1).toLowerCase();
+  if (EXTENSOES_DE_TRABALHO.has(extensao)) return "trabalho";
+
+  // Antes de "assinad": "COLETAR ASSINATURA" e "sem assinar" são o oposto de
+  // assinado, e um `includes` ingênuo classificaria os dois como prontos.
+  if (/\b(sem\s+assinar|coletar\s+assinatura|para\s+assinar|n[ãa]o\s+assinad)/i.test(limpo)) {
+    return "aguardando_assinatura";
+  }
+  if (/assinad[oa]/i.test(limpo)) return "assinado";
+  return "indefinido";
+}
+
+/**
+ * Versão pelo `V2` no nome, e só por ele.
+ *
+ * "MEMORIAL 02 - ALECIA" não é a segunda versão do memorial — é o memorial da
+ * segunda unidade. Ler qualquer número como versão trocaria uma informação por
+ * outra, então só conta o que está escrito como versão.
+ */
+function versaoDoNome(nome: string): number {
+  const achado = nome.replace(/_/g, " ").match(/\bv\s?(\d{1,2})\b/i);
+  const n = achado ? Number(achado[1]) : 1;
+  return Number.isFinite(n) && n >= 1 && n <= 99 ? n : 1;
+}
+
+/**
  * Nome comparável: minúsculo, sem acento, sem pontuação, espaços colapsados.
  *
  * As pastas do Drive são MAIÚSCULAS e os clientes do banco vieram dos portais
@@ -323,6 +368,7 @@ async function main() {
   const ambiguos = new Map<string, string[]>();
   const novos = new Set<string>();
   const porTipo = new Map<string, number>();
+  const porStatus = new Map<string, number>();
   const exemplos = new Map<string, string[]>();
   const resolvidos = new Map<string, string>();
 
@@ -409,6 +455,8 @@ async function main() {
 
     const tipo = classificar(arquivo);
     porTipo.set(tipo, (porTipo.get(tipo) ?? 0) + 1);
+    const st = situacao(arquivo);
+    porStatus.set(st, (porStatus.get(st) ?? 0) + 1);
     if (amostra) {
       const lista = exemplos.get(tipo) ?? [];
       if (lista.length < 12) lista.push(arquivo);
@@ -423,6 +471,8 @@ async function main() {
         empresaId: empresa.id,
         clienteId,
         tipo,
+        status: situacao(arquivo),
+        versao: versaoDoNome(arquivo),
         nomeArquivo: arquivo,
         caminho,
         linkDrive: ler(linha, "link") || null,
@@ -441,6 +491,8 @@ async function main() {
         ],
         set: {
           tipo,
+          status: situacao(arquivo),
+          versao: versaoDoNome(arquivo),
           linkDrive: ler(linha, "link") || null,
           tamanhoBytes: numero(ler(linha, "tamanho")) ?? null,
           modificadoEm: data(ler(linha, "modificado")) ?? null,
@@ -482,6 +534,13 @@ async function main() {
         }
         console.log("");
       }
+    }
+  }
+
+  if (porStatus.size) {
+    console.log("\nPor situação:");
+    for (const [st, n] of [...porStatus].sort((a, b) => b[1] - a[1])) {
+      console.log(`  ${String(n).padStart(5)}  ${st}`);
     }
   }
 

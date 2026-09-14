@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 
+import { podeVerDocumentos } from "@/auth/permissao";
 import { usuarioAtual } from "@/auth/sessao";
 
 import { sair } from "./login/actions";
@@ -33,7 +34,8 @@ export default async function RootLayout({
             <a href="/">Esteira</a>
             <a href="/usinas">Usinas</a>
             <a href="/cadastro">Nova usina</a>
-            <a href="/documentos">Documentos</a>
+            {/* Esconder o link é cortesia; quem barra é a própria página. */}
+            {podeVerDocumentos(usuario.papel) && <a href="/documentos">Documentos</a>}
             <a href="/alertas">Alertas</a>
             <a href="/os">OS</a>
             <span className="quem">

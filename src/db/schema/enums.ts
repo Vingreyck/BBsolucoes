@@ -167,6 +167,37 @@ export const tipoDocumento = pgEnum("tipo_documento", [
   "outro",
 ]);
 
+/**
+ * Em que pé está o documento.
+ *
+ * Isto vivia no nome do arquivo — "Memorial Descritivo Assinado V2.pdf", "sem
+ * assinar", "Coletar assinatura" — e por isso o checklist não sabia dizer se o
+ * papel que existe é o que vale. São 232 arquivos que dizem alguma coisa sobre
+ * assinatura e 2.500 que não dizem nada.
+ *
+ * `trabalho` é o arquivo do meio do caminho: o `.dwg` que só abre no AutoCAD, a
+ * planilha `.xlsm` do memorial. São 98 dos 416 "projetos elétricos" e 29 dos
+ * 238 "memoriais" — e 9 clientes cujo único memorial é a planilha. Não é
+ * entregável, e contar como se fosse é dar por cumprido quem não cumpriu.
+ *
+ * `indefinido` é resposta honesta, não buraco: para a maior parte do que veio
+ * do Drive não dá para saber, e fingir que sim seria pior do que admitir.
+ */
+export const statusDocumento = pgEnum("status_documento", [
+  "indefinido",
+  "trabalho",
+  "aguardando_assinatura",
+  "assinado",
+]);
+
+/** O que se pode fazer com um documento — o vocabulário da trilha de auditoria. */
+export const acaoDocumento = pgEnum("acao_documento", [
+  "visualizou",
+  "baixou",
+  "enviou",
+  "removeu",
+]);
+
 /** Entidades que aceitam comentário. Discussão presa ao objeto, não a um grupo. */
 export const entidadeComentario = pgEnum("entidade_comentario", [
   "projeto",

@@ -1396,3 +1396,104 @@ body {
   color: var(--accent);
   text-decoration: underline;
 }
+
+/* ---------------------------------------------------------------
+   Dossiê: envio de documento em gaveta, em vez de batizar arquivo
+   --------------------------------------------------------------- */
+
+/* `.forte` e `.fraco` existiam só dentro de `.tabela`. A tela do dossiê
+   precisa deles em parágrafo e em cartão também. */
+.fraco {
+  color: var(--ink-3);
+}
+.forte {
+  font-weight: 600;
+  color: var(--ink);
+}
+
+.secao {
+  margin: 1.4rem 0.6rem 0.3rem;
+  font-size: 0.82rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--ink-2);
+}
+
+.cartoes {
+  grid-template-columns: repeat(auto-fill, minmax(19rem, 1fr));
+}
+.cartao h3 {
+  margin: 0;
+  font-size: 0.9rem;
+  font-weight: 600;
+}
+.cartao p {
+  margin: 0;
+  font-size: 0.78rem;
+  line-height: 1.45;
+}
+
+.envio {
+  display: grid;
+  gap: 0.4rem;
+  margin-top: 0.5rem;
+}
+.envio input[type="file"] {
+  font-size: 0.75rem;
+  color: var(--ink-2);
+  background: var(--surface);
+  border: 1px solid var(--line-soft);
+  border-radius: 3px;
+  padding: 0.35rem;
+  width: 100%;
+  /* Sem isto o seletor de arquivo empurra o cartão e quebra a grade quando o
+     nome do arquivo escolhido é longo — e nomes aqui são longos por padrão. */
+  min-width: 0;
+}
+.envio button {
+  justify-self: start;
+  font: inherit;
+  font-size: 0.78rem;
+  padding: 0.3rem 0.8rem;
+  border: 1px solid var(--line);
+  border-radius: 3px;
+  background: var(--surface);
+  color: var(--ink);
+  cursor: pointer;
+}
+.envio button:hover:not(:disabled) {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+.envio button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+.marcar {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-size: 0.76rem;
+  color: var(--ink-2);
+}
+.envio .erro {
+  margin: 0;
+  font-size: 0.76rem;
+  color: var(--crit);
+}
+.envio .ok {
+  margin: 0;
+  font-size: 0.76rem;
+  color: var(--ok);
+}
+
+/* Nome de arquivo do Drive passa de 80 caracteres e sozinho empurrava a
+   tabela para 1721px numa área de 1199, escondendo as colunas que importam.
+   Corta com reticências; o nome inteiro fica no `title`. */
+.tabela .nome-arquivo {
+  max-width: 24rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}

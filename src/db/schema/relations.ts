@@ -3,7 +3,6 @@ import { relations } from "drizzle-orm";
 import {
   cliente,
   contaPortal,
-  documento,
   empresa,
   equipamento,
   unidadeConsumidora,
@@ -11,6 +10,7 @@ import {
   usuario,
   vinculoPortal,
 } from "./cadastro";
+import { documento, documentoAcesso, exigenciaDocumento } from "./documentos";
 import {
   comentario,
   etapa,
@@ -55,10 +55,37 @@ export const clienteRelations = relations(cliente, ({ one, many }) => ({
   documentos: many(documento),
 }));
 
-export const documentoRelations = relations(documento, ({ one }) => ({
+export const documentoRelations = relations(documento, ({ one, many }) => ({
   empresa: one(empresa, { fields: [documento.empresaId], references: [empresa.id] }),
   cliente: one(cliente, { fields: [documento.clienteId], references: [cliente.id] }),
+  projeto: one(projeto, { fields: [documento.projetoId], references: [projeto.id] }),
+  enviadoPor: one(usuario, {
+    fields: [documento.criadoPor],
+    references: [usuario.id],
+  }),
+  acessos: many(documentoAcesso),
 }));
+
+export const documentoAcessoRelations = relations(documentoAcesso, ({ one }) => ({
+  documento: one(documento, {
+    fields: [documentoAcesso.documentoId],
+    references: [documento.id],
+  }),
+  usuario: one(usuario, {
+    fields: [documentoAcesso.usuarioId],
+    references: [usuario.id],
+  }),
+}));
+
+export const exigenciaDocumentoRelations = relations(
+  exigenciaDocumento,
+  ({ one }) => ({
+    etapa: one(etapa, {
+      fields: [exigenciaDocumento.etapaId],
+      references: [etapa.id],
+    }),
+  }),
+);
 
 export const unidadeConsumidoraRelations = relations(
   unidadeConsumidora,
@@ -133,6 +160,7 @@ export const projetoRelations = relations(projeto, ({ one, many }) => ({
     references: [usuario.id],
   }),
   eventos: many(projetoEvento),
+  documentos: many(documento),
 }));
 
 export const projetoEventoRelations = relations(projetoEvento, ({ one }) => ({
