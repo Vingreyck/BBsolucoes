@@ -1,8 +1,12 @@
-import { asc, eq, sql } from "drizzle-orm";
+import { and, asc, eq, sql } from "drizzle-orm";
 
 import { exigirUsuario } from "@/auth/sessao";
 import { db } from "@/db";
-import { leitura as leituraTable, usina as usinaTable } from "@/db/schema";
+import {
+  alerta as alertaTable,
+  leitura as leituraTable,
+  usina as usinaTable,
+} from "@/db/schema";
 
 import { kWh, kWp } from "../formatar";
 
@@ -32,6 +36,21 @@ function normalizar(texto: string): string {
  * O cliente confirmou que essas existem, e elas são as mais perigosas — não
  * aparecem em lugar nenhum quando param de gerar.
  */
+/**
+ * Como cada problema aparece na coluna Situação.
+ *
+ * "Sem comunicação" é o inversor que parou de mandar dado — pode ser internet,
+ * datalogger ou o próprio inversor. "Sem geração" é quando ele fala mas não
+ * produz, que é falha de verdade. A distinção decide o que o técnico leva na
+ * mochila.
+ */
+const SITUACAO_ROTULO: Record<string, string> = {
+  sem_comunicacao: "Sem comunicação",
+  offline: "Sem geração",
+  geracao_baixa: "Gerando pouco",
+  alarme_inversor: "Alarme",
+};
+
 const PORTAL_ROTULO: Record<string, string> = {
   growatt: "Growatt",
   foxess: "FoxESS",
@@ -80,6 +99,48 @@ export default async function Usinas({
 
   const porUsina = new Map(series.map((s) => [s.usinaId, s]));
 
+  /**
+   * Situação de cada usina, tirada dos alertas abertos.
+   *
+   * Esta lista nasceu como auditoria de cadastro — potência errada, sem
+   * equipamento, sem série. Isso resolveu o problema de agosto. Só que agora o
+   * sistema sabe quais usinas pararam de comunicar, e uma lista de 138 linhas
+   * que não mostra isso obriga a pessoa a abrir outra tela para descobrir o que
+   * importa. Quem abre a lista de usinas quer saber, antes de tudo, quais estão
+   * com problema hoje.
+   */
+  const problemas = await db
+    .select({
+      usinaId: alertaTable.usinaId,
+      tipo: alertaTable.tipo,
+      desde: sql<string>`min(${alertaTable.abertoEm})::date::text`,
+      quantos: sql<number>`count(*)::int`,
+    })
+    .from(alertaTable)
+    .where(and(eq(alertaTable.status, "aberto")))
+    .groupBy(alertaTable.usinaId, alertaTable.tipo);
+
+  /** Da mais grave para a menos: parada pesa mais que gerando pouco. */
+  const ORDEM_GRAVIDADE = ["sem_comunicacao", "offline", "geracao_baixa"];
+
+  const situacaoPorUsina = new Map<
+    string,
+    { tipo: string; desde: string; dias: number }
+  >();
+  for (const p of problemas) {
+    const anterior = situacaoPorUsina.get(p.usinaId);
+    const pesoNovo = ORDEM_GRAVIDADE.indexOf(p.tipo);
+    const pesoAtual = anterior ? ORDEM_GRAVIDADE.indexOf(anterior.tipo) : 99;
+    if (pesoNovo > pesoAtual) continue;
+    situacaoPorUsina.set(p.usinaId, {
+      tipo: p.tipo,
+      desde: p.desde,
+      dias: Math.floor(
+        (Date.now() - new Date(`${p.desde}T12:00:00Z`).getTime()) / 86_400_000,
+      ),
+    });
+  }
+
   const linhas = usinas.map((u) => {
     const serie = porUsina.get(u.id);
     const potencia = u.potenciaKwp ? Number(u.potenciaKwp) : null;
@@ -97,6 +158,7 @@ export default async function Usinas({
       serie,
       potencia,
       potenciaSuspeita,
+      situacao: situacaoPorUsina.get(u.id),
       semEquipamento: u.equipamentos.length === 0,
       semSerie: !serie,
       // Uma usina pode, em tese, estar em mais de um portal. Na prática é um só.
@@ -115,6 +177,10 @@ export default async function Usinas({
     }
     if (portal === "sem_portal" && l.portais.length > 0) return false;
     if (portal && portal !== "sem_portal" && !l.portais.includes(portal)) return false;
+    if (filtro === "problema") return l.situacao !== undefined;
+    // Só o mudo. "Sem geração" é o inversor que fala e não produz, e é outro
+    // problema — juntar os dois faria este filtro repetir o de cima.
+    if (filtro === "sem-comunicacao") return l.situacao?.tipo === "sem_comunicacao";
     if (filtro === "potencia") return l.potenciaSuspeita;
     if (filtro === "sem-equipamento") return l.semEquipamento;
     if (filtro === "sem-serie") return l.semSerie;
@@ -136,6 +202,10 @@ export default async function Usinas({
   const suspeitas = linhas.filter((l) => l.potenciaSuspeita).length;
   const semEquipamento = linhas.filter((l) => l.semEquipamento).length;
   const semSerie = linhas.filter((l) => l.semSerie).length;
+  const comProblema = linhas.filter((l) => l.situacao !== undefined).length;
+  const semComunicacao = linhas.filter(
+    (l) => l.situacao?.tipo === "sem_comunicacao",
+  ).length;
   const potenciaTotal = filtradas.reduce((s, l) => s + (l.potencia ?? 0), 0);
 
   return (
@@ -188,6 +258,27 @@ export default async function Usinas({
       </div>
 
       <div className="barra-usinas">
+        <span className="rotulo-filtro">Situação</span>
+        <nav className="filtros">
+          <Filtro atual={filtro} valor="" busca={busca} portal={portal}>
+            Todas ({linhas.length})
+          </Filtro>
+          <Filtro atual={filtro} valor="problema" busca={busca} portal={portal} perigo>
+            Com problema ({comProblema})
+          </Filtro>
+          <Filtro
+            atual={filtro}
+            valor="sem-comunicacao"
+            busca={busca}
+            portal={portal}
+            perigo
+          >
+            Sem comunicação ({semComunicacao})
+          </Filtro>
+        </nav>
+      </div>
+
+      <div className="barra-usinas">
         <span className="rotulo-filtro">Cadastro</span>
         <nav className="filtros">
           <Filtro atual={filtro} valor="" busca={busca} portal={portal}>
@@ -220,6 +311,7 @@ export default async function Usinas({
           <thead>
             <tr>
               <th>Cliente</th>
+              <th>Situação</th>
               <th>Usina</th>
               <th>Portal</th>
               <th>Cidade</th>
@@ -230,9 +322,24 @@ export default async function Usinas({
             </tr>
           </thead>
           <tbody>
-            {filtradas.map(({ usina, serie, potenciaSuspeita, semEquipamento, portais }) => (
+            {filtradas.map(({ usina, serie, potenciaSuspeita, semEquipamento, portais, situacao }) => (
               <tr key={usina.id}>
                 <td className="forte">{usina.cliente.nome}</td>
+                <td>
+                  {situacao ? (
+                    <span
+                      className={`pilula ${
+                        situacao.tipo === "geracao_baixa" ? "sev-atencao" : "sev-critico"
+                      }`}
+                      title={`Desde ${new Date(`${situacao.desde}T12:00:00Z`).toLocaleDateString("pt-BR")}`}
+                    >
+                      {SITUACAO_ROTULO[situacao.tipo] ?? situacao.tipo}
+                      {situacao.dias > 0 ? ` · ${situacao.dias}d` : ""}
+                    </span>
+                  ) : (
+                    <span className="fraco">gerando</span>
+                  )}
+                </td>
                 <td>{usina.nome}</td>
                 <td className={portais.length ? "" : "fraco"}>
                   {portais.length

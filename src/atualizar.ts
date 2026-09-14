@@ -76,6 +76,17 @@ const ETAPAS: Etapa[] = [
         : { rodar: false, motivo: "FOXESS_API_KEY não está no .env" },
   },
   {
+    nome: "Coleta FusionSolar",
+    script: "src/collectors/fusionsolar/coletar.ts",
+    quando: () =>
+      process.env.FUSIONSOLAR_USUARIO && process.env.FUSIONSOLAR_SYSTEM_CODE
+        ? { rodar: true }
+        : {
+            rodar: false,
+            motivo: "FUSIONSOLAR_USUARIO/FUSIONSOLAR_SYSTEM_CODE não estão no .env",
+          },
+  },
+  {
     nome: "Coleta Solis",
     script: "src/collectors/solis/coletar.ts",
     quando: () =>

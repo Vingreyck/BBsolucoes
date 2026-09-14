@@ -7,6 +7,20 @@ Stack: Next.js 15 + TypeScript, PostgreSQL, Drizzle ORM.
 
 ## Rodando
 
+**No dia a dia**, com a máquina já preparada, são dois comandos — e o primeiro
+só falha se o Docker Desktop estiver fechado:
+
+```bash
+docker start bb-pg
+npm run dev
+```
+
+Depois é `http://localhost:3000`. Entra com `adm@bbsolucoes.local` e a senha
+`bbsolucoes`, que é a do seed. Os outros papéis seguem o mesmo padrão:
+`vendas@`, `engenharia@`, `tecnico@`, `estoque@`.
+
+**Na primeira vez, ou em máquina nova:**
+
 ```bash
 npm install
 cp .env.example .env    # preencha APP_ENCRYPTION_KEY e as credenciais Growatt
@@ -139,7 +153,7 @@ código das séries novas.
 | FoxESS | 1 | OpenAPI, chave no OpenPlatform | **funcionando** |
 | SolarPortal+ | 1? | GoodWe SEMS, NDA pelo comercial | e-mail enviado; falta saber se a chave vale no white-label |
 | NEP | 0? | não tem API | e-mail enviado; falta conferir a contagem no app |
-| Huawei | 16 | FusionSolar Northbound API | API liga; a conta da API não enxerga as usinas |
+| Huawei | 16 | FusionSolar Northbound API | **funcionando** (servidor `intl`, desde 11/09/2026) |
 
 **Growatt: o OSS e o ShineServer são dois sistemas, não dois endereços.** A conta
 de distribuidor do OSS — a que exporta a Plant List das 137 usinas — simplesmente
@@ -311,6 +325,24 @@ até aí é seguir a documentação. O que não está escrito em lugar nenhum:
 Também vale saber que `machine` traz o modelo de verdade (`S5-GR1P10K`);
 `model` e `productModel` são um código de quatro dígitos que não diz nada.
 
+**E a BB tem duas contas Solis.** A primeira, com a usina `equilibrium`; a
+segunda, com quatro (Italo Magnavita 01 e 02, Adelvo Ivo do Prado 1 e 2). A API
+da primeira respondia "1 usina" e estava certa — a pergunta é que estava
+incompleta, e isso quase virou a conclusão de que a Solis era um portal de uma
+usina só. Cada conta tem sua própria chave, e o coletor varre todas as que
+estiverem no `.env`:
+
+```
+SOLIS_KEY_ID   / SOLIS_KEY_SECRET
+SOLIS_KEY_ID_2 / SOLIS_KEY_SECRET_2
+```
+
+Ele para no primeiro buraco da numeração, então pular do 2 para o 4 esconde a
+quarta conta. Cada credencial vira uma linha em `conta_portal` (`SolisCloud #1`,
+`#2`…), mas o vínculo de uma usina é procurado em **todas** as contas Solis da
+empresa — assim, se alguém reorganizar as contas no portal, a usina continua
+sendo a mesma aqui em vez de virar cliente duplicado.
+
 Três descobertas que economizam pesquisa depois:
 
 **SolarPortal+ é GoodWe.** O nome não aparece em lugar nenhum da tela, mas o site
@@ -346,29 +378,37 @@ da de login e nasce em *System → Company Management → Northbound Management*
 conta do instalador — e é preciso que seja a conta que administra as usinas, não
 qualquer uma.
 
-**A API liga, mas está apontada para uma conta vazia.** A conta northbound
-`Selebi` existe, o login passa e o token vem. As duas rotas de lista respondem
-`success: true, failCode: 0` com lista vazia — não é permissão negada nem rota
-errada.
+**Funcionando desde 11/09/2026 — e o que atrasou foi o servidor.** Uma conta do
+FusionSolar mora num servidor só: `eu5`, `intl` e `la5` são bancos separados. A
+primeira conta northbound nasceu no `uni005eu5` (cuja API vive no `eu5`) e
+respondia `success: true` com lista vazia, porque as 16 usinas estão no `intl`.
+Uma varredura dos dez hosts com a mesma credencial fecha o diagnóstico: só o
+`eu5` aceitava; `intl`, `la5` e `au5` respondiam `20400 user_or_value_invalid`,
+e os `uniXXX` devolvem HTML.
 
-Só que as usinas existem: o aplicativo do FusionSolar, na mesma empresa, mostra
-**16 instalações** — 15 normais, 1 em falha (Tempernet), nenhuma off-line —
-todas em Itabaiana e São Cristóvão, de 5 a 6 kWp. Isso faz da Huawei o segundo
-maior parque da BB, atrás só da Growatt, e não o portal descartável que a lista
-vazia sugeria.
+A conta certa se descobre pela **barra de endereço de quem enxerga as usinas** —
+não pelo servidor onde a conta de API foi criada.
 
-Aparelho e site mostram coisas diferentes porque uma conta do FusionSolar mora
-num servidor só: `eu5`, `intl` e `la5` são universos separados, e o aplicativo
-guarda o servidor escolhido no primeiro login. O site onde a `Selebi` nasceu é
-`uni005eu5` (empresa "BB Soluções", ainda **não autenticada** — cara de conta
-recém-criada). A conta northbound enxerga as usinas da empresa dela, então
-enquanto as 16 estiverem sob outra conta ou outro servidor, a lista continua
-vazia por mais certa que a integração esteja.
+O formulário do `intl` é melhor que o do `eu5`: ele deixa escolher o escopo. Na
+árvore de empresas/plantas, marcar a **empresa** em vez das usinas uma a uma
+autoriza também "todos os projetos existentes **e futuros**" — sem isso, cada
+usina nova instalada ficaria invisível para a API até alguém lembrar de voltar
+lá.
 
-Sai por um dos dois caminhos: criar a conta de API dentro da conta que
-realmente administra as 16, ou trazer as usinas para a empresa "BB Soluções"
-por *Plants → Plant Migration*. Só depois disso vale escrever o `coletar.ts` —
-que aqui ainda não existe de propósito.
+Duas descobertas que o coletor incorpora:
+
+- **`capacity` vem em kWp, não em MW.** A documentação diz MW; a usina Giselma
+  Mendonça devolve `capacity: 5` e tem um único SUN2000-**5**KTL-L1. Converter
+  inflaria tudo por mil. Foi o probe imprimindo o valor cru ao lado do
+  convertido que pegou o erro antes de ele chegar ao banco. Sete das 16 vêm com
+  `0`, que é campo vazio no cadastro do portal.
+- **Desconectado à noite é o inversor dormindo.** A Huawei marca todo inversor
+  como desconectado depois do pôr do sol; alertar por isso seria dezesseis
+  alertas por dia até a equipe aprender a ignorar a tela. Mas a primeira versão
+  da regra errou para o outro lado: escondeu duas usinas que caíram **às três da
+  tarde** depois de gerar. A regra que ficou usa hora local de Sergipe —
+  desconectado só é perdoado fora da janela de sol, e quem não gerou nada no dia
+  é alerta a qualquer hora.
 
 O host é a pegadinha. A barra de endereço do portal mostra
 `uni005eu5.fusionsolar.huawei.com`, e esse host devolve **HTML** em

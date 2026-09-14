@@ -19,10 +19,11 @@ import { FusionSolarClient } from "./client";
 
 const HOST_PADRAO = "https://la5.fusionsolar.huawei.com";
 
-/** Huawei manda capacidade em MW. 0,008 MW = 8 kWp. */
+/** A conta da BB devolve kWp direto, apesar de a documentação dizer MW. */
 function emKwp(capacidade: number | undefined): string {
   if (capacidade === undefined) return "—";
-  return `${(capacidade * 1000).toLocaleString("pt-BR")} kWp`;
+  if (capacidade === 0) return "sem potência no cadastro";
+  return `${capacidade.toLocaleString("pt-BR")} kWp`;
 }
 
 async function main() {
@@ -71,9 +72,9 @@ async function main() {
   if (usinas.length > 30) console.log(`  … e mais ${usinas.length - 30}`);
 
   console.log(
-    "\nConfira a potência contra o portal. A Huawei documenta capacidade em MW,\n" +
-      "e é por isso que o valor bruto aparece do lado — se as duas colunas não\n" +
-      "baterem, a conversão muda antes de qualquer coisa depender dela.",
+    "\nO valor bruto fica do lado de propósito: a documentação da Huawei diz que\n" +
+      "capacidade vem em MW, e nesta conta vem em kWp. Se um dia as duas colunas\n" +
+      "deixarem de bater com o portal, é aqui que se percebe.",
   );
 
   console.log("\nCampos disponíveis na usina:");

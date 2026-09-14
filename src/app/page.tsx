@@ -77,6 +77,9 @@ export default async function Esteira() {
             {parados.length} parados há {DIAS_ATENCAO} dias ou mais
           </span>
         )}
+        <a href="/projeto/novo" className="primario acao-topo">
+          Novo projeto
+        </a>
       </header>
 
       <p className="aviso">

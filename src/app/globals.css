@@ -74,6 +74,13 @@ body {
   font-size: 0.88rem;
 }
 
+/** Ação principal do cabeçalho — encostada à direita, longe do texto. */
+.topo .acao-topo {
+  margin-left: auto;
+  align-self: center;
+  text-decoration: none;
+}
+
 .aviso {
   margin: 1rem clamp(1rem, 3vw, 2rem) 0;
   padding: 0.7rem 0.9rem;

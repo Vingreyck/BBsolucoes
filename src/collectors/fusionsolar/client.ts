@@ -43,10 +43,17 @@ export interface UsinaHuawei {
   codigo: string;
   nome: string;
   /**
-   * Como a Huawei mandou, sem converter. A unidade documentada é **MW** — uma
-   * casa de 8 kWp chega como `0.008`. Fica cru de propósito: o probe imprime o
-   * número junto com a leitura em kWp, para conferir contra o portal antes de
-   * qualquer conta depender disso.
+   * Potência instalada, em **kWp**.
+   *
+   * A documentação da Huawei diz MW, e não é o que a conta da BB devolve: a
+   * usina Giselma Mendonça vem com `capacity: 5` e tem um único inversor
+   * SUN2000-**5**KTL-L1. O aplicativo mostra a mesma usina como "5,000 kWp",
+   * que em português é cinco, não cinco mil. Converter para MW inflaria tudo
+   * por mil — foi o probe imprimindo o valor cru ao lado do convertido que
+   * pegou o erro antes de ele entrar no banco.
+   *
+   * Vem `0` quando ninguém preencheu a potência no cadastro do portal, o que
+   * acontece em 7 das 16.
    */
   capacidadeBruta?: number;
   endereco?: string;

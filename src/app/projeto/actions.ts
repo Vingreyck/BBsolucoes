@@ -1,12 +1,18 @@
 "use server";
 
-import { eq } from "drizzle-orm";
+import { and, asc, eq } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 
 import { exigirUsuario } from "@/auth/sessao";
 import { db } from "@/db";
-import { comentario, projeto as projetoTable } from "@/db/schema";
+import {
+  cliente as clienteTable,
+  comentario,
+  etapa as etapaTable,
+  projeto as projetoTable,
+  projetoEvento,
+} from "@/db/schema";
 
 const texto = (d: FormData, campo: string) => {
   const v = String(d.get(campo) ?? "").trim();
@@ -19,6 +25,104 @@ const numero = (d: FormData, campo: string) => {
   const n = Number(v.replace(/\./g, "").replace(",", "."));
   return Number.isFinite(n) ? String(n) : null;
 };
+
+/**
+ * Cria um projeto na primeira etapa da esteira.
+ *
+ * Até agora a esteira só tinha os projetos do seed, e um cliente novo não tinha
+ * onde entrar — a tela era bonita e não aceitava trabalho. Este é o começo da
+ * esteira de verdade.
+ *
+ * O cliente pode ser um já cadastrado ou um nome novo. Como o cadastro veio dos
+ * portais, quase todo mundo que já tem usina já está lá; quem chega para
+ * orçamento ainda não, e obrigar a cadastrar antes só faria o vendedor desistir
+ * e voltar para o WhatsApp.
+ */
+export async function criarProjeto(dados: FormData): Promise<void> {
+  const usuario = await exigirUsuario();
+
+  const clienteExistente = texto(dados, "clienteId");
+  const nomeNovo = texto(dados, "clienteNovo");
+
+  if (!clienteExistente && !nomeNovo) {
+    redirect("/projeto/novo?erro=cliente");
+  }
+
+  const primeira = await db.query.etapa.findFirst({
+    where: and(
+      eq(etapaTable.empresaId, usuario.empresaId),
+      eq(etapaTable.ativa, true),
+    ),
+    orderBy: asc(etapaTable.ordem),
+  });
+  if (!primeira) {
+    redirect("/projeto/novo?erro=etapa");
+  }
+
+  let clienteId = clienteExistente;
+
+  if (!clienteId && nomeNovo) {
+    // Nome repetido vira o mesmo cliente: a planilha dos portais não traz CPF,
+    // então é o melhor critério que existe hoje.
+    const jaTem = await db.query.cliente.findFirst({
+      where: and(
+        eq(clienteTable.empresaId, usuario.empresaId),
+        eq(clienteTable.nome, nomeNovo),
+      ),
+    });
+    if (jaTem) {
+      clienteId = jaTem.id;
+    } else {
+      const [criado] = await db
+        .insert(clienteTable)
+        .values({
+          empresaId: usuario.empresaId,
+          nome: nomeNovo,
+          cidade: texto(dados, "cidade"),
+          telefone: texto(dados, "telefone"),
+        })
+        .returning();
+      clienteId = criado.id;
+    }
+  }
+
+  const agora = new Date();
+  const titulo = texto(dados, "titulo") ?? "Projeto novo";
+
+  const [projeto] = await db
+    .insert(projetoTable)
+    .values({
+      empresaId: usuario.empresaId,
+      clienteId: clienteId as string,
+      titulo,
+      etapaId: primeira.id,
+      responsavelId: usuario.id,
+      etapaDesde: agora,
+      prazoEtapa: primeira.prazoPadraoDias
+        ? new Date(agora.getTime() + primeira.prazoPadraoDias * 86_400_000)
+        : null,
+      consumoMedioKwh: numero(dados, "consumoMedioKwh"),
+      observacoes: texto(dados, "observacoes"),
+    })
+    .returning();
+
+  /**
+   * A entrada na esteira também é um evento. Sem ele, o primeiro trecho do
+   * caminho ficaria invisível no histórico, e o tempo até sair da primeira
+   * etapa nunca teria de onde ser calculado.
+   */
+  await db.insert(projetoEvento).values({
+    empresaId: usuario.empresaId,
+    projetoId: projeto.id,
+    etapaParaId: primeira.id,
+    usuarioId: usuario.id,
+    observacao: "Projeto criado",
+    ocorridoEm: agora,
+  });
+
+  revalidatePath("/");
+  redirect(`/projeto/${projeto.id}`);
+}
 
 /** Etapa 2: o que o cliente contou e quanto ele consome. */
 export async function salvarInformacoes(
