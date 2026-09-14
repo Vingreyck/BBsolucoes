@@ -3,6 +3,7 @@ import { relations } from "drizzle-orm";
 import {
   cliente,
   contaPortal,
+  documento,
   empresa,
   equipamento,
   unidadeConsumidora,
@@ -51,6 +52,12 @@ export const clienteRelations = relations(cliente, ({ one, many }) => ({
   usinas: many(usina),
   projetos: many(projeto),
   ordensServico: many(ordemServico),
+  documentos: many(documento),
+}));
+
+export const documentoRelations = relations(documento, ({ one }) => ({
+  empresa: one(empresa, { fields: [documento.empresaId], references: [empresa.id] }),
+  cliente: one(cliente, { fields: [documento.clienteId], references: [cliente.id] }),
 }));
 
 export const unidadeConsumidoraRelations = relations(

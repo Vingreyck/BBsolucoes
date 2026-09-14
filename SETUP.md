@@ -461,6 +461,110 @@ hoymiles.com`, GoodWe Brasil `servico.br@goodwe.com`, Huawei América Latina
 `la_inverter_support@huawei.com`. A GoodWe pede NDA assinado antes de liberar a
 API — e a assinatura digital exige **passaporte**, RG não serve.
 
+## Os documentos do cliente
+
+Hoje cada cliente é uma pasta no Drive, em `Energia solar / CLIENTES <ano> /
+<NOME> /`, com um PDF por assunto no padrão `TIPO - CLIENTE.pdf`. São três anos
+de pastas — 2024, 2025 e 2026.
+
+**O sistema não guarda o arquivo, guarda o que ele é e onde está.** Baixar
+trezentas pastas de PDF escaneado para dentro do banco não resolveria nada: o
+problema nunca foi onde o papel está, foi não conseguir olhar todas as pastas de
+uma vez. Bastou olhar três para o problema aparecer:
+
+| Pasta | Arquivos |
+| --- | --- |
+| YURI MONTEIRO | 8 |
+| MARINA SOBRAL | 4 (incluindo um `.zip` e uma foto de telhado) |
+| ANA PAULA | **1** |
+
+O caminho tem duas peças. `scripts/listar-drive.gs` roda no Apps Script **dentro
+da conta do Google** e escreve um CSV com a árvore inteira — assim não é preciso
+credencial de API nem Drive sincronizado em máquina nenhuma. Depois,
+`npm run import:drive -- "dados/arquivo.csv"` carrega esse CSV.
+
+**A listagem tem que descer nas subpastas.** A primeira versão olhava só o
+primeiro nível e achou 1.162 arquivos. A recursiva achou **2.921** — os 1.764
+que faltavam estavam em 300 subpastas `PE Solar ...`, que é onde o engenheiro
+guarda prancha, memorial, ART assinada, datasheet e as fotos do padrão. Com a
+listagem rasa, metade dos clientes aparecia sem projeto elétrico tendo o projeto
+elétrico uma pasta abaixo.
+
+O importador classifica em duas passadas. **Prefixo primeiro** (`BOLETO` antes
+de `ART`, senão o boleto vira ART), porque metade do Drive segue
+`TIPO - CLIENTE.pdf`. Depois **palavra em qualquer lugar do nome**, porque a
+outra metade inverte: `JUSTINO DECLARAÇÃO.pdf`, `SOLICITACAO ORCAMENTO -
+GILMAR.pdf`. Essa ordem é o que torna a segunda passada segura —
+`MEMORIAL - INMETRO INVERSOR` já saiu como memorial e nunca chega lá para virar
+datasheet.
+
+O casamento de cliente tem três passadas, mas a que vale é a primeira: **o id da
+pasta do Drive**. Casar por nome não é idempotente — na segunda rodada a pasta
+"MELO" deixou de casar sozinha porque "DIEGO MELO" tinha acabado de ser criada, e
+virou um cliente separado.
+
+Quatro coisas que só aparecem olhando o Drive de verdade:
+
+- **128 arquivos são lixo do AutoCAD** (`.bak`, `.log`, `.dwl`). Um `.bak` de
+  prancha se chama `PE Solar Fulano.bak` e entrava como projeto elétrico — dando
+  ao cliente um documento que ele não tem. São ignorados na entrada.
+- **Regra genérica engole regra específica.** `^uc` pegava `UC BENEFICIARIA`
+  antes da regra de beneficiária: 41 arquivos entravam como conta da geradora,
+  que é item do checklist, e quem só tinha a das beneficiárias aparecia em dia.
+- **Os 176 arquivos `Registro NNNNNN_AAAA — Avaliação da Conformidade`** são
+  todos certificado Inmetro de módulo ou inversor, não declaração.
+- **Erros de digitação são regra, não exceção**: `CONTRTATO`, `PTOCURACAO`,
+  `FILHA CADASTRAL`, `DIAJUNTOR`, `COMPENSATICO`.
+
+**Rode com `--simular --amostra` antes.** `--simular` não grava; `--amostra`
+imprime exemplos de arquivo por tipo. Regra de classificação errada não dá erro:
+ela grava com o rótulo trocado e fica quieta, e com 2.900 arquivos a única forma
+de conferir é ler o que cada regra pegou.
+
+A tela `/documentos` responde o que ninguém conseguia responder: **quem está com
+documentação incompleta**. São dois blocos. O da **concessionária** é a lista da
+NDU 013 da Energisa — conta de luz, documento do titular, projeto elétrico,
+memorial, ART e fotos do padrão; falta aqui trava a homologação e a usina fica
+pronta sem poder ligar. O da **empresa** é contrato e recibo: não trava obra,
+aparece quando dá problema meses depois. Procuração, UCs beneficiárias e
+compensativo são condicionais e não contam como falta.
+
+**Comece por 2026.** O corte por ano mostra que o buraco é de arquivamento, não
+de obra parada:
+
+| Ano | Clientes | Tem projeto elétrico | Tem foto do padrão |
+| --- | --- | --- | --- |
+| 2024 | 7 | 0% | 0% |
+| 2025 | 57 | 9% | 3% |
+| 2026 | 105 | 53% | 22% |
+
+Em 2026 são 15 completos e **27 a uma única foto do padrão** de ficarem
+completos. A lista é ordenada por quanto falta, para que esses não sumam no meio
+dos 26 que estão faltando três documentos ou mais.
+
+Falta o dono responder **a partir de qual etapa cada documento passa a ser
+exigido**. Sem isso, cliente que fechou semana passada aparece em vermelho igual
+ao que está parado há seis meses — e ninguém abre uma lista onde todo mundo está
+errado.
+
+### As migrations de `documento` são aplicadas à mão
+
+`drizzle/0001-documento.sql` até `0006-protocolo.sql` são escritas à mão e
+aplicadas com `docker exec -i bb-pg psql -U postgres -d bbsolucoes < arquivo`.
+Não estão no `_journal.json` e **`npm run db:migrate` não as conhece**.
+
+Não foi preguiça. O `drizzle-kit generate` produziu um `0001` que recriava o
+`tipo_documento` com a lista antiga de valores, derrubava o índice `os_numero_idx`
+e readicionava colunas que já tinham sido aplicadas à mão em agosto — rodar aquilo
+num banco limpo daria um schema diferente do que está em produção, calado. O
+arquivo foi removido junto com o snapshot dele, para que `db:migrate` não o
+encontre nunca.
+
+O preço disso é que o próximo `npm run db:generate` vai comparar com o
+`0000_snapshot` e propor recriar tudo de novo. Quando isso acontecer, o caminho é
+gerar, **ler o SQL antes de aplicar** e apagar o que já existe — não rodar no
+escuro.
+
 ## A esteira é dado, não código
 
 As 12 etapas do fluxo da BB Soluções vivem na tabela `etapa`, semeadas por

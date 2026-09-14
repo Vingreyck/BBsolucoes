@@ -15,6 +15,7 @@ import {
   fabricantePortal,
   papelUsuario,
   statusUsina,
+  tipoDocumento,
   tipoEquipamento,
   tipoPessoa,
 } from "./enums";
@@ -265,5 +266,57 @@ export const vinculoPortal = pgTable(
   (t) => [
     uniqueIndex("vinculo_portal_uq").on(t.contaPortalId, t.idExterno),
     index("vinculo_portal_usina_idx").on(t.usinaId),
+  ],
+);
+
+/**
+ * Um documento do cliente, como ele existe hoje: um arquivo numa pasta do Drive.
+ *
+ * O sistema **não guarda o arquivo** — guarda o que ele é, de quem é e onde
+ * está. Baixar 300 pastas de PDF escaneado para dentro do banco não resolveria
+ * nada: o problema da BB nunca foi onde o papel está, foi não conseguir olhar
+ * todas as pastas de uma vez e enxergar quem está incompleto.
+ *
+ * Quando um dia o upload passar a acontecer aqui dentro, `linkDrive` vira o
+ * caminho do arquivo próprio e o resto da tabela continua igual.
+ */
+export const documento = pgTable(
+  "documento",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    empresaId: uuid("empresa_id")
+      .notNull()
+      .references(() => empresa.id, { onDelete: "cascade" }),
+    clienteId: uuid("cliente_id")
+      .notNull()
+      .references(() => cliente.id, { onDelete: "cascade" }),
+    tipo: tipoDocumento("tipo").notNull(),
+    /** Nome do arquivo como está no Drive — é ele que classifica o tipo. */
+    nomeArquivo: text("nome_arquivo").notNull(),
+    /**
+     * Onde o arquivo estava dentro da pasta do cliente. Vazio = solto na raiz;
+     * preenchido = dentro de um pacote, como `PE Solar … / Documentos
+     * Assinados`. As pastas não seguem padrão, e é isso que permite responder
+     * se a ART está solta ou dentro do projeto elétrico.
+     */
+    caminho: text("caminho").notNull().default(""),
+    linkDrive: text("link_drive"),
+    /** Pasta do cliente no Drive. Igual para todos os documentos dele. */
+    pastaExterna: varchar("pasta_externa", { length: 80 }),
+    /** "CLIENTES 2026", "CLIENTES 2025" — o ano em que o negócio aconteceu. */
+    origem: varchar("origem", { length: 40 }),
+    tamanhoBytes: integer("tamanho_bytes"),
+    modificadoEm: timestamp("modificado_em", { withTimezone: false }),
+    criadoEm: timestamp("criado_em", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    index("documento_cliente_idx").on(t.clienteId, t.tipo),
+    /**
+     * Reimportar a mesma listagem não pode duplicar, e o caminho faz parte da
+     * identidade: com a varredura recursiva, o mesmo nome de arquivo aparece
+     * solto na raiz e dentro de `Documentos Assinados`, e são dois documentos
+     * diferentes.
+     */
+    uniqueIndex("documento_arquivo_uq").on(t.clienteId, t.caminho, t.nomeArquivo),
   ],
 );

@@ -115,6 +115,58 @@ export const statusAlerta = pgEnum("status_alerta", [
   "resolvido",
 ]);
 
+/**
+ * Tipos de documento de cliente, tirados das pastas reais do Drive.
+ *
+ * A BB guarda um PDF por assunto, com o nome no padrão `TIPO - CLIENTE.pdf`.
+ * Estes valores saíram de olhar as pastas, não de imaginar o que deveria
+ * existir — e foi olhando que apareceu o problema: a pasta do YURI tem os oito
+ * documentos, a da Marina tem quatro (com um .zip e uma foto de telhado no
+ * meio) e a da Ana Paula tem **um**. Ninguém sabia disso porque não havia como
+ * olhar 300 pastas de uma vez.
+ *
+ * `outro` existe para não perder arquivo que foge do padrão: some do checklist,
+ * mas continua contando como documento da pasta.
+ */
+export const tipoDocumento = pgEnum("tipo_documento", [
+  "art",
+  "boleto_art",
+  "contrato",
+  "memorial",
+  "procuracao",
+  "recibo",
+  "documento_pessoal",
+  "uc_geradora",
+  "projeto_eletrico",
+  "simulacao",
+  // A segunda leva saiu da listagem completa do Drive: 1.162 arquivos em 178
+  // pastas. Sem estes, um terço de tudo caía em `outro` — e "UCS" sozinho são
+  // 45 arquivos, que são as unidades beneficiárias do sistema de compensação,
+  // coisa diferente da UC geradora.
+  "uc_beneficiaria",
+  "compensativo",
+  "nota_fiscal",
+  "ficha_cadastral",
+  "datasheet",
+  "comprovante",
+  "declaracao",
+  "orcamento",
+  // Fotos do padrão de entrada, tampa aberta e fechada — exigência da NDU 013.
+  // No Drive vêm como MEDIDOR, QUADRO, PADRAO, DISJUNTOR e QD.
+  "foto_padrao",
+  /**
+   * Papel que vai para a Energisa ou vem dela.
+   *
+   * Apareceu quando a listagem passou a descer nas subpastas: dezenas de
+   * arquivos `SE20260498249.3d6Wc.pdf`, que é o número de protocolo da
+   * Energisa Sergipe, mais `energisa_2via...` e os formulários de adesão à
+   * compensação. É o rastro da homologação — sem ele não dá para saber se o
+   * pedido de acesso chegou a ser aberto.
+   */
+  "protocolo",
+  "outro",
+]);
+
 /** Entidades que aceitam comentário. Discussão presa ao objeto, não a um grupo. */
 export const entidadeComentario = pgEnum("entidade_comentario", [
   "projeto",
