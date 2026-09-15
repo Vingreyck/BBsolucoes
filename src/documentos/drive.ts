@@ -253,6 +253,23 @@ export async function baixarArquivo(
 }
 
 /**
+ * Manda um arquivo ou pasta para a lixeira do Drive.
+ *
+ * Lixeira e não exclusão definitiva, e isso é de propósito: o Drive guarda por
+ * 30 dias e dá para restaurar com dois cliques. Documento de cliente apagado
+ * por engano — o estagiário que anexou no dossiê errado e "corrigiu" — é
+ * prejuízo que não se desfaz, e a API tem `files.delete` justamente para isso
+ * acontecer. Não vamos usar.
+ */
+export async function moverParaLixeira(fileId: string): Promise<void> {
+  await chamar(`/files/${encodeURIComponent(fileId)}`, {
+    method: "PATCH",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ trashed: true }),
+  });
+}
+
+/**
  * Tira do link do Drive o id do arquivo.
  *
  * Os 2.788 documentos importados guardam a URL inteira
