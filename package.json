@@ -31,7 +31,8 @@
     "seed:exigencias": "tsx src/documentos/semear-exigencias.ts",
     "dossies": "tsx src/documentos/criar-dossies.ts",
     "drive:autorizar": "tsx src/documentos/autorizar-drive.ts",
-    "limpar:exemplos": "tsx src/db/limpar-exemplos.ts"
+    "limpar:exemplos": "tsx src/db/limpar-exemplos.ts",
+    "drive:testar": "tsx src/documentos/testar-drive.ts"
   },
   "dependencies": {
     "dotenv": "^17.4.2",
