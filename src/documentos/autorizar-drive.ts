@@ -11,22 +11,40 @@ import { ESCOPO } from "./drive";
  * refresh token e sai. **O token aparece no seu terminal e em lugar nenhum
  * mais** — ninguém além de você o vê, e é você quem cola no `.env`.
  *
- * ANTES DE RODAR, uma vez só, em https://console.cloud.google.com:
+ * ANTES DE RODAR, uma vez só, em https://console.cloud.google.com.
  *
- *   1. Criar projeto (nome livre, "Selebi" serve)
- *   2. APIs e serviços → Biblioteca → ativar **Google Drive API**
- *   3. APIs e serviços → Tela de permissão OAuth
- *        · Tipo: Externo
+ * O Google renomeou isto em 2025: o que era "Tela de permissão OAuth" dentro
+ * de "APIs e serviços" virou uma seção própria, **Google Auth Platform**. Se
+ * você procurar pelo nome antigo não acha.
+ *
+ *   1. Criar projeto (nome livre, "Selebi" serve). Se você já tem um projeto
+ *      criado sozinho pela Gemini API — nome tipo `gen-lang-client-00721...` —
+ *      dá para usar esse mesmo.
+ *
+ *   2. APIs e serviços → Biblioteca → ativar **Google Drive API**.
+ *      Sem isso o resto configura e o Drive responde 403 na primeira chamada.
+ *
+ *   3. Google Auth Platform → **Público-alvo**
+ *        · Tipo de usuário: Externo
+ *        · Em **Usuários de teste**, adicionar bbsolucoesengenharia@gmail.com
+ *      É o passo que mais some: sem o e-mail nessa lista, o consentimento é
+ *      recusado com "app não concluiu o processo de verificação" e não há como
+ *      seguir.
+ *
+ *   4. Google Auth Platform → **Branding**
  *        · Nome do app: Selebi
  *        · E-mail de suporte e de contato: o seu
- *        · Em "Usuários de teste", adicionar bbsolucoesengenharia@gmail.com
- *   4. Credenciais → Criar credenciais → **ID do cliente OAuth**
+ *
+ *   5. Google Auth Platform → **Clientes** → Criar cliente
  *        · Tipo: Aplicativo da Web
  *        · URI de redirecionamento autorizado: http://localhost:5599/retorno
- *   5. Copiar o ID e a chave secreta para o `.env`:
+ *      O endereço precisa bater com o que este script escuta, letra por letra.
+ *
+ *   6. Copiar o ID e a chave secreta para o `.env`:
  *        GOOGLE_CLIENT_ID=...
  *        GOOGLE_CLIENT_SECRET=...
- *   6. `npm run drive:autorizar`, entrar com a conta bbsolucoesengenharia
+ *
+ *   7. `npm run drive:autorizar`, entrar com a conta bbsolucoesengenharia
  *
  * A tela do Google vai avisar que o app não foi verificado. É esperado: o app
  * é seu, usado só pela sua empresa. Clique em "Avançado" → "Acessar Selebi".

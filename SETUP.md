@@ -637,8 +637,18 @@ gravar arquivo e devolver arquivo.
 não pelo link do Drive: se a tela só mostrasse o link, quem não tem conta Google
 esbarraria na tela de login do Google.
 
-Seis passos no [console do Google](https://console.cloud.google.com), uma vez só
-— estão detalhados no cabeçalho de `src/documentos/autorizar-drive.ts`. Depois:
+Sete passos no [console do Google](https://console.cloud.google.com), uma vez só
+— estão detalhados no cabeçalho de `src/documentos/autorizar-drive.ts`. Dois
+deles enganam:
+
+- O Google renomeou a **"Tela de permissão OAuth"** para **Google Auth
+  Platform**, com as opções repartidas em *Público-alvo*, *Branding* e
+  *Clientes*. Procurar pelo nome antigo não acha.
+- O e-mail da conta precisa estar em **Público-alvo → Usuários de teste**.
+  Sem isso o consentimento é recusado com "o app não concluiu o processo de
+  verificação" e não há como seguir.
+
+Depois:
 
 ```bash
 npm run drive:autorizar
