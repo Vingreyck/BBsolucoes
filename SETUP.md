@@ -19,6 +19,22 @@ Depois é `http://localhost:3000`. Entra com `adm@bbsolucoes.local` e a senha
 `bbsolucoes`, que é a do seed. Os outros papéis seguem o mesmo padrão:
 `vendas@`, `engenharia@`, `tecnico@`, `estoque@`.
 
+> **`Failed query: select ... from "sessao" inner join "usuario"`**
+>
+> Não é bug da tela: é o Postgres fora do ar, e a consulta do login é só a
+> primeira a tentar falar com ele. Quase sempre o Docker Desktop foi fechado —
+> ele leva uns 30 segundos para subir, e só então `docker start bb-pg`
+> funciona. Para não repetir, dá para marcar *Start Docker Desktop when you log
+> in* nas configurações dele.
+
+> **`EADDRINUSE: address already in use :::3000`**
+>
+> Já tem um servidor rodando nessa porta, provavelmente de outra janela de
+> terminal. Fecha a outra, ou usa outra porta com `npm run dev -- -p 3001`.
+>
+> E `npm start` não é o comando de desenvolvimento: ele roda `next start`, que
+> exige um `npm run build` antes. Para mexer no código é `npm run dev`.
+
 **Na primeira vez, ou em máquina nova:**
 
 ```bash
@@ -422,33 +438,42 @@ guardado e só se reloga quando o portal manda (`failCode 305`), e um contador
 recusa o sexto login dentro de dez minutos, que é o que trancaria a conta por
 meia hora.
 
-**Hoymiles tem API oficial, e ela é paga.** Depois do e-mail para o suporte
-brasileiro, mandaram a documentação — *Open API for S-Miles Cloud* V1.14, 104
-páginas, marcada como confidencial — e a tabela de preços de 2025. Cinco planos,
-cobrados por volume:
+**Hoymiles tem API oficial, e ela é paga — mas não para nós.** O suporte mandou
+a documentação *Open API for S-Miles Cloud* e a tabela de preços.
 
-| Plano | Chamadas/min | Chamadas/mês | Preço |
-| --- | --- | --- | --- |
-| A | 10 | 10.000 | US$ 18/mês — **grátis para revenda certificada ou Gold** |
-| B | 50 | 30.000 | US$ 30/mês |
-| C | 100 | 350.000 | US$ 350/mês |
+> A documentação é marcada **"Confidential level: Internal Information"** e por
+> isso **não é descrita aqui** — este repositório é público. Rotas, parâmetros
+> e formatos ficam fora. O PDF está com o dono, e o resumo técnico, fora do
+> repositório.
 
-Ironicamente é a API **mais simples** de todas as sete: base
-`https://wapi.hoymiles.com`, a chave vai na própria URL (`?key=…`), sem
-assinatura, sem token que expira, sem sessão única. A resposta é
-`{status, message, data}`, com `status: "0"` significando sucesso e `100` a
-chave inválida. As rotas que interessam são `findMyStations` (lista, dez por
-página), `gpw` (estado da usina), `station_today_production` e
-`findStation30dayEnergy`.
+A tabela de preços de 2026 tem cinco planos por volume de chamadas, e o que
+decide é o **nível do distribuidor**, não o plano:
+
+| Plano | Chamadas/min | Chamadas/mês | Regular | Certified | Gold | Platinum | Diamond |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| A | 10 | 10.000 | US$ 18 | **grátis** | **grátis** | grátis | grátis |
+| B | 50 | 30.000 | US$ 30 | US$ 30 | US$ 30 | **grátis** | grátis |
+| C | 100 | 350.000 | US$ 350 | US$ 350 | US$ 350 | US$ 350 | **grátis** |
+
+O detalhe que resolve está nas *Remarks* da própria tabela: o nível interno
+**"Gold / Certified (B / C-level)"** tem direito ao *Free Package Entitlement:
+Package A*. Ou seja, **Certified basta — não precisa ser Gold**. Vale insistir
+nisso, porque o suporte pediu o certificado Gold como se fosse a única via.
 
 Para as quatro usinas da BB o plano A sobra: uma rodada de coleta gasta cerca de
 nove chamadas, então de hora em hora dá ~6.500 no mês, dentro das 10.000. De
 quinze em quinze minutos estoura — e é bom saber disso antes de escolher a
 cadência, não depois da primeira fatura.
 
-O que ainda pesa contra: o portal atual sai do ar em 31/10/2026, e ninguém
-confirmou que a chave migra para o `global.hoymiles.com`. Vale perguntar junto
-com o pedido da chave.
+**Nada deve ser escrito com base em documentação antiga.** A versão de
+fevereiro de 2026 apagou toda a geração anterior de interfaces: um coletor
+escrito pela documentação de 2024 não teria uma única rota válida. Quando a
+chave chegar, conferir a versão do PDF antes de escrever a primeira linha.
+
+O que ainda pesa contra: o portal atual sai do ar em 31/10/2026 e ninguém
+confirmou que a chave migra para o `global.hoymiles.com` — a documentação de
+2026 não menciona a migração em lugar nenhum. Vale perguntar junto com o pedido
+da chave.
 
 E há prazo: o aviso na tela de login do `previous.hoymiles.com` diz que **a
 versão atual sai do ar em 31/10/2026**, e manda usar `global.hoymiles.com`. Ou
