@@ -133,22 +133,58 @@ async function main() {
   }
   console.log(`\nCampos da usina:\n  ${campos(lista[0])}`);
 
-  const cliente = new GrowattOpenApi(token);
-  const primeira = lista[0].plant_id;
+  /**
+   * Sonda uma usina que **gera**, não a primeira da lista.
+   *
+   * A primeira é `DWHBCJ210H`, com zero kWh acumulados e zero dispositivos —
+   * cadastro de teste. Sondando ela, as três rotas voltam vazias e a conclusão
+   * seria que a API não entrega nada, quando o problema é a amostra.
+   */
+  const cliente = new GrowattOpenApi(token, { pausaMs: 8000 });
+  const cobaia = lista.find((u) => Number(u.total_energy ?? 0) > 0) ?? lista[0];
+  console.log(`\nSondando a usina ${cobaia.plant_id} (${cobaia.name ?? "sem nome"}):`);
+
+  const hoje = new Date().toISOString().slice(0, 10);
+  const seteDiasAtras = new Date(Date.now() - 6 * 86_400_000)
+    .toISOString()
+    .slice(0, 10);
+
+  const visaoGeral = await tentar("visão geral", () =>
+    cliente.visaoGeral(cobaia.plant_id),
+  );
+  console.log(
+    visaoGeral.ok
+      ? `  /v1/plant/data   ${JSON.stringify(visaoGeral.valor.data)}`
+      : `  /v1/plant/data   erro — ${visaoGeral.motivo}`,
+  );
 
   const dispositivos = await tentar("dispositivos", () =>
-    cliente.listarDispositivos(primeira),
+    cliente.listarDispositivos(cobaia.plant_id),
   );
   if (dispositivos.ok) {
     const devs = dispositivos.valor.data?.devices ?? [];
-    console.log(`\nDispositivos da primeira usina: ${devs.length}`);
-    if (devs[0]) console.log(`Campos do dispositivo:\n  ${campos(devs[0])}`);
+    console.log(`  /v1/device/list  ${devs.length} dispositivos`);
+    if (devs[0]) console.log(`    campos: ${campos(devs[0])}`);
   } else {
-    console.log(`\nDispositivos: erro — ${dispositivos.motivo}`);
+    console.log(`  /v1/device/list  erro — ${dispositivos.motivo}`);
+  }
+
+  const energia = await tentar("energia diária", () =>
+    cliente.energia(cobaia.plant_id, seteDiasAtras, hoje, "day"),
+  );
+  if (energia.ok) {
+    const dias = energia.valor.data?.energys ?? [];
+    console.log(`  /v1/plant/energy ${dias.length} dias`);
+    for (const d of dias.slice(-7)) console.log(`    ${d.date}  ${d.energy} kWh`);
+  } else {
+    console.log(`  /v1/plant/energy erro — ${energia.motivo}`);
   }
 
   const destino = "probe-growatt-api.json";
-  writeFileSync(destino, JSON.stringify({ usinas, clientes, dispositivos }, null, 2));
+  writeFileSync(
+    destino,
+    JSON.stringify({ usinas, clientes, visaoGeral, dispositivos, energia }, null, 2),
+  );
   console.log(`\nRespostas cruas em ${destino} (está no .gitignore).`);
   process.exit(0);
 }

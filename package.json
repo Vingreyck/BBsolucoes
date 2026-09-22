@@ -32,7 +32,8 @@
     "dossies": "tsx src/documentos/criar-dossies.ts",
     "drive:autorizar": "tsx src/documentos/autorizar-drive.ts",
     "limpar:exemplos": "tsx src/db/limpar-exemplos.ts",
-    "drive:testar": "tsx src/documentos/testar-drive.ts"
+    "drive:testar": "tsx src/documentos/testar-drive.ts",
+    "coletar:growatt": "tsx src/collectors/growatt/coletar.ts"
   },
   "dependencies": {
     "dotenv": "^17.4.2",

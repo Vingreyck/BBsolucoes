@@ -95,6 +95,19 @@ const ETAPAS: Etapa[] = [
         : { rodar: false, motivo: "SOLIS_KEY_ID/SOLIS_KEY_SECRET não estão no .env" },
   },
   {
+    /**
+     * Última das coletas de propósito: é a maior, com 143 usinas, e a única
+     * que a Growatt pode recusar por frequência. Vindo no fim, um `10012`
+     * aqui não atrapalha as outras três, que já terminaram.
+     */
+    nome: "Coleta Growatt",
+    script: "src/collectors/growatt/coletar.ts",
+    quando: () =>
+      process.env.GROWATT_API_TOKEN
+        ? { rodar: true }
+        : { rodar: false, motivo: "GROWATT_API_TOKEN não está no .env" },
+  },
+  {
     nome: "Detecção de usina parada",
     script: "src/collectors/detectar.ts",
   },
