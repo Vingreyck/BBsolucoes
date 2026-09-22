@@ -27,12 +27,78 @@ interface Etapa {
 
 const PASTA_DADOS = "dados";
 
+/**
+ * Janela em que vale a pena falar com os portais.
+ *
+ * Depois que o sol se põe nenhuma usina gera mais nada, e o total do dia já
+ * está fechado. Continuar consultando de hora em hora até o amanhecer gasta
+ * orçamento de chamada e risco de bloqueio para reler o mesmo número dez vezes
+ * — e o orçamento é a parte escassa: a Growatt bloqueia IP por frequência e a
+ * Northbound da Huawei tem teto diário de chamadas.
+ *
+ * `ANOITECE = 19` é uma hora depois do pôr do sol em Sergipe, de propósito: a
+ * rodada das 19h é a que fecha o dia, com o total definitivo. Das 20h às 4h não
+ * se consulta ninguém.
+ *
+ * Corta 9 das 24 rodadas — quase 40% das chamadas, sem perder um dado sequer.
+ * A detecção e as importações de planilha continuam rodando, porque são locais
+ * e não custam chamada nenhuma.
+ */
+const AMANHECE = 5;
+const ANOITECE = 19;
+
+function horaLocal(): number {
+  return Number(
+    new Intl.DateTimeFormat("pt-BR", {
+      hour: "numeric",
+      hour12: false,
+      timeZone: "America/Sao_Paulo",
+    }).format(new Date()),
+  );
+}
+
+/** As coletas que falam com portal usam isto; as locais, não. */
+function dentroDoDiaSolar(): { rodar: boolean; motivo?: string } {
+  const hora = horaLocal();
+  if (hora >= AMANHECE && hora <= ANOITECE) return { rodar: true };
+  return {
+    rodar: false,
+    motivo: `são ${hora}h e nenhuma usina gera à noite — consultar o portal agora só gastaria chamada`,
+  };
+}
+
+/** Junta a janela solar com outra condição, como a credencial estar no `.env`. */
+function soDeDia(
+  extra: () => { rodar: boolean; motivo?: string },
+): () => { rodar: boolean; motivo?: string } {
+  return () => {
+    const credencial = extra();
+    if (!credencial.rodar) return credencial;
+    return dentroDoDiaSolar();
+  };
+}
+
+/**
+ * As duas importações de planilha só rodam quando a API está fora.
+ *
+ * Elas foram o caminho enquanto o token da OpenAPI não enxergava as usinas.
+ * Agora que enxerga, deixá-las no automático relê uma exportação de dias atrás
+ * a cada rodada e reescreve por cima do que veio fresco da API.
+ *
+ * Os scripts ficam: o contrato da Growatt diz que ela pode suspender o serviço
+ * quando quiser e sem indenizar, então o plano B não se apaga. Tirando
+ * `GROWATT_API_TOKEN` do `.env`, eles voltam a rodar sozinhos.
+ */
+const PLANO_B =
+  "a OpenAPI está ligada; a planilha é plano B e roda à mão com npm run import:geracao";
+
 const ETAPAS: Etapa[] = [
   {
     nome: "Geração exportada do Growatt",
     script: "src/collectors/growatt/importar-geracao.ts",
     argumentos: [PASTA_DADOS],
     quando: () => {
+      if (process.env.GROWATT_API_TOKEN) return { rodar: false, motivo: PLANO_B };
       if (!existsSync(PASTA_DADOS)) {
         return { rodar: false, motivo: `a pasta ${PASTA_DADOS}/ não existe` };
       }
@@ -53,6 +119,7 @@ const ETAPAS: Etapa[] = [
     script: "src/collectors/growatt/importar-dispositivos.ts",
     argumentos: [],
     quando: () => {
+      if (process.env.GROWATT_API_TOKEN) return { rodar: false, motivo: PLANO_B };
       if (!existsSync(PASTA_DADOS)) {
         return { rodar: false, motivo: `a pasta ${PASTA_DADOS}/ não existe` };
       }
@@ -70,29 +137,29 @@ const ETAPAS: Etapa[] = [
   {
     nome: "Coleta FoxESS",
     script: "src/collectors/foxess/coletar.ts",
-    quando: () =>
+    quando: soDeDia(() =>
       process.env.FOXESS_API_KEY
         ? { rodar: true }
-        : { rodar: false, motivo: "FOXESS_API_KEY não está no .env" },
+        : { rodar: false, motivo: "FOXESS_API_KEY não está no .env" }),
   },
   {
     nome: "Coleta FusionSolar",
     script: "src/collectors/fusionsolar/coletar.ts",
-    quando: () =>
+    quando: soDeDia(() =>
       process.env.FUSIONSOLAR_USUARIO && process.env.FUSIONSOLAR_SYSTEM_CODE
         ? { rodar: true }
         : {
             rodar: false,
             motivo: "FUSIONSOLAR_USUARIO/FUSIONSOLAR_SYSTEM_CODE não estão no .env",
-          },
+          }),
   },
   {
     nome: "Coleta Solis",
     script: "src/collectors/solis/coletar.ts",
-    quando: () =>
+    quando: soDeDia(() =>
       process.env.SOLIS_KEY_ID && process.env.SOLIS_KEY_SECRET
         ? { rodar: true }
-        : { rodar: false, motivo: "SOLIS_KEY_ID/SOLIS_KEY_SECRET não estão no .env" },
+        : { rodar: false, motivo: "SOLIS_KEY_ID/SOLIS_KEY_SECRET não estão no .env" }),
   },
   {
     /**
@@ -102,10 +169,10 @@ const ETAPAS: Etapa[] = [
      */
     nome: "Coleta Growatt",
     script: "src/collectors/growatt/coletar.ts",
-    quando: () =>
+    quando: soDeDia(() =>
       process.env.GROWATT_API_TOKEN
         ? { rodar: true }
-        : { rodar: false, motivo: "GROWATT_API_TOKEN não está no .env" },
+        : { rodar: false, motivo: "GROWATT_API_TOKEN não está no .env" }),
   },
   {
     nome: "Detecção de usina parada",

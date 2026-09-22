@@ -298,9 +298,23 @@ async function main() {
     }
   }
 
+  /**
+   * Não carimba `ultimaColetaEm`, e isso é correção de um bug real.
+   *
+   * O campo existe para uma coisa só: a trava de cadência que impede o coletor
+   * de estourar o limite da API. Uma planilha não gasta chamada nenhuma, então
+   * carimbar aqui mente para essa trava.
+   *
+   * E não foi teoria. Esta importação roda **antes** da coleta no
+   * `npm run atualizar`, e o coletor da OpenAPI via "coletado há 0 minutos" em
+   * toda rodada — a Growatt, 86% do parque, nunca seria coletada pela API, em
+   * silêncio, com o resumo mostrando ✓ em tudo.
+   *
+   * Só o que fala com o portal carimba.
+   */
   await db
     .update(schema.contaPortal)
-    .set({ ultimaColetaEm: new Date(), ultimoErro: null })
+    .set({ ultimoErro: null })
     .where(eq(schema.contaPortal.id, conta.id));
 
   console.log(`Inversores novos:      ${inversores}`);

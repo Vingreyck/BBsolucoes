@@ -40,6 +40,7 @@ export default async function RootLayout({
             {/* Esconder o link é cortesia; quem barra é a própria página. */}
             {temDocumentos && <a href="/documentos">Documentos</a>}
             <a href="/alertas">Alertas</a>
+            <a href="/coleta">Coleta</a>
             <a href="/os">OS</a>
             <span className="quem">
               {usuario.nome}
