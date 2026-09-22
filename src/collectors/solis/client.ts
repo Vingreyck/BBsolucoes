@@ -27,8 +27,35 @@ import { ErroColetor } from "../types";
  *   barra sobrando. Por isso o construtor apara a barra em vez de confiar.
  */
 
+/**
+ * Base oficial, porta 13333 e tudo.
+ *
+ * Conferida em 22/09/2026 contra o *SolisCloud Platform API Document V2.0.2*,
+ * 129 páginas, publicado pela própria Ginlong em
+ * `oss.soliscloud.com/templet/`. Bate com o que estava aqui.
+ */
 const BASE_PADRAO = "https://www.soliscloud.com:13333";
 const TIPO = "application/json";
+
+/**
+ * Limites que a documentação da Solis publica, e o que eles significam aqui.
+ *
+ * - *"The update frequency for all interface data is 5 minutes"* — o dado só
+ *   muda de cinco em cinco minutos do lado deles. Consultar mais rápido não
+ *   traz número novo, só gasta chamada. A cadência de 15 min em
+ *   `conta_portal` está folgada de propósito.
+ * - *"Interface frequency limit 2 times/sec"*, por endpoint.
+ *
+ * O coletor faz **três chamadas por conta** — `userStationList`,
+ * `inverterList` e `collectorList` —, cada uma num endpoint diferente. Com duas
+ * contas são seis chamadas, longe do teto. Por isso não há espaçamento
+ * artificial aqui: ele seria enfeite, e enfeite que esconde o motivo.
+ *
+ * Se um dia o coletor passar a chamar `inverterDetail` por inversor, aí o teto
+ * de 2/s passa a valer de verdade e o espaçamento vira obrigatório.
+ */
+export const LIMITE_POR_SEGUNDO = 2;
+export const ATUALIZACAO_DO_DADO_MIN = 5;
 
 export interface RespostaSolis<T = unknown> {
   success: boolean;

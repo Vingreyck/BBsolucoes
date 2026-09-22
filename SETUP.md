@@ -707,6 +707,37 @@ O preço disso é que o próximo `npm run db:generate` vai comparar com o
 gerar, **ler o SQL antes de aplicar** e apagar o que já existe — não rodar no
 escuro.
 
+## De onde vem o que sabemos de cada API
+
+Esta tabela existe porque a diferença importa. "A Growatt exige 5 minutos entre
+chamadas" esteve escrito no código como se fosse cláusula, e não é — é
+comportamento observado. Quem for depurar isso daqui a um ano precisa saber
+qual das duas coisas está lendo.
+
+| Portal | Documentação | Lida? | O que é observado, e não documentado |
+| --- | --- | --- | --- |
+| **Growatt** | *Server Open API protocol standards*, 44 p., [pública](https://growatt.pl/wp-content/uploads/2020/01/Growatt-Server-Open-API-protocol-standards.pdf) | sim, 22/09/2026 | **Todo o limite de frequência.** A doc não traz teto de chamadas nem por minuto nem por dia. `10012` lá é "Energy storage machine does not exist"; aqui aparece ao repetir `plant/list` em menos de 5 min |
+| **Solis** | *SolisCloud Platform API Document V2.0.2*, 129 p., [pública](https://oss.soliscloud.com/templet/SolisCloud%20Platform%20API%20Document%20V2.0.2.pdf) | sim, 22/09/2026 | Nada relevante. Limites e base conferem |
+| **Huawei** | *SmartPVMS Northbound Interface Reference*, atrás do portal de suporte | **não** | Os limites por endpoint no texto abaixo. O único número confirmado é "five times every 10 minutes" por usuário northbound, e que `407` é estouro |
+| **FoxESS** | OpenPlatform | **não** | Tudo. Uma usina só, risco baixo |
+| **Hoymiles** | *Open API for S-Miles Cloud* V1.15, 70 p., confidencial | 8 páginas | Fica para quando a chave chegar — a V1.15 já apagou toda a geração anterior de rotas, e estudar agora pode ser estudar o que vai mudar |
+
+O que a Solis e a Growatt confirmaram:
+
+- **Solis** — *"The update frequency for all interface data is 5 minutes"*: o
+  dado só muda de cinco em cinco minutos do lado deles, então a cadência de 15
+  min está folgada de propósito. *"Interface frequency limit 2 times/sec"* por
+  endpoint; o coletor faz três chamadas por conta, em endpoints diferentes.
+- **Growatt** — nenhum limite publicado. O teto de 1.200 chamadas/dia em
+  `conta_portal` é **orçamento nosso**, não regra deles.
+
+E vale dizer o que ler documentação **não** resolveria. O que mais custou tempo
+neste projeto não está em documento nenhum: o `capacity` da Huawei documentado
+em MW e entregue em kWp; o `peak_power` da Growatt metade em kWp e metade em
+MW, porque é digitado à mão; `dayPowerGeneration` da Solis, que não é geração e
+sim hora de sol pleno; a barra no fim da URL que devolve HTTP 500. Isso só sai
+conferindo o número contra a realidade física.
+
 ## Como as quatro APIs convivem
 
 Quatro portais coletando, com limites e feitios diferentes. O que as junta é
@@ -727,7 +758,7 @@ importações de planilha continuam rodando à noite, porque são locais.
 | Portal | Usinas | Cadência | O que aperta |
 | --- | --- | --- | --- |
 | Growatt | 143 | 60 min, lotes de 40 | ~5 min entre listagens; IP bloqueado se insistir |
-| Huawei | 16 | 60 min | 1 chamada/min por endpoint, teto diário, sessão única |
+| Huawei | 16 | 60 min | 5 logins/10 min (confirmado); 1/min por endpoint e teto diário **não conferidos** |
 | Solis | 6 | 15 min | 2.000/dia; dados mudam a cada 5 min do lado deles |
 | FoxESS | 1 | 15 min | 1.440/dia por dispositivo |
 
