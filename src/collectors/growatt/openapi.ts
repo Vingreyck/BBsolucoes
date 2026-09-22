@@ -79,22 +79,71 @@ export interface AlarmeV1 {
   end_time?: string;
 }
 
+/**
+ * O que cada código significou **nas rotas que usamos**, e não o que a
+ * documentação diz em geral.
+ *
+ * A distinção não é preciosismo. O PDF oficial da Growatt (*Server Open API
+ * protocol standards*) lista os códigos por seção, e o mesmo número quer dizer
+ * coisas diferentes conforme o endpoint: lá, `10002` é "User name or password
+ * is empty" e `10012` é "Energy storage machine does not exist". Nenhum dos
+ * dois descreve o que vimos aqui.
+ *
+ * O que está nesta tabela foi **observado na prática**, chamando estas rotas
+ * com este token:
+ *
+ * - `10002` veio ao pedir alarme passando `device_id` em vez de `device_sn`
+ * - `10011` veio ao pedir usinas de um cliente antes de o token ser vinculado
+ * - `10012` veio ao chamar `/v1/plant/list` duas vezes em menos de cinco
+ *   minutos, duas vezes no mesmo dia, e sumiu depois de esperar
+ *
+ * Por isso a mensagem da Growatt vem **junto** da nossa nota, e não no lugar
+ * dela: a versão anterior descartava `error_msg` sempre que o código estava
+ * aqui, o que significa que, se a Growatt tivesse escrito "frequently access",
+ * ninguém jamais teria lido.
+ */
 const ERROS: Record<number, string> = {
   10001: "erro interno da Growatt",
-  10002: "usina ou dispositivo não existe",
+  10002: "identificador não encontrado — confira se o parâmetro é o serial, não o id",
   10003: "faltou o identificador na chamada",
   10004: "data inválida, ou janela maior que 7 dias",
-  10011: "sem permissão — o token não está vinculado a estas contas",
-  10012:
-    "chamadas demais. A Growatt exige cerca de 5 minutos entre chamadas de " +
-    "visão geral e 1 minuto nas de detalhe — espere e tente de novo",
+  10011: "sem permissão — o token pode não estar vinculado a estas contas",
+  10012: "observado como excesso de chamadas; esperar alguns minutos resolveu",
 };
 
-/** Erro de frequência. Insistir nele é o caminho para o IP ser bloqueado. */
+/**
+ * Código que aparece quando chamamos demais.
+ *
+ * **Não é documentado como tal** — é o que observamos. A cautela em volta dele
+ * (esperar, parar a passada, nunca insistir) vem de relatos de outros
+ * integradores sobre IP bloqueado por dias, não de uma cláusula. Preferimos
+ * errar para o lado de esperar: o custo de esperar é uma rodada; o de ser
+ * bloqueado é o parque inteiro sem monitoramento.
+ */
 export const ERRO_FREQUENCIA = 10012;
 
-/** Janela que a Growatt exige entre chamadas de visão geral. */
+/**
+ * Janela que respeitamos entre chamadas de visão geral.
+ *
+ * **Escolha nossa, não limite publicado.** A documentação da Growatt não traz
+ * teto de frequência nem de chamadas por dia em lugar nenhum — o único
+ * "intervalo" que ela menciona é a janela de 7 dias entre `start_date` e
+ * `end_date`, que é outra coisa. Cinco minutos é o que bateu com o
+ * comportamento observado.
+ */
 export const JANELA_VISAO_GERAL_MS = 5 * 60 * 1000;
+
+/**
+ * Este erro é de frequência?
+ *
+ * Procura `error_code 10012` e não o número solto: agora que a mensagem da
+ * Growatt vem junto, um `10012` que aparecesse dentro do texto dela — ou num
+ * identificador — faria o coletor encerrar a passada achando que levou
+ * bloqueio.
+ */
+export function ehErroDeFrequencia(mensagem: string): boolean {
+  return new RegExp(`error_code\\s+${ERRO_FREQUENCIA}\\b`).test(mensagem);
+}
 
 export class GrowattOpenApi {
   private ultimaChamada = 0;
@@ -155,9 +204,25 @@ export class GrowattOpenApi {
     }
 
     if (dados.error_code !== 0) {
+      /**
+       * A mensagem da Growatt vem primeiro, e a nossa nota depois, entre
+       * parênteses.
+       *
+       * Antes era o contrário — a nota substituía `error_msg` sempre que o
+       * código estivesse na nossa tabela —, e isso apagava a única fonte
+       * confiável que existe sobre esta API. A documentação dela contradiz o
+       * que observamos em pelo menos dois códigos, então jogar fora o que o
+       * servidor de fato disse é abrir mão de descobrir qual dos dois vale.
+       */
+      const daGrowatt = dados.error_msg?.trim();
+      const nossa = ERROS[dados.error_code];
+      const detalhe = [daGrowatt || null, nossa ? `(${nossa})` : null]
+        .filter(Boolean)
+        .join(" ");
+
       throw new ErroColetor(
         `Growatt recusou ${caminho}: error_code ${dados.error_code} — ` +
-          (ERROS[dados.error_code] ?? dados.error_msg ?? "sem detalhe"),
+          (detalhe || "sem detalhe"),
         "growatt",
       );
     }

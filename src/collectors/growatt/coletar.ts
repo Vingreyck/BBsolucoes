@@ -4,7 +4,7 @@ import { and, asc, eq, inArray, isNull, sql } from "drizzle-orm";
 
 import { db, schema } from "../../db";
 import {
-  ERRO_FREQUENCIA,
+  ehErroDeFrequencia,
   GrowattOpenApi,
   type DispositivoV1,
   type UsinaV1,
@@ -195,7 +195,7 @@ async function main() {
      * coisa. Sair com erro aqui encheria `conta_portal.ultimoErro` de alarme
      * falso e faria `npm run atualizar` parecer quebrado todo dia.
      */
-    if (mensagem.includes(String(ERRO_FREQUENCIA))) {
+    if (ehErroDeFrequencia(mensagem)) {
       console.log(
         "A Growatt pediu calma (10012) logo na listagem. Alguma chamada foi\n" +
           "feita há menos de cinco minutos — pode ter sido o probe ou outra\n" +
@@ -532,7 +532,7 @@ async function main() {
        * O que sobrou vai para a próxima rodada porque a fila é ordenada por
        * quem está mais velho. Insistir aqui é o caminho para o IP bloqueado.
        */
-      if (mensagem.includes(String(ERRO_FREQUENCIA))) {
+      if (ehErroDeFrequencia(mensagem)) {
         cortadoPorFrequencia = true;
         break;
       }
