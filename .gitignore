@@ -25,3 +25,6 @@ dados/
 
 # Permissoes locais do Claude Code, especificas da maquina
 .claude/settings.local.json
+
+# Log das rodadas agendadas.
+logs/

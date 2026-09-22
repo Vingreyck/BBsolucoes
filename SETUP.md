@@ -707,6 +707,76 @@ O preço disso é que o próximo `npm run db:generate` vai comparar com o
 gerar, **ler o SQL antes de aplicar** e apagar o que já existe — não rodar no
 escuro.
 
+## Como as quatro APIs convivem
+
+Quatro portais coletando, com limites e feitios diferentes. O que as junta é
+`npm run atualizar`, e três regras.
+
+### 1. Ninguém consulta portal à noite
+
+Depois do pôr do sol nenhuma usina gera e o total do dia já fechou. A rodada das
+**19h é a de fechamento**; das 20h às 4h não se fala com ninguém. Corta 9 das 24
+rodadas — quase 40% das chamadas, sem perder um dado.
+
+O orçamento é a parte escassa, não o tempo: a Growatt **bloqueia IP** por
+frequência e a Northbound da Huawei tem teto diário. A detecção e as
+importações de planilha continuam rodando à noite, porque são locais.
+
+### 2. Cada portal no seu passo
+
+| Portal | Usinas | Cadência | O que aperta |
+| --- | --- | --- | --- |
+| Growatt | 143 | 60 min, lotes de 40 | ~5 min entre listagens; IP bloqueado se insistir |
+| Huawei | 16 | 60 min | 1 chamada/min por endpoint, teto diário, sessão única |
+| Solis | 6 | 15 min | 2.000/dia; dados mudam a cada 5 min do lado deles |
+| FoxESS | 1 | 15 min | 1.440/dia por dispositivo |
+
+A Growatt varre em lotes porque 143 chamadas por rodada seriam 3.400 no dia. A
+fila é ordenada por quem está mais desatualizado, então uma rodada cortada por
+`10012` continua de onde parou, sem guardar estado. Cada chamada traz sete dias,
+o que também tapa buraco de dia sem coleta. Parque inteiro a cada quatro horas.
+
+O intervalo horário não é chute: é o que [o mercado usa para frota
+residencial](https://www.surgepv.com/best-solar-software/operations-maintenance)
+— agregar as APIs dos fabricantes num painel só, com alerta por regra sobre
+queda de produção. Poll de 5 minutos é para controle em tempo real, que não é o
+nosso caso.
+
+### 3. Só quem fala com o portal carimba `ultimaColetaEm`
+
+Este campo é a trava de cadência, não um "última atualização" genérico.
+Planilha não gasta chamada, então não carimba.
+
+Isso já mordeu: `importar-dispositivos.ts` carimbava, rodava antes da coleta, e
+o coletor da OpenAPI via "coletado há 0 minutos" **em toda rodada**. A Growatt,
+86% do parque, nunca seria coletada pela API — em silêncio, com o resumo
+mostrando ✓ em tudo. Hoje as duas importações de planilha só rodam quando
+`GROWATT_API_TOKEN` está fora do `.env`, como plano B.
+
+### A tela `/coleta`
+
+Um portal por linha: última coleta, cadência, cobertura e último erro.
+
+Existe por um motivo medido. Em 22/09/2026 o sistema estava **onze dias sem
+coletar nada** e ninguém percebeu — os coletores funcionavam, a tela de usinas
+mostrava números, e os números eram de 11 de setembro. **Dado velho é pior que
+dado ausente**: uma usina parada há dez dias aparece "gerando" se ninguém olhar
+a data, e o alerta não abre porque não houve leitura nova para disparar a
+detecção.
+
+Atrasado é passar de **duas vezes** a cadência, não de uma. Rodada perdida
+acontece, e tela sempre vermelha é tela que ninguém olha.
+
+### Para rodar sozinho
+
+```bash
+powershell -ExecutionPolicy Bypass -File scripts/agendar-windows.ps1
+```
+
+No PowerShell **como administrador**. Agenda de hora em hora, das 5h às 19h, com
+log em `logs/atualizar.log`. Sobe o container do Postgres antes, porque o caso
+mais comum é a máquina ter acabado de ligar.
+
 ## A esteira é dado, não código
 
 As 12 etapas do fluxo da BB Soluções vivem na tabela `etapa`, semeadas por
