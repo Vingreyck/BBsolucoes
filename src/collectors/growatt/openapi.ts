@@ -239,10 +239,15 @@ export class GrowattOpenApi {
    * trouxe 1 evento em 5 meses enquanto 5 usinas estavam offline. Aqui o alarme
    * vem da fonte, com código e janela de início e fim.
    */
-  alarmes(dispositivoId: string, pagina = 1, porPagina = 100) {
+  /**
+   * Vai pelo **número de série**, não pelo `device_id` numérico que a listagem
+   * devolve ao lado dele: passar o id dá `10002 dispositivo não existe`, que é
+   * uma mensagem infeliz para um parâmetro trocado. `date` também é exigido.
+   */
+  alarmes(serie: string, data: string, pagina = 1, porPagina = 100) {
     return this.chamar<{ alarms?: AlarmeV1[]; count?: number }>(
       "/v1/device/inverter/alarm",
-      { device_id: dispositivoId, page: pagina, perpage: porPagina },
+      { device_sn: serie, date: data, page: pagina, perpage: porPagina },
     );
   }
 }

@@ -180,10 +180,42 @@ async function main() {
     console.log(`  /v1/plant/energy erro — ${energia.motivo}`);
   }
 
+  /**
+   * Alarmes do inversor.
+   *
+   * É a rota que resolveria o buraco do Fault Log do OSS, que trouxe 1 evento
+   * em 5 meses enquanto 5 usinas estavam offline. Fica por último porque
+   * depende de haver dispositivo — e é a única do conjunto que nunca respondeu
+   * antes da permissão sair.
+   */
+  const primeiroDispositivo = dispositivos.ok
+    ? (dispositivos.valor.data?.devices ?? [])[0]
+    : undefined;
+
+  const alarmes = primeiroDispositivo?.device_sn
+    ? await tentar("alarmes", () =>
+        cliente.alarmes(primeiroDispositivo.device_sn as string, hoje),
+      )
+    : null;
+
+  if (!alarmes) {
+    console.log("  /v1/device/inverter/alarm  sem dispositivo para testar");
+  } else if (alarmes.ok) {
+    const lista = alarmes.valor.data?.alarms ?? [];
+    console.log(`  /v1/device/inverter/alarm  ${lista.length} alarmes`);
+    if (lista[0]) console.log(`    campos: ${campos(lista[0])}`);
+  } else {
+    console.log(`  /v1/device/inverter/alarm  erro — ${alarmes.motivo}`);
+  }
+
   const destino = "probe-growatt-api.json";
   writeFileSync(
     destino,
-    JSON.stringify({ usinas, clientes, visaoGeral, dispositivos, energia }, null, 2),
+    JSON.stringify(
+      { usinas, clientes, visaoGeral, dispositivos, energia, alarmes },
+      null,
+      2,
+    ),
   );
   console.log(`\nRespostas cruas em ${destino} (está no .gitignore).`);
   process.exit(0);
