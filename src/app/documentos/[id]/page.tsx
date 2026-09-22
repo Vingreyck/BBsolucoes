@@ -53,7 +53,8 @@ export default async function Dossie({
 }: {
   params: Promise<{ id: string }>;
 }) {
-  const usuario = await exigirAcessoDocumentos();
+  const acesso = await exigirAcessoDocumentos();
+  const usuario = acesso.usuario;
   const { id } = await params;
 
   const projeto = await db.query.projeto.findFirst({
@@ -69,7 +70,7 @@ export default async function Dossie({
   });
   if (!projeto) notFound();
 
-  const [exigencias, etapas, pessoais] = await Promise.all([
+  const [todasExigencias, etapas, pessoais] = await Promise.all([
     db.query.exigenciaDocumento.findMany({
       where: eq(schema.exigenciaDocumento.empresaId, usuario.empresaId),
       with: { etapa: true },
@@ -95,6 +96,18 @@ export default async function Dossie({
       },
     }),
   ]);
+
+  /**
+   * O que este papel cuida. Para o técnico, a tela inteira encolhe para a foto
+   * do padrão: ele sobe o que fotografou e não vê a CNH nem o contrato.
+   *
+   * `presentes` é calculado com **todos** os documentos, e não só com os
+   * visíveis — senão o técnico veria "falta conta de luz" num dossiê que tem a
+   * conta de luz, só que fora do alcance dele.
+   */
+  const exigencias = acesso.tudo
+    ? todasExigencias
+    : todasExigencias.filter((e) => acesso.pode(e.tipo));
 
   const daPessoa = pessoais.filter((d) => !d.projetoId);
   const noDossie = projeto.documentos;
@@ -129,10 +142,20 @@ export default async function Dossie({
     })),
   ].sort((a, b) => a.tipo.localeCompare(b.tipo) || b.versao - a.versao);
 
-  /** Tudo que conta como entregue: do dossiê ou da pessoa, menos os de trabalho. */
+  /**
+   * Tudo que conta como entregue: do dossiê ou da pessoa, menos os de trabalho.
+   *
+   * Sobre a lista **inteira**, antes de esconder o que não é deste papel. Se
+   * fosse calculado sobre o visível, o técnico veria o dossiê pedindo um
+   * documento que já está lá.
+   */
   const presentes = new Set<string>(
     naPasta.filter((d) => d.status !== "trabalho").map((d) => d.tipo),
   );
+
+  /** O que aparece na tabela: só o que este papel pode abrir. */
+  const visiveis = naPasta.filter((d) => acesso.pode(d.tipo));
+  const ocultos = naPasta.length - visiveis.length;
 
   const ordenadas = [...exigencias].sort((a, b) => a.etapa.ordem - b.etapa.ordem);
   const atual = projeto.etapa.ordem;
@@ -200,7 +223,14 @@ export default async function Dossie({
         </div>
       )}
 
-      <h2 className="secao">Na pasta ({naPasta.length})</h2>
+      <h2 className="secao">Na pasta ({visiveis.length})</h2>
+      {ocultos > 0 && (
+        <p className="aviso">
+          Outros {ocultos} documentos deste dossiê são de outras etapas e não
+          aparecem para o seu perfil. Documento de cliente guarda CNH, CPF e
+          conta de luz — cada um enxerga o que precisa para trabalhar.
+        </p>
+      )}
       <div className="tabela-wrap">
         <table className="tabela">
           <thead>
@@ -215,7 +245,7 @@ export default async function Dossie({
             </tr>
           </thead>
           <tbody>
-            {naPasta.map((d) => (
+            {visiveis.map((d) => (
               <tr key={d.id}>
                 <td className="forte">{ROTULO[d.tipo] ?? d.tipo}</td>
                 {/* `title` porque o nome é cortado: os do Drive passam de 80

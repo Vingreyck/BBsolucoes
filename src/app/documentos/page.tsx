@@ -58,10 +58,11 @@ export default async function Documentos({
 }: {
   searchParams: Promise<{ filtro?: string; busca?: string; etapa?: string }>;
 }) {
-  const usuario = await exigirAcessoDocumentos();
+  const acesso = await exigirAcessoDocumentos();
+  const usuario = acesso.usuario;
   const { filtro = "", busca = "", etapa: etapaFiltro = "" } = await searchParams;
 
-  const [etapas, exigencias, projetos] = await Promise.all([
+  const [etapas, todasExigencias, projetos] = await Promise.all([
     db.query.etapa.findMany({
       where: eq(schema.etapa.empresaId, usuario.empresaId),
       orderBy: asc(schema.etapa.ordem),
@@ -75,6 +76,18 @@ export default async function Documentos({
       with: { cliente: true, etapa: true, documentos: true },
     }),
   ]);
+
+  /**
+   * Estreitar aqui estreita tudo.
+   *
+   * Filtrando as exigências pelo papel logo na entrada, a coluna do que falta,
+   * a contagem dos gargalos e os filtros já saem no escopo de quem está
+   * olhando — sem `if` espalhado pela tela. Para o técnico a lista vira "os
+   * dossiês esperando a minha foto", que é a lista que ele usaria.
+   */
+  const exigencias = acesso.tudo
+    ? todasExigencias
+    : todasExigencias.filter((e) => acesso.pode(e.tipo));
 
   /**
    * Documentos que são da pessoa e não da venda — CNH, RG, ficha.
@@ -305,6 +318,15 @@ export default async function Documentos({
             ))}
         </nav>
       </div>
+
+      {!acesso.tudo && (
+        <p className="aviso">
+          <strong>Você está vendo os documentos das suas etapas</strong> —{" "}
+          {[...acesso.tipos].map((t) => ROTULO[t] ?? t).join(", ")}. O resto do
+          dossiê existe, mas é de outra pessoa: documento de cliente guarda CNH,
+          CPF e conta de luz, e cada um enxerga só o que precisa para trabalhar.
+        </p>
+      )}
 
       <p className="aviso">
         <strong>Cada documento só é cobrado a partir da etapa em que deveria

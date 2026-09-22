@@ -23,6 +23,9 @@ export default async function RootLayout({
   children,
 }: Readonly<{ children: React.ReactNode }>) {
   const usuario = await usuarioAtual();
+  const temDocumentos = usuario
+    ? await podeVerDocumentos(usuario.empresaId, usuario.papel)
+    : false;
 
   return (
     <html lang="pt-BR">
@@ -35,7 +38,7 @@ export default async function RootLayout({
             <a href="/usinas">Usinas</a>
             <a href="/cadastro">Nova usina</a>
             {/* Esconder o link é cortesia; quem barra é a própria página. */}
-            {podeVerDocumentos(usuario.papel) && <a href="/documentos">Documentos</a>}
+            {temDocumentos && <a href="/documentos">Documentos</a>}
             <a href="/alertas">Alertas</a>
             <a href="/os">OS</a>
             <span className="quem">

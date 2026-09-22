@@ -79,7 +79,8 @@ export async function enviarDocumento(
   _anterior: ResultadoEnvio,
   form: FormData,
 ): Promise<ResultadoEnvio> {
-  const usuario = await exigirAcessoDocumentos();
+  const acesso = await exigirAcessoDocumentos();
+  const usuario = acesso.usuario;
 
   if (!driveConfigurado()) {
     return {
@@ -109,6 +110,14 @@ export async function enviarDocumento(
   }
   if (!schema.tipoDocumento.enumValues.includes(tipo)) {
     return { erro: "Tipo de documento inválido." };
+  }
+  /**
+   * O `tipo` vem de um campo escondido do formulário, e campo escondido é
+   * palpite do navegador, não fato. Sem esta linha, trocar o valor no
+   * inspetor deixaria o técnico gravar um "contrato" no dossiê.
+   */
+  if (!acesso.pode(tipo)) {
+    return { erro: "Este tipo de documento não é das suas etapas." };
   }
 
   const projeto = await db.query.projeto.findFirst({

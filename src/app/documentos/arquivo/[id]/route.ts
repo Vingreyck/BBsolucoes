@@ -20,7 +20,8 @@ export async function GET(
   _req: Request,
   { params }: { params: Promise<{ id: string }> },
 ) {
-  const usuario = await exigirAcessoDocumentos();
+  const acesso = await exigirAcessoDocumentos();
+  const usuario = acesso.usuario;
   const { id } = await params;
 
   const documento = await db.query.documento.findFirst({
@@ -35,6 +36,19 @@ export async function GET(
 
   if (!documento) {
     return new Response("Documento não encontrado.", { status: 404 });
+  }
+
+  /**
+   * A tela esconde o que não é deste papel; esta linha é a que impede.
+   *
+   * Sem ela, bastaria trocar o id no endereço para o técnico baixar a CNH do
+   * cliente — e o link até apareceria numa tela antiga aberta noutra aba.
+   */
+  if (!acesso.pode(documento.tipo)) {
+    return new Response(
+      "Este documento é de uma etapa que não é do seu perfil.",
+      { status: 403 },
+    );
   }
 
   if (!driveConfigurado()) {
