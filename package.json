@@ -33,7 +33,8 @@
     "drive:autorizar": "tsx src/documentos/autorizar-drive.ts",
     "limpar:exemplos": "tsx src/db/limpar-exemplos.ts",
     "drive:testar": "tsx src/documentos/testar-drive.ts",
-    "coletar:growatt": "tsx src/collectors/growatt/coletar.ts"
+    "coletar:growatt": "tsx src/collectors/growatt/coletar.ts",
+    "reconciliar": "tsx src/collectors/reconciliar-cli.ts"
   },
   "dependencies": {
     "dotenv": "^17.4.2",

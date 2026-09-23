@@ -12,7 +12,9 @@ import {
   etapa as etapaTable,
   projeto as projetoTable,
   projetoEvento,
+  serialInstalado,
 } from "@/db/schema";
+import { reconciliarSeriais } from "@/collectors/reconciliar";
 
 const texto = (d: FormData, campo: string) => {
   const v = String(d.get(campo) ?? "").trim();
@@ -205,5 +207,84 @@ export async function comentar(projetoId: string, dados: FormData): Promise<void
     autorId: usuario.id,
     texto: conteudo,
   });
+  revalidatePath(`/projeto/${projetoId}`);
+}
+
+/**
+ * Anota o número de série do inversor no dia da instalação.
+ *
+ * É o passo que cura o cadastro duplicado. Até aqui, o sistema só descobria
+ * uma usina quando ela aparecia no portal do fabricante, dias depois, com o
+ * nome que o técnico digitou lá — "José Fernando7", "micaely 03" — e sem nada
+ * que a ligasse a este cliente, que já está no Selebi desde a venda.
+ *
+ * O serial é a única coisa que os dois lados têm em comum: está na etiqueta do
+ * aparelho, é único e não muda.
+ *
+ * Reconcilia na hora, e não só na próxima coleta, porque a usina pode já estar
+ * no banco esperando dono — e ver o vínculo acontecer no mesmo clique é o que
+ * ensina para que serve digitar isso.
+ */
+export async function anotarSerial(
+  projetoId: string,
+  dados: FormData,
+): Promise<void> {
+  const usuario = await exigirUsuario();
+
+  const bruto = texto(dados, "numeroSerie");
+  if (!bruto) redirect(`/projeto/${projetoId}?serial=vazio`);
+
+  // Etiqueta lida à mão erra em caixa e em espaço; o serial do portal é maiúsculo.
+  const serie = bruto.toUpperCase().replace(/\s+/g, "");
+
+  const projeto = await db.query.projeto.findFirst({
+    where: and(
+      eq(projetoTable.id, projetoId),
+      eq(projetoTable.empresaId, usuario.empresaId),
+    ),
+    columns: { id: true },
+  });
+  if (!projeto) redirect("/");
+
+  try {
+    await db.insert(serialInstalado).values({
+      empresaId: usuario.empresaId,
+      projetoId,
+      numeroSerie: serie,
+      observacao: texto(dados, "observacao"),
+      registradoPor: usuario.id,
+    });
+  } catch {
+    /**
+     * O índice único barrou: este serial já está em outro projeto.
+     *
+     * É digitação errada ou inversor remanejado de um cliente para outro, e
+     * nos dois casos quem decide é gente. Gravar aqui levaria a geração de uma
+     * pessoa para o dossiê de outra.
+     */
+    redirect(`/projeto/${projetoId}?serial=repetido`);
+  }
+
+  await reconciliarSeriais(usuario.empresaId);
+
+  revalidatePath(`/projeto/${projetoId}`);
+  revalidatePath("/usinas/sem-dono");
+  redirect(`/projeto/${projetoId}?serial=ok`);
+}
+
+/** Remove um serial anotado por engano. */
+export async function removerSerial(
+  projetoId: string,
+  serialId: string,
+): Promise<void> {
+  const usuario = await exigirUsuario();
+  await db
+    .delete(serialInstalado)
+    .where(
+      and(
+        eq(serialInstalado.id, serialId),
+        eq(serialInstalado.empresaId, usuario.empresaId),
+      ),
+    );
   revalidatePath(`/projeto/${projetoId}`);
 }

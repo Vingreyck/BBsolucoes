@@ -175,6 +175,14 @@ const ETAPAS: Etapa[] = [
         : { rodar: false, motivo: "GROWATT_API_TOKEN não está no .env" }),
   },
   {
+    /**
+     * Depois das coletas de propósito: o serial anotado na instalação só
+     * encontra a usina depois que o portal entregou os equipamentos dela.
+     */
+    nome: "Usina órfã ligada pelo número de série",
+    script: "src/collectors/reconciliar-cli.ts",
+  },
+  {
     nome: "Detecção de usina parada",
     script: "src/collectors/detectar.ts",
   },

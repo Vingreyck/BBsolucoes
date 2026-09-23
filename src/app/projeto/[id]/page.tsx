@@ -11,7 +11,9 @@ import {
 
 import { kWh, kWp } from "../../formatar";
 import {
+  anotarSerial,
   comentar,
+  removerSerial,
   salvarInformacoes,
   salvarProjetoTecnico,
   salvarVistoria,
@@ -33,15 +35,24 @@ function duracao(horas: number | null): string {
 
 export default async function DetalheProjeto({
   params,
+  searchParams,
 }: {
   params: Promise<{ id: string }>;
+  searchParams: Promise<{ serial?: string }>;
 }) {
   await exigirUsuario();
   const { id } = await params;
+  const { serial: aviso } = await searchParams;
 
   const projeto = await db.query.projeto.findFirst({
     where: eq(projetoTable.id, id),
-    with: { cliente: true, usina: true, etapa: true, responsavel: true },
+    with: {
+      cliente: true,
+      usina: true,
+      etapa: true,
+      responsavel: true,
+      seriais: { with: { usina: { columns: { nome: true } } } },
+    },
   });
   if (!projeto) notFound();
 
@@ -215,6 +226,80 @@ export default async function DetalheProjeto({
                 Salvar projeto
               </button>
             </div>
+          </form>
+        </section>
+
+
+        {/* Etapa 10 — instalação */}
+        <section className="bloco">
+          <h2>
+            Inversores instalados
+            {projeto.seriais.length > 0 && (
+              <span className="contador">{projeto.seriais.length}</span>
+            )}
+          </h2>
+          <p className="nota">
+            <strong>
+              Anote aqui o número de série de cada inversor no dia da instalação.
+            </strong>{" "}
+            É o que liga esta venda à usina que vai aparecer no portal do
+            fabricante dias depois. Sem isso, o sistema vê a usina com o nome
+            que o técnico digitou no portal — <code>José Fernando7</code>,{" "}
+            <code>micaely 03</code> — e não tem como saber que é deste cliente.
+            O serial está na etiqueta do aparelho e não muda.
+          </p>
+
+          {aviso === "repetido" && (
+            <p className="erro">
+              Este número de série já está em outro projeto. É digitação errada
+              ou inversor remanejado — confira antes de insistir.
+            </p>
+          )}
+          {aviso === "vazio" && <p className="erro">Digite o número de série.</p>}
+
+          {projeto.seriais.length > 0 && (
+            <ul className="seriais">
+              {projeto.seriais.map((s) => (
+                <li key={s.id}>
+                  <code>{s.numeroSerie}</code>
+                  {s.observacao && <span className="fraco"> · {s.observacao}</span>}
+                  {s.usinaId ? (
+                    <span className="pilula sev-info">
+                      confirmado no portal
+                      {s.usina?.nome ? ` · ${s.usina.nome}` : ""}
+                    </span>
+                  ) : (
+                    <span className="pilula sev-atencao">
+                      esperando o portal confirmar
+                    </span>
+                  )}
+                  <form action={removerSerial.bind(null, projeto.id, s.id)}>
+                    <button type="submit" className="remover" title="Remover">
+                      remover
+                    </button>
+                  </form>
+                </li>
+              ))}
+            </ul>
+          )}
+
+          <form action={anotarSerial.bind(null, projeto.id)} className="form-serial">
+            <input
+              type="text"
+              name="numeroSerie"
+              placeholder="Número de série do inversor"
+              required
+              autoComplete="off"
+              spellCheck={false}
+              aria-label="Número de série do inversor"
+            />
+            <input
+              type="text"
+              name="observacao"
+              placeholder="opcional: inversor 2, o do fundo…"
+              aria-label="Observação"
+            />
+            <button type="submit">Anotar</button>
           </form>
         </section>
 

@@ -163,6 +163,60 @@ export const projetoEvento = pgTable(
   (t) => [index("projeto_evento_projeto_idx").on(t.projetoId, t.ocorridoEm)],
 );
 
+/**
+ * O número de série que o técnico anotou no dia da instalação.
+ *
+ * Inverte a ordem em que cliente e usina se conhecem, e é isso que cura o
+ * cadastro duplicado. Hoje o sistema só descobre uma usina quando ela aparece
+ * no portal do fabricante, com o nome que o técnico digitou lá — "José
+ * Fernando7", "micaely 03" — e sem nada que a ligue ao cliente, que já existe
+ * no Selebi desde que a venda foi fechada.
+ *
+ * O serial do inversor é a única coisa que os dois lados têm em comum: está na
+ * etiqueta do aparelho, é único e não muda. Anotado aqui, o coletor reconhece
+ * a usina quando ela aparecer no portal e liga sozinho ao cliente certo.
+ *
+ * `usinaId` nulo é a espera. É a diferença entre "o técnico disse que
+ * instalou" e "o portal confirmou que existe", e a diferença entre as duas é
+ * informação útil: serial anotado há uma semana e ainda sem confirmação
+ * costuma ser datalogger que não conectou.
+ */
+export const serialInstalado = pgTable(
+  "serial_instalado",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    empresaId: uuid("empresa_id")
+      .notNull()
+      .references(() => empresa.id, { onDelete: "cascade" }),
+    projetoId: uuid("projeto_id")
+      .notNull()
+      .references(() => projeto.id, { onDelete: "cascade" }),
+    numeroSerie: varchar("numero_serie", { length: 60 }).notNull(),
+    /** "inversor 2", "o do fundo" — o que o técnico precisar lembrar. */
+    observacao: text("observacao"),
+    /** Preenchido quando o portal confirma que a usina existe. */
+    usinaId: uuid("usina_id").references(() => usina.id, { onDelete: "set null" }),
+    confirmadoEm: timestamp("confirmado_em", { withTimezone: true }),
+    registradoPor: uuid("registrado_por").references(() => usuario.id, {
+      onDelete: "set null",
+    }),
+    registradoEm: timestamp("registrado_em", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => [
+    /**
+     * Um serial existe uma vez só na empresa.
+     *
+     * Dois projetos reivindicando o mesmo aparelho é erro de digitação ou
+     * inversor remanejado de um cliente para outro. Nos dois casos é para
+     * alguém olhar, não para o sistema escolher um dos dois em silêncio.
+     */
+    uniqueIndex("serial_instalado_uq").on(t.empresaId, t.numeroSerie),
+    index("serial_instalado_projeto_idx").on(t.projetoId),
+  ],
+);
+
 export const ordemServico = pgTable(
   "ordem_servico",
   {

@@ -14,6 +14,7 @@ import { documento, documentoAcesso, exigenciaDocumento } from "./documentos";
 import {
   comentario,
   etapa,
+  serialInstalado,
   ordemServico,
   osAnexo,
   osChecklistItem,
@@ -161,6 +162,22 @@ export const projetoRelations = relations(projeto, ({ one, many }) => ({
   }),
   eventos: many(projetoEvento),
   documentos: many(documento),
+  seriais: many(serialInstalado),
+}));
+
+export const serialInstaladoRelations = relations(serialInstalado, ({ one }) => ({
+  projeto: one(projeto, {
+    fields: [serialInstalado.projetoId],
+    references: [projeto.id],
+  }),
+  usina: one(usina, {
+    fields: [serialInstalado.usinaId],
+    references: [usina.id],
+  }),
+  registradoPor: one(usuario, {
+    fields: [serialInstalado.registradoPor],
+    references: [usuario.id],
+  }),
 }));
 
 export const projetoEventoRelations = relations(projetoEvento, ({ one }) => ({
