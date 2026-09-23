@@ -28,3 +28,6 @@ dados/
 
 # Log das rodadas agendadas.
 logs/
+
+# Cópias do banco: dado real de cliente, nunca vão para o repositório.
+backups/

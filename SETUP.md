@@ -15,9 +15,21 @@ docker start bb-pg
 npm run dev
 ```
 
-Depois é `http://localhost:3000`. Entra com `adm@bbsolucoes.local` e a senha
-`bbsolucoes`, que é a do seed. Os outros papéis seguem o mesmo padrão:
-`vendas@`, `engenharia@`, `tecnico@`, `estoque@`.
+Depois é `http://localhost:3000`. O `db:seed` cria cinco contas de
+desenvolvimento — `adm@`, `vendas@`, `engenharia@`, `tecnico@` e `estoque@`,
+todas em `@bbsolucoes.local` — com a senha que estiver em `SEED_SENHA`.
+
+> **A senha padrão do seed não está escrita aqui de propósito.** Este
+> repositório é público, e senha documentada em repositório público é senha de
+> ninguém. Ela está em `src/db/seed.ts`; defina `SEED_SENHA` no seu `.env` para
+> usar outra.
+>
+> Essas cinco contas **não vão para produção**. Elas são genéricas — um
+> `tecnico` para todos os técnicos — e conta compartilhada faz a trilha de quem
+> baixou documento e de quem anotou serial não identificar ninguém. Em
+> produção, o administrador cria uma conta por pessoa em **Administração →
+> Usuários**, e cada uma recebe senha provisória que a própria pessoa troca no
+> primeiro acesso. O `db:seed` se recusa a rodar em produção sem `SEED_SENHA`.
 
 > **`Failed query: select ... from "sessao" inner join "usuario"`**
 >
@@ -100,10 +112,20 @@ campo de watts. Enquanto não for corrigido na origem, qualquer alerta de
 
 ## Autenticação
 
-Login por e-mail e senha. O seed cria cinco usuários, um por papel, todos com a
-senha `bbsolucoes` — ou o que estiver em `SEED_SENHA`. Serve só para desenvolver:
-**antes de qualquer instalação real, cada pessoa precisa da sua senha**, senão o
-usuário nominal, que é o motivo de existir login separado, não vale nada.
+Login por e-mail e senha. O seed cria cinco usuários, um por papel, com a senha
+de `SEED_SENHA` — **que não é documentada aqui**, porque este repositório é
+público. Serve só para desenvolver.
+
+**Em produção, cada pessoa tem a sua conta**, criada em *Administração →
+Usuários*. O administrador gera a conta, o sistema sorteia uma senha provisória
+que aparece **uma vez só** na tela, e a pessoa é obrigada a trocá-la antes de
+ver qualquer coisa — `exigirUsuario()` redireciona para `/trocar-senha`
+enquanto `deve_trocar_senha` estiver marcado. Trocar a senha encerra todas as
+sessões daquela pessoa, inclusive a que estava aberta.
+
+Conta se **desativa**, nunca se apaga: apagar levaria junto quem enviou cada
+documento e quem anotou cada número de série, e a trilha sumiria justamente
+quando alguém sai da empresa.
 
 ```
 adm@bbsolucoes.local         engenharia@bbsolucoes.local

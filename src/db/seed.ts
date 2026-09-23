@@ -16,6 +16,31 @@ import { db, schema } from "./index";
 const SENHA_DEV = process.env.SEED_SENHA || "bbsolucoes";
 
 /**
+ * Em produção o seed se recusa a usar a senha conhecida.
+ *
+ * Ela está escrita no README deste repositório, que é público. Numa máquina de
+ * desenvolvimento isso não custa nada; num servidor com IP público, custa a
+ * CNH, o CPF e o contrato de 166 pessoas. O `db:seed` rodado por engano lá
+ * recriaria as contas genéricas com a senha publicada, desfazendo em um
+ * comando o trabalho de criar conta para cada pessoa.
+ *
+ * Com `SEED_SENHA` definida, segue normal — quem define escolheu.
+ */
+if (process.env.NODE_ENV === "production" && !process.env.SEED_SENHA) {
+  console.error(
+    [
+      "Recusando semear em produção com a senha padrão.",
+      "",
+      "A senha do seed está publicada no repositório, que é público. Defina",
+      "SEED_SENHA com uma senha própria, ou — melhor — crie as contas em",
+      "Administração → Usuários: lá cada pessoa recebe uma senha provisória",
+      "e é obrigada a trocar no primeiro acesso.",
+    ].join("\n"),
+  );
+  process.exit(1);
+}
+
+/**
  * Semeia a empresa, a esteira e um punhado de projetos de demonstração.
  *
  * As 12 etapas são as que a BB Soluções escreveu à mão na reunião. A ordem vai

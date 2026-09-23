@@ -183,6 +183,18 @@ const ETAPAS: Etapa[] = [
     script: "src/collectors/reconciliar-cli.ts",
   },
   {
+    /**
+     * Uma cópia por dia, tirada na primeira rodada da manhã.
+     *
+     * O `--se-preciso` faz a etapa sair calada quando já existe cópia de hoje,
+     * então ela cabe na rodada de hora em hora sem gerar catorze arquivos.
+     * Fica antes da detecção por acaso de ordem, não por dependência.
+     */
+    nome: "Cópia de segurança do banco",
+    script: "src/db/backup.ts",
+    argumentos: ["--se-preciso"],
+  },
+  {
     nome: "Detecção de usina parada",
     script: "src/collectors/detectar.ts",
   },

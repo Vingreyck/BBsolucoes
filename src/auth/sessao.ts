@@ -50,6 +50,8 @@ export interface UsuarioSessao {
   email: string;
   papel: string;
   empresaId: string;
+  /** Senha provisória: não pode ver nada antes de trocar. */
+  deveTrocarSenha: boolean;
 }
 
 /** Usuário da requisição atual, ou null se não há sessão válida. */
@@ -65,6 +67,7 @@ export async function usuarioAtual(): Promise<UsuarioSessao | null> {
       email: usuarioTable.email,
       papel: usuarioTable.papel,
       empresaId: usuarioTable.empresaId,
+      deveTrocarSenha: usuarioTable.deveTrocarSenha,
       ativo: usuarioTable.ativo,
     })
     .from(sessaoTable)
@@ -82,6 +85,7 @@ export async function usuarioAtual(): Promise<UsuarioSessao | null> {
     email: usuario.email,
     papel: usuario.papel,
     empresaId: usuario.empresaId,
+    deveTrocarSenha: usuario.deveTrocarSenha,
   };
 }
 
@@ -95,6 +99,19 @@ export async function usuarioAtual(): Promise<UsuarioSessao | null> {
 export async function exigirUsuario(): Promise<UsuarioSessao> {
   const usuario = await usuarioAtual();
   if (!usuario) redirect("/login");
+
+  /**
+   * Senha provisória barra tudo, e é aqui que barra.
+   *
+   * Podia ser no middleware, e não seria suficiente: o middleware do Next roda
+   * no Edge e só olha se o cookie existe, sem falar com o banco. Quem precisa
+   * decidir isso é quem já tem o usuário em mãos — e é esta função que toda
+   * tela chama.
+   *
+   * A própria tela de troca usa `usuarioAtual()` em vez desta, senão ela
+   * redirecionaria para si mesma para sempre.
+   */
+  if (usuario.deveTrocarSenha) redirect("/trocar-senha");
   return usuario;
 }
 

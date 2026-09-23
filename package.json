@@ -34,7 +34,8 @@
     "limpar:exemplos": "tsx src/db/limpar-exemplos.ts",
     "drive:testar": "tsx src/documentos/testar-drive.ts",
     "coletar:growatt": "tsx src/collectors/growatt/coletar.ts",
-    "reconciliar": "tsx src/collectors/reconciliar-cli.ts"
+    "reconciliar": "tsx src/collectors/reconciliar-cli.ts",
+    "backup": "tsx src/db/backup.ts"
   },
   "dependencies": {
     "dotenv": "^17.4.2",

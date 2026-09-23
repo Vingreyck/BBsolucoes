@@ -44,6 +44,15 @@ export const usuario = pgTable(
     email: text("email").notNull(),
     senhaHash: text("senha_hash").notNull(),
     papel: papelUsuario("papel").notNull().default("vendedor"),
+    /**
+     * Senha provisória: obriga a trocar antes de ver qualquer tela.
+     *
+     * Existe porque "conta nominal" só vale se a senha for **da pessoa**. Conta
+     * criada pelo administrador com senha que ele escolheu e continua sabendo
+     * não é nominal — é conta compartilhada com nome bonito, e a trilha de
+     * `documento_acesso` volta a não provar nada.
+     */
+    deveTrocarSenha: boolean("deve_trocar_senha").notNull().default(false),
     telefone: varchar("telefone", { length: 20 }),
     ativo: boolean("ativo").notNull().default(true),
     criadoEm: timestamp("criado_em", { withTimezone: true }).notNull().defaultNow(),
