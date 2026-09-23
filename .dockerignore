@@ -1,0 +1,19 @@
+# O que não entra na imagem.
+#
+# `node_modules` fica de fora porque o `npm ci` do Dockerfile instala os do
+# Linux — copiar os do Windows traria binários que não rodam lá.
+node_modules
+.next
+.git
+.env
+.env.*
+!.env.example
+
+# Dado real de cliente nunca entra em imagem.
+backups
+dados
+probe-*.json
+logs
+
+*.md
+!SETUP.md

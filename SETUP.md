@@ -729,6 +729,72 @@ O preço disso é que o próximo `npm run db:generate` vai comparar com o
 gerar, **ler o SQL antes de aplicar** e apagar o que já existe — não rodar no
 escuro.
 
+## Colocando no ar
+
+Quatro containers: banco, site, coletor e o Caddy que resolve o HTTPS.
+
+```bash
+docker compose up -d --build
+docker compose logs -f coletor
+```
+
+Precisa de um `.env` ao lado do `docker-compose.yml`, com o de sempre mais três:
+
+```
+POSTGRES_PASSWORD=   # senha do banco, só existe dentro do compose
+POSTGRES_DB=bbsolucoes
+DOMINIO=selebi.exemplo.com.br   # o subdomínio que aponta para a VM
+```
+
+Restaurar o banco de uma cópia:
+
+```bash
+gunzip -c backups/selebi-AAAA-MM-DD-HHMM.sql.gz \
+  | docker compose exec -T db psql -U postgres -d bbsolucoes
+```
+
+### Decisões que valem saber
+
+**O banco não publica porta.** Não há `ports:` no serviço `db`, e é a linha mais
+importante do arquivo: com IP público, uma 5432 aberta é varrida por robô em
+horas. O banco só existe dentro da rede do compose.
+
+**O site também não.** Quem fala com a internet é o Caddy. Publicar a 3000
+deixaria HTTP puro ao lado do HTTPS, e login por HTTP é senha trafegando aberta.
+
+**Caddy em vez de Nginx** porque ele pede e renova o certificado sozinho. A
+alternativa seria certbot, cron de renovação e um bloco de vinte linhas que
+quebra calado quando o certificado vence.
+
+**Uma imagem só para site e coletor.** A build `standalone` do Next sairia bem
+menor, mas joga fora o código-fonte e as dependências de desenvolvimento — e o
+coletor roda os scripts com `tsx`. Duas imagens sairiam de sincronia sem
+ninguém perceber.
+
+**O coletor é um laço de shell, não um cron.** Assim a rodada aparece em
+`docker compose logs` como qualquer outra coisa, em vez de num log próprio que
+ninguém abre. A precisão não importa: cada coletor tem sua trava de cadência e
+as etapas se recusam sozinhas fora do horário de sol.
+
+### Três armadilhas que o primeiro build revelou
+
+Todas apareceram testando aqui, antes de existir VM.
+
+**`next build` não pode precisar de banco.** `src/db/index.ts` lançava erro no
+topo quando faltava `DATABASE_URL`, e isso derrubava o build: para gerar a rota
+de download o Next carrega o módulo, que importa o banco, e durante o build não
+há variável nenhuma. O erro era `Failed to collect page data for
+/documentos/arquivo/[id]`, que não diz nada sobre a causa. Hoje a conexão abre
+na primeira consulta.
+
+**O `pg_dump` do Debian é o 15 e o servidor é o 16.** Ele se recusa a copiar:
+*aborting because of server version mismatch*. O backup falharia todo dia, e a
+falha sumiria no log de um laço. Por isso o Dockerfile instala
+`postgresql-client-16` do repositório oficial do PostgreSQL.
+
+**`pg_dump` sem `-w` trava esperando senha.** Num laço de hora em hora, travado
+é pior que quebrado: quebrado aparece no log, travado só some.
+
 ## De onde vem o que sabemos de cada API
 
 Esta tabela existe porque a diferença importa. "A Growatt exige 5 minutos entre

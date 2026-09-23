@@ -3,18 +3,49 @@ import postgres from "postgres";
 
 import * as schema from "./schema";
 
-const connectionString = process.env.DATABASE_URL;
+/**
+ * A conexão só é aberta na primeira consulta, e não ao importar o arquivo.
+ *
+ * A versão anterior lançava erro no topo quando `DATABASE_URL` faltava, e isso
+ * derrubava o `next build`: para gerar a rota de download de documento o Next
+ * carrega o módulo dela, que importa este arquivo — e durante o build não há
+ * banco nem variável de ambiente. O erro que aparecia era
+ * `Failed to collect page data for /documentos/arquivo/[id]`, que não diz nada
+ * sobre a causa.
+ *
+ * Compilar não é motivo para precisar de banco. Adiar a conexão resolve os
+ * dois lados: o build passa, e quem chamar uma consulta sem `DATABASE_URL`
+ * continua recebendo a mesma mensagem clara, só que na hora certa.
+ */
+let conexao: ReturnType<typeof postgres> | null = null;
 
-if (!connectionString) {
-  throw new Error("DATABASE_URL não está definida. Copie .env.example para .env.");
+function cliente() {
+  if (conexao) return conexao;
+
+  const url = process.env.DATABASE_URL;
+  if (!url) {
+    throw new Error("DATABASE_URL não está definida. Copie .env.example para .env.");
+  }
+
+  /**
+   * O coletor roda em processo separado e abre sua própria conexão. Aqui o pool
+   * fica pequeno de propósito: a aplicação web não é o gargalo desse sistema.
+   */
+  conexao = postgres(url, { max: 10 });
+  return conexao;
 }
 
 /**
- * O coletor roda em processo separado e abre sua própria conexão. Aqui o pool
- * fica pequeno de propósito: a aplicação web não é o gargalo desse sistema.
+ * `db` é um proxy: cada uso toca no Drizzle de verdade, que por sua vez abre a
+ * conexão na primeira vez. Mantém a forma `db.query...` e `db.insert(...)` que
+ * o projeto inteiro já usa, sem trocar uma linha de quem chama.
  */
-const client = postgres(connectionString, { max: 10 });
-
-export const db = drizzle(client, { schema });
+export const db = new Proxy({} as ReturnType<typeof drizzle<typeof schema>>, {
+  get(_alvo, prop, receptor) {
+    const real = drizzle(cliente(), { schema });
+    const valor = Reflect.get(real, prop, receptor);
+    return typeof valor === "function" ? valor.bind(real) : valor;
+  },
+});
 
 export { schema };

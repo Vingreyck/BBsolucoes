@@ -1,0 +1,36 @@
+# HTTPS automático.
+#
+# O Caddy pede o certificado ao Let's Encrypt sozinho, renova sozinho, e
+# redireciona HTTP para HTTPS sem configuração. É por isso que ele está aqui em
+# vez de Nginx: a alternativa seria certbot, cron de renovação e um bloco de
+# configuração de vinte linhas que quebra calado quando o certificado vence.
+#
+# Login por HTTP é senha trafegando aberta, e este sistema vai ter CNH, CPF e
+# contrato de 166 pessoas atrás dele.
+
+{$DOMINIO} {
+	reverse_proxy site:3000
+
+	encode gzip
+
+	# Cabeçalhos que custam nada e fecham buracos conhecidos.
+	header {
+		# Só HTTPS, por um ano, inclusive em subdomínio.
+		Strict-Transport-Security "max-age=31536000; includeSubDomains"
+		# Navegador não adivinha o tipo do arquivo — o proxy de download entrega
+		# PDF e imagem de cliente, e adivinhação vira execução de script.
+		X-Content-Type-Options "nosniff"
+		# Ninguém embute o Selebi num iframe de outro site.
+		X-Frame-Options "DENY"
+		Referrer-Policy "strict-origin-when-cross-origin"
+		# Não anuncia qual servidor é.
+		-Server
+	}
+
+	log {
+		output file /data/acesso.log {
+			roll_size 10MiB
+			roll_keep 5
+		}
+	}
+}
