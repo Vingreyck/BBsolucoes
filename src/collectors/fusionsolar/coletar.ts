@@ -3,6 +3,7 @@ import "dotenv/config";
 import { and, eq, isNull } from "drizzle-orm";
 
 import { db, schema } from "../../db";
+import { donoConhecido } from "../dono";
 import { FusionSolarClient } from "./client";
 
 /**
@@ -146,6 +147,14 @@ async function main() {
   console.log(`  ${usinas.length} usinas (rota ${rota})`);
 
   const usinaPorCodigo = new Map<string, string>();
+  /**
+   * Usinas que apareceram no portal e ainda não têm dono conhecido.
+   *
+   * Antes elas ganhavam um cliente inventado com o nome do login do técnico.
+   * Agora ficam sem dono e esperam em /usinas/sem-dono, que é honesto e
+   * reversível — inventar não era nem uma coisa nem outra.
+   */
+  let semDono = 0;
   let usinasNovas = 0;
   let semPotencia = 0;
 
@@ -176,24 +185,14 @@ async function main() {
       continue;
     }
 
-    let clienteDb = await db.query.cliente.findFirst({
-      where: and(
-        eq(schema.cliente.empresaId, empresa.id),
-        eq(schema.cliente.nome, nome),
-      ),
-    });
-    if (!clienteDb) {
-      [clienteDb] = await db
-        .insert(schema.cliente)
-        .values({ empresaId: empresa.id, nome })
-        .returning();
-    }
+    const clienteId = await donoConhecido(empresa.id, nome);
+    if (!clienteId) semDono++;
 
     const [usina] = await db
       .insert(schema.usina)
       .values({
         empresaId: empresa.id,
-        clienteId: clienteDb.id,
+        clienteId,
         nome,
         potenciaKwp: kwp ? String(kwp) : null,
         cidade: endereco && endereco.length <= 60 ? endereco : null,

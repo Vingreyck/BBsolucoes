@@ -1,0 +1,20 @@
+-- Usina pode existir sem cliente.
+--
+-- Até aqui toda usina era obrigada a ter um, e os coletores resolviam isso do
+-- pior jeito: ao encontrar uma usina desconhecida no portal, criavam um cliente
+-- novo com o nome que estivesse lá. Só que o nome no portal é login de técnico,
+-- não nome de pessoa — "José Fernando7", "Deninho7", "micaely 03".
+--
+-- O resultado são 289 clientes para cerca de 166 pessoas. O mesmo homem existe
+-- duas vezes: `JOSE FERNANDO` com 6 documentos e nenhuma usina, e
+-- `José Fernando7` com uma usina parada desde agosto e nenhum documento. Quem
+-- abre o dossiê não vê a usina parada; quem abre o alerta não acha o contrato.
+--
+-- Uma usina achada no portal e ainda não reconhecida **não tem dono conhecido**,
+-- e é isso que a coluna passa a poder dizer. Inventar um dono para satisfazer a
+-- restrição era transformar "não sei" em "sei, e é esta pessoa aqui que eu
+-- acabei de inventar".
+--
+-- As 102 usinas que hoje apontam para clientes inventados continuam como estão:
+-- juntá-las ao cliente certo é conferência humana, não migration.
+ALTER TABLE "usina" ALTER COLUMN "cliente_id" DROP NOT NULL;

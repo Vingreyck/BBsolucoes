@@ -1497,3 +1497,66 @@ body {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+
+/* --------------------------------------------------
+   Ligar usina órfã ao cliente certo
+   -------------------------------------------------- */
+.ligar {
+  display: grid;
+  gap: 0.4rem;
+  margin-top: 0.4rem;
+}
+.sugestoes {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.3rem;
+}
+.sugestoes button {
+  font: inherit;
+  font-size: 0.76rem;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.25rem 0.55rem;
+  border: 1px solid var(--line);
+  border-radius: 3px;
+  background: var(--surface);
+  color: var(--ink);
+  cursor: pointer;
+}
+.sugestoes button:hover:not(:disabled) {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+.sugestoes button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+/* Quem tem documento veio do contrato assinado; o número diz isso de relance. */
+.sugestoes .conta {
+  font-size: 0.66rem;
+  color: var(--ink-3);
+  background: var(--accent-soft);
+  border-radius: 2px;
+  padding: 0 0.25rem;
+}
+.ligar select {
+  font: inherit;
+  font-size: 0.76rem;
+  padding: 0.25rem;
+  border: 1px solid var(--line-soft);
+  border-radius: 3px;
+  background: var(--surface);
+  color: var(--ink);
+  max-width: 100%;
+}
+.ligar .erro {
+  margin: 0;
+  font-size: 0.74rem;
+  color: var(--crit);
+}
+.cartao .ok {
+  margin: 0;
+  font-size: 0.78rem;
+  color: var(--ok);
+}

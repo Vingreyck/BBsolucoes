@@ -119,7 +119,12 @@ async function main() {
     columns: { id: true, clienteId: true, status: true, potenciaKwp: true },
   });
   const usinaPorCliente = new Map<string, (typeof usinas)[number]>();
-  for (const u of usinas) if (!usinaPorCliente.has(u.clienteId)) usinaPorCliente.set(u.clienteId, u);
+  for (const u of usinas) {
+    // Usina sem dono não entra: ela ainda não pertence a ninguém, e um dossiê
+    // é de uma venda a uma pessoa. Entra quando for ligada ao cliente certo.
+    if (!u.clienteId) continue;
+    if (!usinaPorCliente.has(u.clienteId)) usinaPorCliente.set(u.clienteId, u);
+  }
 
   /** Dossiês que já existem, para não criar de novo a cada rodada. */
   const projetos = await db.query.projeto.findMany({

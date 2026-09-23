@@ -171,7 +171,7 @@ export default async function Usinas({
   const filtradas = linhas.filter((l) => {
     if (alvo) {
       const campos = normalizar(
-        `${l.usina.nome} ${l.usina.cliente.nome} ${l.usina.cidade ?? ""}`,
+        `${l.usina.nome} ${l.usina.cliente?.nome ?? ""} ${l.usina.cidade ?? ""}`,
       );
       if (!campos.includes(alvo)) return false;
     }
@@ -324,7 +324,15 @@ export default async function Usinas({
           <tbody>
             {filtradas.map(({ usina, serie, potenciaSuspeita, semEquipamento, portais, situacao }) => (
               <tr key={usina.id}>
-                <td className="forte">{usina.cliente.nome}</td>
+                <td className="forte">
+                  {usina.cliente ? (
+                    usina.cliente.nome
+                  ) : (
+                    <a href="/usinas/sem-dono" className="pilula sev-atencao">
+                      sem dono
+                    </a>
+                  )}
+                </td>
                 <td>
                   {situacao ? (
                     <span

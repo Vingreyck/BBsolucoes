@@ -36,7 +36,7 @@ export default async function CadastroPasso({
   return (
     <main>
       <header className="topo">
-        <h1>{usina.cliente.nome}</h1>
+        <h1>{usina.cliente?.nome ?? usina.nome}</h1>
         <span className="sub">{usina.nome}</span>
       </header>
 

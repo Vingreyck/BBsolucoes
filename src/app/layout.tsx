@@ -36,6 +36,7 @@ export default async function RootLayout({
             <span className="marca">Selebi</span>
             <a href="/">Esteira</a>
             <a href="/usinas">Usinas</a>
+            <a href="/usinas/sem-dono">Sem dono</a>
             <a href="/cadastro">Nova usina</a>
             {/* Esconder o link é cortesia; quem barra é a própria página. */}
             {temDocumentos && <a href="/documentos">Documentos</a>}

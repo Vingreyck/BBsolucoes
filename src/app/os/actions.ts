@@ -56,6 +56,22 @@ export async function abrirOsDoAlerta(alertaId: string): Promise<void> {
     redirect(`/os/${alerta.ordemServicoId}`);
   }
 
+  /**
+   * Ordem de serviço precisa de cliente, e usina sem dono não tem.
+   *
+   * Não é limitação técnica que dê para contornar: a OS existe para alguém ir
+   * até um endereço atender uma pessoa, e não sabemos qual pessoa é. Abrir com
+   * um cliente inventado só empurraria o problema para o técnico que chegasse
+   * lá sem saber com quem falar.
+   *
+   * Manda para a fila de quem precisa ser ligado, que é onde isso se resolve
+   * em um clique.
+   */
+  const clienteId = alerta.usina.clienteId;
+  if (!clienteId) {
+    redirect(`/usinas/sem-dono?usina=${alerta.usinaId}`);
+  }
+
   const osId = await db.transaction(async (tx) => {
     const [{ proximo }] = await tx
       .select({
@@ -69,7 +85,7 @@ export async function abrirOsDoAlerta(alertaId: string): Promise<void> {
       .values({
         empresaId: alerta.empresaId,
         numero: proximo,
-        clienteId: alerta.usina.clienteId,
+        clienteId,
         usinaId: alerta.usinaId,
         tipo: "corretiva",
         status: "aberta",

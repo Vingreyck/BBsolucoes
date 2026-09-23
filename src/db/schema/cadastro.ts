@@ -147,9 +147,24 @@ export const usina = pgTable(
     empresaId: uuid("empresa_id")
       .notNull()
       .references(() => empresa.id, { onDelete: "cascade" }),
-    clienteId: uuid("cliente_id")
-      .notNull()
-      .references(() => cliente.id, { onDelete: "restrict" }),
+    /**
+     * Nulo quando o portal mostrou uma usina que ainda não reconhecemos.
+     *
+     * Até 23/09/2026 era obrigatório, e os coletores satisfaziam a restrição do
+     * pior jeito: criavam um cliente com o nome que estivesse no portal. Mas
+     * ali o nome é login de técnico, não de pessoa — "José Fernando7",
+     * "Deninho7", "micaely 03". Deu 289 clientes para cerca de 166 pessoas, com
+     * o mesmo homem em dois registros: um com os documentos do Drive e outro
+     * com a usina, nenhum sabendo do outro.
+     *
+     * Nulo aqui quer dizer **"não sei de quem é"**, que é a verdade. Inventar
+     * um dono para preencher a coluna era transformar isso em "sei, e é esta
+     * pessoa que eu acabei de criar". A tela `/usinas/sem-dono` é a fila de
+     * quem precisa ser ligado ao cliente certo, com um clique.
+     */
+    clienteId: uuid("cliente_id").references(() => cliente.id, {
+      onDelete: "restrict",
+    }),
     unidadeConsumidoraId: uuid("unidade_consumidora_id").references(
       () => unidadeConsumidora.id,
       { onDelete: "set null" },

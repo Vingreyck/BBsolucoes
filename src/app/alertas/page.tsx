@@ -84,7 +84,7 @@ export default async function Alertas() {
             <section className={`grupo s-${pior.severidade}`} key={primeiro.usinaId}>
               <header className="grupo-topo">
                 <div>
-                  <h2>{primeiro.usina.cliente.nome}</h2>
+                  <h2>{primeiro.usina.cliente?.nome ?? "Usina sem dono"}</h2>
                   <p className="usina">
                     {primeiro.usina.nome}
                     {primeiro.usina.cidade ? ` · ${primeiro.usina.cidade}` : ""}

@@ -3,6 +3,7 @@ import "dotenv/config";
 import { and, eq, inArray } from "drizzle-orm";
 
 import { db, schema } from "../../db";
+import { donoConhecido } from "../dono";
 import { InversorSolis, SolisClient, UsinaSolis } from "./client";
 
 /**
@@ -116,6 +117,8 @@ function credenciais(): Credencial[] {
 
 interface Resultado {
   usinasNovas: number;
+  /** Usinas do portal sem cliente conhecido — esperam em /usinas/sem-dono. */
+  semDono: number;
   equipamentosNovos: number;
   leituras: number;
   alertas: number;
@@ -158,6 +161,7 @@ async function coletarConta(
 
   const resultado: Resultado = {
     usinasNovas: 0,
+    semDono: 0,
     equipamentosNovos: 0,
     leituras: 0,
     alertas: 0,
@@ -216,24 +220,14 @@ async function coletarConta(
     }
 
     // O portal não separa cliente de usina: o nome da estação é tudo o que há.
-    let clienteDb = await db.query.cliente.findFirst({
-      where: and(
-        eq(schema.cliente.empresaId, empresaId),
-        eq(schema.cliente.nome, nome),
-      ),
-    });
-    if (!clienteDb) {
-      [clienteDb] = await db
-        .insert(schema.cliente)
-        .values({ empresaId, nome })
-        .returning();
-    }
+    const clienteId = await donoConhecido(empresaId, nome);
+    if (!clienteId) resultado.semDono++;
 
     const [usina] = await db
       .insert(schema.usina)
       .values({
         empresaId,
-        clienteId: clienteDb.id,
+        clienteId,
         nome,
         potenciaKwp: potenciaKwp !== undefined ? String(potenciaKwp) : null,
         // Endereço vem de quem cadastrou a usina no portal e costuma vir
@@ -462,6 +456,7 @@ async function main() {
 
   const total: Resultado = {
     usinasNovas: 0,
+    semDono: 0,
     equipamentosNovos: 0,
     leituras: 0,
     alertas: 0,
@@ -474,6 +469,7 @@ async function main() {
     try {
       const r = await coletarConta(credencial, empresa.id, contasSolis);
       total.usinasNovas += r.usinasNovas;
+      total.semDono += r.semDono;
       total.equipamentosNovos += r.equipamentosNovos;
       total.leituras += r.leituras;
       total.alertas += r.alertas;
