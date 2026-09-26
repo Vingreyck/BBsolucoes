@@ -273,6 +273,7 @@ async function main() {
         email: u.email,
         senhaHash: hash,
         papel: u.papel,
+        aprovadoEm: new Date(),
       })),
     )
     .returning();

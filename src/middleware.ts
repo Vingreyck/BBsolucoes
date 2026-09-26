@@ -24,6 +24,13 @@ export function middleware(requisicao: NextRequest) {
 }
 
 export const config = {
-  // Deixa passar os estáticos do Next e o favicon; o resto passa pela barreira.
-  matcher: ["/((?!_next/static|_next/image|favicon.ico).*)"],
+  /**
+   * Deixa passar os estáticos do Next, o favicon e a API do app.
+   *
+   * O app não usa cookie: manda o token no cabeçalho `Authorization`, e cada
+   * rota de `/api/app/` confere a sessão no banco. Se esta barreira pegasse
+   * essas rotas, redirecionaria o celular para a página de login em HTML — e o
+   * app receberia uma página no lugar do JSON que esperava.
+   */
+  matcher: ["/((?!_next/static|_next/image|favicon.ico|api/app/).*)"],
 };

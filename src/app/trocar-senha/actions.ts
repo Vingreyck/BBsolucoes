@@ -3,22 +3,11 @@
 import { eq } from "drizzle-orm";
 import { redirect } from "next/navigation";
 
+import { problemaNaSenha } from "@/auth/politica-senha";
 import { conferirSenha, gerarHash } from "@/auth/senha";
 import { usuarioAtual } from "@/auth/sessao";
 import { db } from "@/db";
 import { sessao as sessaoTable, usuario as usuarioTable } from "@/db/schema";
-
-/**
- * Tamanho mínimo da senha.
- *
- * Oito é o piso das recomendações e é o que dá para pedir a uma equipe que vai
- * digitar isso no celular, em cima de um telhado. Comprimento importa mais que
- * exigir símbolo: regra de complexidade produz `Senha@123` em todo mundo.
- */
-const MINIMO = 8;
-
-/** Senhas que já estiveram num repositório público não voltam. */
-const PROIBIDAS = new Set(["bbsolucoes", "12345678", "senha123", "bbsolucoes1"]);
 
 export async function trocarSenha(
   _anterior: { erro?: string },
@@ -31,16 +20,11 @@ export async function trocarSenha(
   const nova = String(dados.get("nova") ?? "");
   const repetida = String(dados.get("repetida") ?? "");
 
-  if (nova.length < MINIMO) {
-    return { erro: `A senha nova precisa de pelo menos ${MINIMO} caracteres.` };
-  }
+  // A regra é a mesma do app: `@/auth/politica-senha`.
+  const problema = problemaNaSenha(nova);
+  if (problema) return { erro: problema };
   if (nova !== repetida) {
     return { erro: "As duas senhas novas não são iguais." };
-  }
-  if (PROIBIDAS.has(nova.toLowerCase())) {
-    return {
-      erro: "Essa senha já foi usada por todo mundo e está publicada. Escolha outra.",
-    };
   }
   if (nova === atual) {
     return { erro: "A senha nova precisa ser diferente da atual." };

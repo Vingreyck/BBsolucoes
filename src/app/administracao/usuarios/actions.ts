@@ -1,12 +1,10 @@
 "use server";
 
-import { randomBytes } from "node:crypto";
-
 import { and, eq } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 
-import { gerarHash } from "@/auth/senha";
+import { gerarHash, gerarSenhaProvisoria } from "@/auth/senha";
 import { exigirUsuario } from "@/auth/sessao";
 import { db, schema } from "@/db";
 
@@ -30,20 +28,8 @@ async function exigirAdm() {
   return usuario;
 }
 
-/**
- * Senha provisória legível, gerada por sorteio.
- *
- * Sem `0/O` e `1/l/I`, porque ela vai ser lida em voz alta ou mandada por
- * mensagem, e confundir zero com ó é o jeito mais rápido de gerar um chamado.
- * Ela vale uma vez: a pessoa é obrigada a trocar no primeiro acesso.
- */
-function senhaProvisoria(): string {
-  const letras = "abcdefghjkmnpqrstuvwxyz";
-  const numeros = "23456789";
-  const alfabeto = letras + letras.toUpperCase() + numeros;
-  const bytes = randomBytes(10);
-  return [...bytes].map((b) => alfabeto[b % alfabeto.length]).join("");
-}
+/** Sorteada em `@/auth/senha`, a mesma que o app usa. */
+const senhaProvisoria = gerarSenhaProvisoria;
 
 const PAPEIS = new Set(["adm", "vendedor", "engenheiro", "tecnico", "estoque"]);
 
@@ -83,6 +69,9 @@ export async function criarUsuario(
     papel: papel as never,
     telefone: String(dados.get("telefone") ?? "").trim() || null,
     deveTrocarSenha: true,
+    // Foi o próprio administrador que criou: já nasce aprovada.
+    aprovadoEm: new Date(),
+    aprovadoPorId: adm.id,
   });
 
   revalidatePath("/administracao/usuarios");
@@ -105,13 +94,18 @@ export async function alternarAtivo(usuarioId: string): Promise<void> {
       eq(schema.usuario.id, usuarioId),
       eq(schema.usuario.empresaId, adm.empresaId),
     ),
-    columns: { id: true, ativo: true },
+    columns: { id: true, ativo: true, aprovadoEm: true },
   });
   if (!alvo) return;
 
+  // Ativar um cadastro que veio do app é aprová-lo — com o papel técnico, que é
+  // o que o cadastro traz. Trocar o papel fica para o app, na tela de equipe.
+  const aprovacao =
+    !alvo.ativo && !alvo.aprovadoEm ? { aprovadoEm: new Date(), aprovadoPorId: adm.id } : {};
+
   await db
     .update(schema.usuario)
-    .set({ ativo: !alvo.ativo })
+    .set({ ativo: !alvo.ativo, ...aprovacao })
     .where(eq(schema.usuario.id, usuarioId));
 
   // Desativar derruba a sessão na hora, sem esperar o cookie vencer.

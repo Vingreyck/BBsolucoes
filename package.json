@@ -35,7 +35,10 @@
     "drive:testar": "tsx src/documentos/testar-drive.ts",
     "coletar:growatt": "tsx src/collectors/growatt/coletar.ts",
     "reconciliar": "tsx src/collectors/reconciliar-cli.ts",
-    "backup": "tsx src/db/backup.ts"
+    "backup": "tsx src/db/backup.ts",
+    "empresa:codigo": "tsx src/empresa/definir-codigo.ts",
+    "usuario:aprovar": "tsx src/auth/aprovar-cli.ts",
+    "testar:app": "tsx src/app-movel/testar-fluxo.ts"
   },
   "dependencies": {
     "dotenv": "^17.4.2",

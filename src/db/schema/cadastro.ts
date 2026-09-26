@@ -1,4 +1,6 @@
+import { sql } from "drizzle-orm";
 import {
+  type AnyPgColumn,
   boolean,
   index,
   integer,
@@ -24,13 +26,30 @@ import {
  * Tenant. Toda tabela do sistema carrega `empresaId` desde a primeira migration:
  * a BB Soluções é a empresa nº 1, não a única. Retrofitar isso depois é reescrita.
  */
-export const empresa = pgTable("empresa", {
-  id: uuid("id").primaryKey().defaultRandom(),
-  nome: text("nome").notNull(),
-  cnpj: varchar("cnpj", { length: 14 }),
-  ativa: boolean("ativa").notNull().default(true),
-  criadoEm: timestamp("criado_em", { withTimezone: true }).notNull().defaultNow(),
-});
+export const empresa = pgTable(
+  "empresa",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    nome: text("nome").notNull(),
+    cnpj: varchar("cnpj", { length: 14 }),
+    ativa: boolean("ativa").notNull().default(true),
+    /**
+     * SHA-256 do código que o desenvolvedor entrega à empresa.
+     *
+     * É o que um técnico digita no app para se cadastrar na empresa certa. Só o
+     * hash mora aqui — o código não fica salvo em lugar nenhum, porque o
+     * repositório é público. Quem define é `npm run empresa:codigo`, e só quem
+     * tem acesso ao banco consegue rodar.
+     */
+    codigoAcessoHash: varchar("codigo_acesso_hash", { length: 64 }),
+    criadoEm: timestamp("criado_em", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    uniqueIndex("empresa_codigo_acesso_uq")
+      .on(t.codigoAcessoHash)
+      .where(sql`${t.codigoAcessoHash} is not null`),
+  ],
+);
 
 /** Usuário nominal. Acaba com o login compartilhado — requisito de LGPD. */
 export const usuario = pgTable(
@@ -41,7 +60,14 @@ export const usuario = pgTable(
       .notNull()
       .references(() => empresa.id, { onDelete: "cascade" }),
     nome: text("nome").notNull(),
-    email: text("email").notNull(),
+    /**
+     * Opcional desde o app: quem se cadastra pelo celular entra por CPF, e boa
+     * parte dos técnicos não usa e-mail. O login do navegador continua por
+     * e-mail, então quem não tem e-mail usa só o app.
+     */
+    email: text("email"),
+    /** Só dígitos. Único dentro da empresa — é o login do app. */
+    cpf: varchar("cpf", { length: 11 }),
     senhaHash: text("senha_hash").notNull(),
     papel: papelUsuario("papel").notNull().default("vendedor"),
     /**
@@ -55,10 +81,25 @@ export const usuario = pgTable(
     deveTrocarSenha: boolean("deve_trocar_senha").notNull().default(false),
     telefone: varchar("telefone", { length: 20 }),
     ativo: boolean("ativo").notNull().default(true),
+    /**
+     * Quando um administrador liberou a conta. Nulo = cadastro pedindo para
+     * entrar, que chega pelo app desativado e fica esperando alguém escolher o
+     * papel. Desativado **com** aprovação é outra coisa: é quem saiu.
+     *
+     * Quem cria conta pelo navegador já nasce aprovado — foi o próprio
+     * administrador que criou.
+     */
+    aprovadoEm: timestamp("aprovado_em", { withTimezone: true }),
+    aprovadoPorId: uuid("aprovado_por_id").references((): AnyPgColumn => usuario.id, {
+      onDelete: "set null",
+    }),
     criadoEm: timestamp("criado_em", { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [
     uniqueIndex("usuario_email_uq").on(t.email),
+    uniqueIndex("usuario_cpf_uq")
+      .on(t.empresaId, t.cpf)
+      .where(sql`${t.cpf} is not null`),
     index("usuario_empresa_idx").on(t.empresaId),
   ],
 );
@@ -81,6 +122,17 @@ export const sessao = pgTable(
       .notNull()
       .references(() => usuario.id, { onDelete: "cascade" }),
     expiraEm: timestamp("expira_em", { withTimezone: true }).notNull(),
+    /**
+     * `web` (cookie do navegador) ou `app` (token do celular).
+     *
+     * Separar impede que um token do app sirva de cookie no navegador e vice-
+     * versa, e deixa as duas durarem tempos diferentes: o técnico não pode ficar
+     * digitando senha em cima de telhado, o navegador pode.
+     */
+    origem: varchar("origem", { length: 10 }).notNull().default("web"),
+    /** "Xiaomi Redmi Note 12 · Android 14" — para a pessoa reconhecer a sessão. */
+    dispositivo: text("dispositivo"),
+    ultimoUsoEm: timestamp("ultimo_uso_em", { withTimezone: true }),
     criadoEm: timestamp("criado_em", { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [index("sessao_usuario_idx").on(t.usuarioId)],

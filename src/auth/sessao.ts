@@ -27,6 +27,7 @@ export async function criarSessao(usuarioId: string): Promise<void> {
     id: digerir(token),
     usuarioId,
     expiraEm,
+    origem: "web",
   });
 
   const jar = await cookies();
@@ -47,7 +48,8 @@ export async function criarSessao(usuarioId: string): Promise<void> {
 export interface UsuarioSessao {
   id: string;
   nome: string;
-  email: string;
+  /** Nulo para quem se cadastrou pelo app sem e-mail — esse não entra por aqui. */
+  email: string | null;
   papel: string;
   empresaId: string;
   /** Senha provisória: não pode ver nada antes de trocar. */
@@ -69,15 +71,25 @@ export async function usuarioAtual(): Promise<UsuarioSessao | null> {
       empresaId: usuarioTable.empresaId,
       deveTrocarSenha: usuarioTable.deveTrocarSenha,
       ativo: usuarioTable.ativo,
+      aprovadoEm: usuarioTable.aprovadoEm,
     })
     .from(sessaoTable)
     .innerJoin(usuarioTable, eq(usuarioTable.id, sessaoTable.usuarioId))
-    .where(and(eq(sessaoTable.id, digerir(token)), gt(sessaoTable.expiraEm, new Date())))
+    .where(
+      and(
+        eq(sessaoTable.id, digerir(token)),
+        // Token do app não vale como cookie do navegador, e vice-versa.
+        eq(sessaoTable.origem, "web"),
+        gt(sessaoTable.expiraEm, new Date()),
+      ),
+    )
     .limit(1);
 
   const usuario = linha[0];
   // Desativar um usuário derruba o acesso na hora, sem esperar a sessão vencer.
-  if (!usuario || !usuario.ativo) return null;
+  // Cadastro do app ainda não aprovado também não passa, mesmo que um dia tenha
+  // sessão — é a segunda tranca, além do `ativo`.
+  if (!usuario || !usuario.ativo || !usuario.aprovadoEm) return null;
 
   return {
     id: usuario.id,

@@ -1,6 +1,7 @@
 import { asc, eq } from "drizzle-orm";
 import { redirect } from "next/navigation";
 
+import { ocultarCpf } from "@/auth/cpf";
 import { exigirUsuario } from "@/auth/sessao";
 import { db, schema } from "@/db";
 
@@ -37,7 +38,8 @@ export default async function Usuarios() {
   });
 
   const provisorias = usuarios.filter((u) => u.deveTrocarSenha && u.ativo);
-  const genericas = usuarios.filter((u) => u.email.endsWith("@bbsolucoes.local"));
+  const genericas = usuarios.filter((u) => u.email?.endsWith("@bbsolucoes.local"));
+  const pendentes = usuarios.filter((u) => !u.aprovadoEm);
 
   return (
     <main>
@@ -46,6 +48,12 @@ export default async function Usuarios() {
         <span className="sub">{usuarios.length} contas</span>
         {provisorias.length > 0 && (
           <span className="alerta">{provisorias.length} com senha provisória</span>
+        )}
+        {pendentes.length > 0 && (
+          <span className="alerta">
+            {pendentes.length} {pendentes.length === 1 ? "cadastro" : "cadastros"} do app
+            esperando aprovação
+          </span>
         )}
       </header>
 
@@ -78,7 +86,7 @@ export default async function Usuarios() {
           <thead>
             <tr>
               <th>Nome</th>
-              <th>E-mail</th>
+              <th>E-mail ou CPF</th>
               <th>Papel</th>
               <th>Situação</th>
               <th>Senha</th>
@@ -89,10 +97,14 @@ export default async function Usuarios() {
             {usuarios.map((u) => (
               <tr key={u.id}>
                 <td className="forte">{u.nome}</td>
-                <td className="fraco">{u.email}</td>
+                <td className="fraco">
+                  {u.email ?? (u.cpf ? `CPF ${ocultarCpf(u.cpf)}` : "—")}
+                </td>
                 <td className="fraco">{PAPEL_ROTULO[u.papel] ?? u.papel}</td>
                 <td>
-                  {u.ativo ? (
+                  {!u.aprovadoEm ? (
+                    <span className="pilula sev-atencao">aguardando aprovação</span>
+                  ) : u.ativo ? (
                     <span className="pilula sev-info">ativo</span>
                   ) : (
                     <span className="pilula sev-atencao">desativado</span>
@@ -110,7 +122,7 @@ export default async function Usuarios() {
                   {u.id !== usuario.id && (
                     <form action={alternarAtivo.bind(null, u.id)}>
                       <button type="submit">
-                        {u.ativo ? "desativar" : "reativar"}
+                        {!u.aprovadoEm ? "aprovar" : u.ativo ? "desativar" : "reativar"}
                       </button>
                     </form>
                   )}

@@ -3,21 +3,10 @@
 import { eq } from "drizzle-orm";
 import { redirect } from "next/navigation";
 
-import { conferirSenha } from "@/auth/senha";
+import { conferirSenha, HASH_FANTASMA } from "@/auth/senha";
 import { criarSessao, encerrarSessao } from "@/auth/sessao";
 import { db } from "@/db";
 import { usuario as usuarioTable } from "@/db/schema";
-
-/**
- * Hash descartável usado quando o e-mail não existe.
- *
- * Sem isto, e-mail inexistente responderia na hora e senha errada demoraria o
- * tempo do scrypt — e essa diferença de tempo permitiria descobrir quais
- * e-mails estão cadastrados. Conferir contra um hash falso iguala os dois casos.
- */
-const HASH_FANTASMA =
-  "scrypt$AAAAAAAAAAAAAAAAAAAAAA==$" +
-  "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA";
 
 /**
  * Login sem depender de JavaScript.
@@ -46,8 +35,9 @@ export async function entrar(dados: FormData): Promise<void> {
   const confere = await conferirSenha(senha, encontrado?.senhaHash ?? HASH_FANTASMA);
 
   // Mensagem única de propósito: dizer "usuário não existe" entregaria a quem
-  // tenta adivinhar quais e-mails são válidos.
-  if (!encontrado || !confere || !encontrado.ativo) {
+  // tenta adivinhar quais e-mails são válidos. Cadastro do app ainda não
+  // aprovado nasce desativado, então cai aqui também.
+  if (!encontrado || !confere || !encontrado.ativo || !encontrado.aprovadoEm) {
     redirect("/login?erro=credenciais");
   }
 

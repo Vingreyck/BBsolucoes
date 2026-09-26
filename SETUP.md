@@ -729,6 +729,35 @@ O preço disso é que o próximo `npm run db:generate` vai comparar com o
 gerar, **ler o SQL antes de aplicar** e apagar o que já existe — não rodar no
 escuro.
 
+## App do técnico (Android)
+
+O app mora em outro projeto (`Estudos/Selebi`, Kotlin + Compose) e fala com esta
+API em `/api/app/v1`. Login é **empresa + CPF + senha**; o cadastro feito pelo
+celular chega desativado e espera um administrador aprovar e escolher o papel
+(técnico, engenheiro ou administrador).
+
+Três passos, uma vez por ambiente:
+
+```bash
+# 1. A migração (à mão, como as outras)
+docker compose exec -T db psql -U postgres -d bbsolucoes -v ON_ERROR_STOP=1 < drizzle/0011-app-movel.sql
+
+# 2. O código da empresa. Ele é perguntado no terminal para não ficar no
+#    histórico, e só o hash vai para o banco — guarde-o com quem vai entregar.
+docker compose exec site npm run empresa:codigo
+
+# 3. O primeiro administrador: ele se cadastra pelo app como qualquer um, e
+#    este comando o aprova. Daí em diante, quem aprova os outros é ele, no app.
+docker compose exec site npm run usuario:aprovar -- --cpf 000.000.000-00 --papel adm
+```
+
+Conferir a API inteira de ponta a ponta (cria dois cadastros de teste e apaga
+no fim): `TESTE_CODIGO=<código> npm run testar:app`, com o `npm run dev` rodando.
+
+O build de release do app precisa do endereço público:
+`selebi.api.url.release=https://<DOMINIO>/api/app/v1/` no `gradle.properties`
+do projeto Android.
+
 ## Colocando no ar
 
 Quatro containers: banco, site, coletor e o Caddy que resolve o HTTPS.
