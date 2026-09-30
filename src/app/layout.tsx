@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 
 import { podeVerDocumentos } from "@/auth/permissao";
 import { usuarioAtual } from "@/auth/sessao";
+import { ehGestaoWeb } from "@/os/acesso";
 
 import { sair } from "./login/actions";
 import "./globals.css";
@@ -42,9 +43,18 @@ export default async function RootLayout({
             {temDocumentos && <a href="/documentos">Documentos</a>}
             <a href="/alertas">Alertas</a>
             <a href="/coleta">Coleta</a>
-            <a href="/os">OS</a>
+            {usuario.papel !== "estoque" && (
+              <>
+                <a href="/os">OS</a>
+                <a href="/os/agenda">Agenda</a>
+              </>
+            )}
+            {ehGestaoWeb(usuario.papel) && <a href="/os/acompanhamento">Em campo</a>}
             {usuario.papel === "adm" && (
-              <a href="/administracao/usuarios">Usuários</a>
+              <>
+                <a href="/administracao/usuarios">Usuários</a>
+                <a href="/administracao/modelos">Modelos de OS</a>
+              </>
             )}
             <span className="quem">
               {usuario.nome}

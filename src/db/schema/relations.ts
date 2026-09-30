@@ -14,14 +14,18 @@ import { documento, documentoAcesso, exigenciaDocumento } from "./documentos";
 import {
   comentario,
   etapa,
+  modeloOs,
+  modeloOsItem,
   serialInstalado,
   ordemServico,
   osAnexo,
   osChecklistItem,
+  osEvento,
   projeto,
   projetoEvento,
 } from "./operacao";
 import { alerta, leitura, notificacao, tarifa } from "./monitoramento";
+import { posicaoAtual } from "./rastreamento";
 
 export const empresaRelations = relations(empresa, ({ many }) => ({
   usuarios: many(usuario),
@@ -41,6 +45,7 @@ export const usuarioRelations = relations(usuario, ({ one, many }) => ({
   }),
   projetosResponsavel: many(projeto),
   ordensResponsavel: many(ordemServico),
+  ordensAbertas: many(ordemServico, { relationName: "osAbertaPor" }),
   comentarios: many(comentario),
 }));
 
@@ -163,6 +168,7 @@ export const projetoRelations = relations(projeto, ({ one, many }) => ({
   eventos: many(projetoEvento),
   documentos: many(documento),
   seriais: many(serialInstalado),
+  ordensServico: many(ordemServico),
 }));
 
 export const serialInstaladoRelations = relations(serialInstalado, ({ one }) => ({
@@ -215,16 +221,34 @@ export const ordemServicoRelations = relations(ordemServico, ({ one, many }) => 
     fields: [ordemServico.responsavelId],
     references: [usuario.id],
   }),
+  abertaPor: one(usuario, {
+    fields: [ordemServico.abertaPorId],
+    references: [usuario.id],
+    relationName: "osAbertaPor",
+  }),
+  projeto: one(projeto, { fields: [ordemServico.projetoId], references: [projeto.id] }),
+  osOrigem: one(ordemServico, {
+    fields: [ordemServico.osOrigemId],
+    references: [ordemServico.id],
+    relationName: "retorno",
+  }),
+  retornos: many(ordemServico, { relationName: "retorno" }),
   checklist: many(osChecklistItem),
   anexos: many(osAnexo),
+  eventos: many(osEvento),
   alertas: many(alerta),
 }));
 
-export const osChecklistItemRelations = relations(osChecklistItem, ({ one }) => ({
+export const osChecklistItemRelations = relations(osChecklistItem, ({ one, many }) => ({
   ordemServico: one(ordemServico, {
     fields: [osChecklistItem.ordemServicoId],
     references: [ordemServico.id],
   }),
+  respondidoPor: one(usuario, {
+    fields: [osChecklistItem.respondidoPorId],
+    references: [usuario.id],
+  }),
+  anexos: many(osAnexo),
 }));
 
 export const osAnexoRelations = relations(osAnexo, ({ one }) => ({
@@ -236,6 +260,28 @@ export const osAnexoRelations = relations(osAnexo, ({ one }) => ({
     fields: [osAnexo.enviadoPorId],
     references: [usuario.id],
   }),
+  checklistItem: one(osChecklistItem, {
+    fields: [osAnexo.checklistItemId],
+    references: [osChecklistItem.id],
+  }),
+  documento: one(documento, { fields: [osAnexo.documentoId], references: [documento.id] }),
+}));
+
+export const osEventoRelations = relations(osEvento, ({ one }) => ({
+  ordemServico: one(ordemServico, {
+    fields: [osEvento.ordemServicoId],
+    references: [ordemServico.id],
+  }),
+  usuario: one(usuario, { fields: [osEvento.usuarioId], references: [usuario.id] }),
+}));
+
+export const modeloOsRelations = relations(modeloOs, ({ one, many }) => ({
+  empresa: one(empresa, { fields: [modeloOs.empresaId], references: [empresa.id] }),
+  itens: many(modeloOsItem),
+}));
+
+export const modeloOsItemRelations = relations(modeloOsItem, ({ one }) => ({
+  modelo: one(modeloOs, { fields: [modeloOsItem.modeloId], references: [modeloOs.id] }),
 }));
 
 export const comentarioRelations = relations(comentario, ({ one }) => ({
@@ -259,6 +305,14 @@ export const alertaRelations = relations(alerta, ({ one }) => ({
   usina: one(usina, { fields: [alerta.usinaId], references: [usina.id] }),
   ordemServico: one(ordemServico, {
     fields: [alerta.ordemServicoId],
+    references: [ordemServico.id],
+  }),
+}));
+
+export const posicaoAtualRelations = relations(posicaoAtual, ({ one }) => ({
+  usuario: one(usuario, { fields: [posicaoAtual.usuarioId], references: [usuario.id] }),
+  ordemServico: one(ordemServico, {
+    fields: [posicaoAtual.ordemServicoId],
     references: [ordemServico.id],
   }),
 }));

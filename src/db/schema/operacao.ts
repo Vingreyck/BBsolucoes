@@ -1,7 +1,9 @@
+import { sql } from "drizzle-orm";
 import {
   boolean,
   index,
   integer,
+  jsonb,
   numeric,
   pgTable,
   text,
@@ -9,6 +11,7 @@ import {
   uniqueIndex,
   uuid,
   varchar,
+  type AnyPgColumn,
 } from "drizzle-orm/pg-core";
 
 import { cliente, empresa, usina, usuario } from "./cadastro";
@@ -19,8 +22,16 @@ import {
   prioridadeOs,
   situacaoProjeto,
   statusOs,
+  tipoDocumento,
   tipoOs,
 } from "./enums";
+
+/**
+ * A resposta de um item do checklist, conforme o tipo dele: marcado (check,
+ * sim/não), número, texto, uma opção, várias opções, ou a lista de seriais.
+ * Foto não tem valor — é anexo, contado em `os_anexo`.
+ */
+export type ValorResposta = boolean | number | string | string[] | null;
 
 /**
  * Uma etapa da esteira, por empresa.
@@ -247,11 +258,42 @@ export const ordemServico = pgTable(
     concluidaEm: timestamp("concluida_em", { withTimezone: true }),
     laudo: text("laudo"),
     criadoEm: timestamp("criado_em", { withTimezone: true }).notNull().defaultNow(),
+
+    /**
+     * A venda a que a OS serve. É esta coluna que liga a OS à esteira: a
+     * vistoria e a instalação são etapas de um projeto, e concluir a OS pode
+     * andar o projeto sozinho (ver `modelo_os.etapa_slug`). Nula na corretiva
+     * de usina antiga, que não pertence a venda nenhuma.
+     */
+    projetoId: uuid("projeto_id").references(() => projeto.id, { onDelete: "set null" }),
+    /** A OS de onde esta nasceu — o retorno de um atendimento não resolvido. */
+    osOrigemId: uuid("os_origem_id").references((): AnyPgColumn => ordemServico.id, {
+      onDelete: "set null",
+    }),
+    /** Como terminou: `resolvido` ou `nao_resolvido` (pede retorno). */
+    resultado: varchar("resultado", { length: 20 }),
+    /** Quem assinou pelo cliente — nem sempre é o titular. A imagem é anexo. */
+    assinaturaNome: text("assinatura_nome"),
+    /**
+     * Chave do link público do relatório, que vai para o cliente pelo
+     * WhatsApp. Aleatória e longa: quem tem o link vê o relatório, quem não tem
+     * não adivinha. Gerar outra invalida a anterior.
+     */
+    relatorioToken: varchar("relatorio_token", { length: 64 }),
+    canceladaEm: timestamp("cancelada_em", { withTimezone: true }),
+    atualizadoEm: timestamp("atualizado_em", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
   },
   (t) => [
     index("os_empresa_status_idx").on(t.empresaId, t.status),
     index("os_responsavel_idx").on(t.responsavelId, t.status),
     index("os_usina_idx").on(t.usinaId),
+    index("os_projeto_idx").on(t.projetoId),
+    index("os_agenda_idx").on(t.empresaId, t.agendadaPara),
+    uniqueIndex("os_relatorio_token_uq")
+      .on(t.relatorioToken)
+      .where(sql`${t.relatorioToken} IS NOT NULL`),
     /**
      * O número da OS é o que o cliente cita ao telefone, então dois chamados
      * com o mesmo número seria confusão garantida. Como ele é sequencial por
@@ -279,9 +321,34 @@ export const osChecklistItem = pgTable(
     ordem: integer("ordem").notNull().default(0),
     descricao: text("descricao").notNull(),
     obrigatorio: boolean("obrigatorio").notNull().default(false),
+    /**
+     * O item está cumprido: resposta dada e fotos mínimas enviadas. É o que o
+     * botão de concluir confere — calculado no servidor, nunca aceito pronto.
+     */
     concluido: boolean("concluido").notNull().default(false),
     observacao: text("observacao"),
     concluidoEm: timestamp("concluido_em", { withTimezone: true }),
+
+    // Copiados do modelo quando a OS nasce: mudar o modelo depois não mexe no
+    // que já foi pedido ao técnico, e o relatório continua batendo.
+    secao: text("secao"),
+    ajuda: text("ajuda"),
+    tipoResposta: varchar("tipo_resposta", { length: 20 }).notNull().default("check"),
+    opcoes: jsonb("opcoes").$type<string[]>(),
+    unidade: varchar("unidade", { length: 20 }),
+    fotosMinimas: integer("fotos_minimas").notNull().default(0),
+    /** Só vale foto tirada na hora — três vistorias usaram print do Street View. */
+    apenasCamera: boolean("apenas_camera").notNull().default(false),
+    /** A foto deste item vira este documento no dossiê da venda. */
+    tipoDocumento: tipoDocumento("tipo_documento"),
+    /** Nome estável do item ("disjuntor_amperagem"), para cruzar com o projeto. */
+    chave: varchar("chave", { length: 60 }),
+
+    valor: jsonb("valor").$type<ValorResposta>(),
+    respondidoPorId: uuid("respondido_por_id").references(() => usuario.id, {
+      onDelete: "set null",
+    }),
+    respondidoEm: timestamp("respondido_em", { withTimezone: true }),
   },
   (t) => [index("os_checklist_os_idx").on(t.ordemServicoId, t.ordem)],
 );
@@ -307,8 +374,133 @@ export const osAnexo = pgTable(
     /** Data/hora do aparelho: o app é offline-first e sobe o anexo depois. */
     capturadoEm: timestamp("capturado_em", { withTimezone: true }),
     criadoEm: timestamp("criado_em", { withTimezone: true }).notNull().defaultNow(),
+
+    /** Nulo para anexo geral da OS (assinatura, foto avulsa). */
+    checklistItemId: uuid("checklist_item_id").references(() => osChecklistItem.id, {
+      onDelete: "set null",
+    }),
+    /**
+     * Id que o celular dá ao anexo antes de ter sinal. Reenviar depois de uma
+     * queda de conexão não duplica a foto: o índice único barra a segunda.
+     */
+    idCliente: uuid("id_cliente"),
+    mime: varchar("mime", { length: 100 }),
+    driveId: varchar("drive_id", { length: 100 }),
+    latitude: numeric("latitude", { precision: 10, scale: 7 }),
+    longitude: numeric("longitude", { precision: 10, scale: 7 }),
+    /**
+     * O documento que esta foto virou no dossiê da venda. Sem `references`
+     * aqui: `documentos.ts` importa este arquivo, e o contrário fecharia um
+     * ciclo. A chave estrangeira existe no banco (migração 0012) e a relação,
+     * em `relations.ts`.
+     */
+    documentoId: uuid("documento_id"),
   },
-  (t) => [index("os_anexo_os_idx").on(t.ordemServicoId)],
+  (t) => [
+    index("os_anexo_os_idx").on(t.ordemServicoId),
+    index("os_anexo_item_idx").on(t.checklistItemId),
+    uniqueIndex("os_anexo_id_cliente_uq")
+      .on(t.empresaId, t.idCliente)
+      .where(sql`${t.idCliente} IS NOT NULL`),
+  ],
+);
+
+/**
+ * O histórico da OS: quem fez o quê, quando, de onde e por quê.
+ *
+ * É a "mensagem" do IXC e o que responde, meses depois, "quem esteve lá e
+ * quanto tempo ficou". Cada ação vira uma linha — nada se reescreve —, e é
+ * daqui que o relatório tira chegada, saída e tempo em campo.
+ *
+ * `ocorridoEm` é a hora do celular: o técnico sem sinal chega às 9h, e o
+ * evento só sobe às 11h. `registradoEm` é quando o servidor soube.
+ */
+export const osEvento = pgTable(
+  "os_evento",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    empresaId: uuid("empresa_id")
+      .notNull()
+      .references(() => empresa.id, { onDelete: "cascade" }),
+    ordemServicoId: uuid("ordem_servico_id")
+      .notNull()
+      .references(() => ordemServico.id, { onDelete: "cascade" }),
+    tipo: varchar("tipo", { length: 30 }).notNull(),
+    usuarioId: uuid("usuario_id").references(() => usuario.id, { onDelete: "set null" }),
+    /** `web`, `app` ou `sistema`. */
+    origem: varchar("origem", { length: 10 }).notNull().default("web"),
+    ocorridoEm: timestamp("ocorrido_em", { withTimezone: true }).notNull().defaultNow(),
+    registradoEm: timestamp("registrado_em", { withTimezone: true }).notNull().defaultNow(),
+    latitude: numeric("latitude", { precision: 10, scale: 7 }),
+    longitude: numeric("longitude", { precision: 10, scale: 7 }),
+    precisaoM: integer("precisao_m"),
+    /** O que muda de ação para ação: motivo, de/para, resultado. */
+    dados: jsonb("dados").$type<Record<string, unknown>>(),
+    idCliente: uuid("id_cliente"),
+  },
+  (t) => [
+    index("os_evento_os_idx").on(t.ordemServicoId, t.ocorridoEm),
+    uniqueIndex("os_evento_id_cliente_uq")
+      .on(t.empresaId, t.idCliente)
+      .where(sql`${t.idCliente} IS NOT NULL`),
+  ],
+);
+
+/**
+ * O modelo de cada tipo de OS — o "assunto" do IXC.
+ *
+ * Dado, não código: a lista do que o técnico precisa trazer do campo muda
+ * conforme a empresa aprende, e mudar precisa ser um formulário no site, não
+ * uma versão nova do app instalada em doze celulares.
+ */
+export const modeloOs = pgTable(
+  "modelo_os",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    empresaId: uuid("empresa_id")
+      .notNull()
+      .references(() => empresa.id, { onDelete: "cascade" }),
+    tipo: tipoOs("tipo").notNull(),
+    nome: text("nome").notNull(),
+    /** Mostrado ao técnico ao abrir a OS. */
+    instrucoes: text("instrucoes"),
+    /** Prazo a partir da abertura. Nulo = sem prazo. */
+    prazoHoras: integer("prazo_horas"),
+    exigeAssinatura: boolean("exige_assinatura").notNull().default(false),
+    /**
+     * A etapa da esteira que esta OS cumpre. Concluída com o problema resolvido
+     * e com o projeto parado nessa etapa, o projeto anda para a próxima.
+     */
+    etapaSlug: varchar("etapa_slug", { length: 40 }),
+    atualizadoEm: timestamp("atualizado_em", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [uniqueIndex("modelo_os_tipo_uq").on(t.empresaId, t.tipo)],
+);
+
+export const modeloOsItem = pgTable(
+  "modelo_os_item",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    empresaId: uuid("empresa_id")
+      .notNull()
+      .references(() => empresa.id, { onDelete: "cascade" }),
+    modeloId: uuid("modelo_id")
+      .notNull()
+      .references(() => modeloOs.id, { onDelete: "cascade" }),
+    ordem: integer("ordem").notNull().default(0),
+    secao: text("secao"),
+    descricao: text("descricao").notNull(),
+    ajuda: text("ajuda"),
+    tipoResposta: varchar("tipo_resposta", { length: 20 }).notNull().default("check"),
+    opcoes: jsonb("opcoes").$type<string[]>(),
+    unidade: varchar("unidade", { length: 20 }),
+    obrigatorio: boolean("obrigatorio").notNull().default(false),
+    fotosMinimas: integer("fotos_minimas").notNull().default(0),
+    apenasCamera: boolean("apenas_camera").notNull().default(false),
+    tipoDocumento: tipoDocumento("tipo_documento"),
+    chave: varchar("chave", { length: 60 }),
+  },
+  (t) => [index("modelo_os_item_modelo_idx").on(t.modeloId, t.ordem)],
 );
 
 /**
@@ -327,8 +519,13 @@ export const comentario = pgTable(
     autorId: uuid("autor_id").references(() => usuario.id, { onDelete: "set null" }),
     texto: text("texto").notNull(),
     criadoEm: timestamp("criado_em", { withTimezone: true }).notNull().defaultNow(),
+    /** Id dado pelo celular: a nota escrita sem sinal e reenviada não duplica. */
+    idCliente: uuid("id_cliente"),
   },
   (t) => [
     index("comentario_entidade_idx").on(t.empresaId, t.entidade, t.entidadeId),
+    uniqueIndex("comentario_id_cliente_uq")
+      .on(t.empresaId, t.idCliente)
+      .where(sql`${t.idCliente} IS NOT NULL`),
   ],
 );

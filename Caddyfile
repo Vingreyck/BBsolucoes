@@ -11,7 +11,23 @@
 {$DOMINIO} {
 	reverse_proxy site:3000
 
-	encode gzip
+	# Comprime só uma lista fechada de tipos, e nunca `text/*` inteiro: o mapa
+	# "Em campo" recebe as posições ao vivo em `text/event-stream`, e a
+	# compressão seguraria os bytes até juntar um bloco — a posição chegaria em
+	# rajadas, minutos atrasada, e o mapa pareceria travado.
+	encode gzip {
+		match {
+			header Content-Type text/html*
+			header Content-Type text/css*
+			header Content-Type text/plain*
+			header Content-Type text/javascript*
+			header Content-Type text/x-component*
+			header Content-Type application/javascript*
+			header Content-Type application/json*
+			header Content-Type application/xml*
+			header Content-Type image/svg+xml*
+		}
+	}
 
 	# Cabeçalhos que custam nada e fecham buracos conhecidos.
 	header {

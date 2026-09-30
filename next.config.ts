@@ -9,6 +9,20 @@ const nextConfig: NextConfig = {
    */
   outputFileTracingRoot: path.join(__dirname),
 
+  /**
+   * A biblioteca do relatório em PDF carrega fontes e o motor de layout em
+   * WebAssembly por conta própria. Empacotada pelo Next, ela perde esses
+   * arquivos e quebra só em produção; fora do pacote, o Node a carrega como
+   * qualquer dependência.
+   */
+  serverExternalPackages: ["@react-pdf/renderer"],
+
+  /**
+   * Quem comprime é o Caddy, na frente. Comprimir aqui também seria trabalho
+   * dobrado e seguraria o fluxo ao vivo do mapa "Em campo" (SSE) num buffer.
+   */
+  compress: false,
+
   experimental: {
     serverActions: {
       /**

@@ -38,18 +38,23 @@
     "backup": "tsx src/db/backup.ts",
     "empresa:codigo": "tsx src/empresa/definir-codigo.ts",
     "usuario:aprovar": "tsx src/auth/aprovar-cli.ts",
-    "testar:app": "tsx src/app-movel/testar-fluxo.ts"
+    "testar:app": "tsx src/app-movel/testar-fluxo.ts",
+    "testar:os": "tsx src/os/testar-os.ts",
+    "testar:rastreamento": "tsx src/rastreamento/testar-rastreamento.ts"
   },
   "dependencies": {
+    "@react-pdf/renderer": "^4.9.0",
     "dotenv": "^17.4.2",
     "drizzle-orm": "^0.44.0",
     "exceljs": "^4.4.0",
+    "leaflet": "^1.9.4",
     "next": "^15.3.0",
     "postgres": "^3.4.5",
     "react": "^19.1.0",
     "react-dom": "^19.1.0"
   },
   "devDependencies": {
+    "@types/leaflet": "^1.9.22",
     "@types/node": "^22.15.0",
     "@types/react": "^19.1.0",
     "@types/react-dom": "^19.1.0",

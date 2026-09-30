@@ -5,7 +5,8 @@ import { revalidatePath } from "next/cache";
 
 import { exigirAcessoDocumentos } from "@/auth/permissao";
 import { db, schema } from "@/db";
-import { driveConfigurado, enviarArquivo, garantirPasta } from "@/documentos/drive";
+import { driveConfigurado, enviarArquivo } from "@/documentos/drive";
+import { limparNome, pastaDoCliente } from "@/documentos/pastas";
 
 /**
  * Sobe um documento pelo Selebi.
@@ -59,16 +60,6 @@ const ROTULO_ARQUIVO: Record<string, string> = {
   protocolo: "PROTOCOLO",
   outro: "OUTRO",
 };
-
-/** Tira acento e o que o Drive e o Windows não gostam em nome de arquivo. */
-function limparNome(texto: string): string {
-  return texto
-    .normalize("NFD")
-    .replace(/[̀-ͯ]/g, "")
-    .replace(/[\\/:*?"<>|]/g, " ")
-    .replace(/\s+/g, " ")
-    .trim();
-}
 
 export interface ResultadoEnvio {
   erro?: string;
@@ -129,37 +120,9 @@ export async function enviarDocumento(
   });
   if (!projeto) return { erro: "Dossiê não encontrado." };
 
-  /**
-   * Onde gravar: a pasta que o cliente já tem no Drive.
-   *
-   * `pastaExterna` foi gravada na importação e é o id da pasta do cliente. Se
-   * o cliente não tem pasta — venda que nasceu aqui dentro —, cria uma sob
-   * `CLIENTES <ano>`, seguindo a árvore que a BB já usa.
-   */
-  const comPasta = await db.query.documento.findFirst({
-    where: and(
-      eq(schema.documento.clienteId, projeto.clienteId),
-      eq(schema.documento.empresaId, usuario.empresaId),
-    ),
-    columns: { pastaExterna: true },
-  });
-
-  let pastaId = comPasta?.pastaExterna ?? null;
-
   try {
-    if (!pastaId) {
-      const raiz = process.env.GOOGLE_DRIVE_RAIZ;
-      if (!raiz) {
-        return {
-          erro:
-            "Falta GOOGLE_DRIVE_RAIZ no .env — é o id da pasta \"Energia solar\" no Drive. " +
-            "Está no cabeçalho de scripts/listar-drive.gs.",
-        };
-      }
-      const ano = new Date().getFullYear();
-      const pastaDoAno = await garantirPasta(`CLIENTES ${ano}`, raiz);
-      pastaId = await garantirPasta(limparNome(projeto.cliente.nome), pastaDoAno);
-    }
+    // A pasta que o cliente já tem no Drive, ou uma nova sob CLIENTES <ano>.
+    const pastaId = await pastaDoCliente(usuario.empresaId, projeto.cliente);
 
     const ponto = arquivo.name.lastIndexOf(".");
     const extensao = ponto < 0 ? "" : arquivo.name.slice(ponto);

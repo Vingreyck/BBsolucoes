@@ -31,6 +31,10 @@ export const config = {
    * rota de `/api/app/` confere a sessão no banco. Se esta barreira pegasse
    * essas rotas, redirecionaria o celular para a página de login em HTML — e o
    * app receberia uma página no lugar do JSON que esperava.
+   *
+   * `r/` é o relatório da OS que vai para o cliente pelo WhatsApp. Ele não tem
+   * login no Selebi: quem abre é quem recebeu o link, e a rota confere a chave
+   * longa e aleatória do link no banco.
    */
-  matcher: ["/((?!_next/static|_next/image|favicon.ico|api/app/).*)"],
+  matcher: ["/((?!_next/static|_next/image|favicon.ico|api/app/|r/).*)"],
 };

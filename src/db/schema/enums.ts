@@ -68,6 +68,8 @@ export const tipoOs = pgEnum("tipo_os", [
 export const statusOs = pgEnum("status_os", [
   "aberta",
   "agendada",
+  /** O técnico saiu para o endereço — o "Deslocamento" do IXC. Migração 0012. */
+  "em_deslocamento",
   "em_andamento",
   "aguardando_peca",
   "concluida",

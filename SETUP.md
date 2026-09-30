@@ -758,6 +758,80 @@ O build de release do app precisa do endereço público:
 `selebi.api.url.release=https://<DOMINIO>/api/app/v1/` no `gradle.properties`
 do projeto Android.
 
+## Ordem de serviço
+
+O Selebi é o "IXC" da BB: a OS mora num banco só, e o site e o app são duas
+janelas para ela — o que o técnico faz no celular aparece no site na hora, e
+vice-versa. As regras vivem em `src/os/` e valem igual para os dois lados.
+
+- **Modelo por tipo de OS** (o "assunto" do IXC): checklist, prazo, se exige a
+  assinatura do cliente e qual etapa da esteira a OS cumpre. Editável em
+  Administração → Modelos de OS; mudança vale para as OS novas.
+- **Checklist com resposta de verdade**: marcar, sim/não, número, texto, uma ou
+  várias opções, só foto, e número de série — que vai também para
+  `serial_instalado` e liga a usina ao cliente sozinho. Item obrigatório e foto
+  mínima travam a conclusão; quem decide se o item está cumprido é o servidor.
+- **Fotos** vão para o Drive, na pasta do cliente, numa subpasta da OS. A foto
+  de item marcado com tipo de documento (ex.: a do padrão) entra também no
+  dossiê da venda.
+- **Histórico** (`os_evento`): cada ação com quem, quando, de onde (site, app,
+  GPS) e por quê. Reagendar, pausar, cancelar e "não atendida" exigem motivo.
+- **Esteira**: concluída como resolvida, a OS ligada à venda anda o projeto
+  quando ele está parado na etapa que ela cumpre (vistoria → Vistoria técnica,
+  instalação → Execução).
+- **Relatório em PDF**, gerado na hora (`/os/<id>/relatorio`), e o link para o
+  cliente (`/r/<chave>`), que abre sem login e sai pelo botão de WhatsApp.
+- **Agenda** por técnico (`/os/agenda`) com a fila do que está sem data.
+
+O app offline manda um `idCliente` (UUID do celular) em cada ação e foto: o
+reenvio depois de uma queda de sinal não duplica nada.
+
+Conferir as regras contra o banco (cria dados de teste e apaga no fim, sem
+tocar o Drive): `npm run testar:os`.
+
+Na VM, uma vez, antes de subir o código novo (a migração só acrescenta, e o
+código antigo continua funcionando depois dela):
+
+```bash
+docker compose exec -T db psql -U postgres -d bbsolucoes -v ON_ERROR_STOP=1 < drizzle/0012-ordem-servico.sql
+```
+
+### Rastreamento em campo
+
+O "Acompanhar técnico" do SeeNet: a gestão vê em **Em campo** (`/os/acompanhamento`)
+quem está a caminho ou atendendo, ao vivo no mapa, com o trajeto de cada OS, e
+a produtividade do mês. O mesmo mapa aparece no bloco **Trajeto** da tela da OS,
+e na aba "Em campo" do app de quem é da gestão.
+
+- **Só durante a OS.** O celular liga o GPS no "Estou a caminho" (a cada 5 s),
+  passa ao modo econômico no "Cheguei" (a cada minuto, precisão média) e
+  desliga ao concluir, pausar ou "não consegui atender". Enquanto isso, o
+  técnico vê uma notificação fixa. Fora da OS ninguém é rastreado.
+- **Trilha limpa** (`src/rastreamento/trilha.ts`): ponto parado ou de antena
+  não entra; salto impossível e rabisco de GPS parado são descartados; visitas
+  em dias diferentes viram trechos separados. As regras vieram das queixas com
+  foto do SeeNet — cada uma tem teste.
+- **Colada nas ruas** pelo OSRM público (grátis, sem chave). Ele aceita só 10
+  pontos por chamada e uma chamada por segundo, então a trilha é amostrada; se
+  o OSRM falhar, o trajeto sai cru, nunca some. Variáveis opcionais:
+  `OSRM_URL` (um OSRM próprio, sem esses limites) e `OSRM_ATIVO=false`
+  (desliga).
+- **Ao vivo** por Server-Sent Events, na memória do processo do site. Com duas
+  instâncias do site, o aviso precisaria de Redis entre elas — hoje é uma só.
+  O Caddy comprime só uma lista fechada de tipos para não segurar esse fluxo.
+- **Retenção:** a trilha fica 30 dias; a última posição some 12 h depois. O GPS
+  de cada ação (saiu, chegou, concluiu) continua no histórico da OS.
+
+Conferir: `npm run testar:rastreamento` (e `-- --osrm` para colar uma rota de
+verdade no OSRM público).
+
+Na VM, uma vez, antes do código novo, e depois recarregar o Caddy (o
+Caddyfile mudou):
+
+```bash
+docker compose exec -T db psql -U postgres -d bbsolucoes -v ON_ERROR_STOP=1 < drizzle/0013-rastreamento.sql
+```
+
 ## Colocando no ar
 
 Quatro containers: banco, site, coletor e o Caddy que resolve o HTTPS.

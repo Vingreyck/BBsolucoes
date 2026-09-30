@@ -1,8 +1,11 @@
-import { and, desc, eq, gte, notInArray, or, type SQL } from "drizzle-orm";
+import { and, asc, desc, eq, gte, notInArray, or, type SQL } from "drizzle-orm";
 
 import type { UsuarioApp } from "@/auth/sessao-app";
-import { db } from "@/db";
+import { db, schema } from "@/db";
 import { ordemServico as osTable } from "@/db/schema";
+import { detalheDoEvento } from "@/os/formatar";
+import { notasDasOs } from "@/os/notas";
+import { EVENTO_ROTULO } from "@/os/tipos";
 
 import { pode } from "./permissoes";
 
@@ -28,6 +31,7 @@ import { pode } from "./permissoes";
 
 const DIA = 86_400_000;
 const JANELA_FECHADAS_DIAS = 30;
+const HISTORICO_MAXIMO = 40;
 
 /** A consulta única: lista e detalhe saem daqui, com as mesmas relações. */
 function buscar(filtro: SQL | undefined) {
@@ -36,8 +40,26 @@ function buscar(filtro: SQL | undefined) {
     with: {
       cliente: true,
       usina: true,
+      projeto: { columns: { id: true, titulo: true } },
       responsavel: { columns: { id: true, nome: true } },
       checklist: { orderBy: (item, { asc }) => [asc(item.ordem)] },
+      anexos: {
+        columns: {
+          id: true,
+          checklistItemId: true,
+          categoria: true,
+          capturadoEm: true,
+          mime: true,
+          enviadoPorId: true,
+        },
+        orderBy: asc(schema.osAnexo.capturadoEm),
+      },
+      // Os mais recentes: o histórico inteiro de uma OS de dois anos fica no site.
+      eventos: {
+        orderBy: desc(schema.osEvento.ocorridoEm),
+        limit: HISTORICO_MAXIMO,
+        with: { usuario: { columns: { nome: true } } },
+      },
     },
     orderBy: desc(osTable.numero),
   });
@@ -91,7 +113,28 @@ function numeroOuNulo(valor: string | null): number | null {
   return Number.isFinite(n) ? n : null;
 }
 
-export function serializarOrdem(o: OsCompleta) {
+/** O que o modelo do tipo diz ao técnico: instruções e se exige assinatura. */
+type RegraDoModelo = { instrucoes: string | null; exigeAssinatura: boolean };
+
+async function modelosDa(empresaId: string): Promise<Map<string, RegraDoModelo>> {
+  const modelos = await db.query.modeloOs.findMany({
+    where: eq(schema.modeloOs.empresaId, empresaId),
+    columns: { tipo: true, instrucoes: true, exigeAssinatura: true },
+  });
+  return new Map(modelos.map((m) => [m.tipo, { instrucoes: m.instrucoes, exigeAssinatura: m.exigeAssinatura }]));
+}
+
+type Nota = Awaited<ReturnType<typeof notasDasOs>>[number];
+
+/**
+ * A OS no formato do app. Campo novo aqui não quebra app antigo — o app ignora
+ * o que não conhece —, mas campo tirado quebra: por isso só se acrescenta.
+ *
+ * Vão junto o histórico e as notas: o técnico sem sinal precisa ler que o
+ * escritório reagendou "a pedido do cliente" e que "o portão é pelo lado da
+ * padaria" tanto quanto o endereço.
+ */
+export function serializarOrdem(o: OsCompleta, modelo?: RegraDoModelo, notas: Nota[] = []) {
   return {
     id: o.id,
     numero: o.numero,
@@ -124,6 +167,12 @@ export function serializarOrdem(o: OsCompleta) {
         }
       : null,
     responsavel: o.responsavel ? { id: o.responsavel.id, nome: o.responsavel.nome } : null,
+    projeto: o.projeto ? { id: o.projeto.id, titulo: o.projeto.titulo } : null,
+    resultado: o.resultado,
+    assinaturaNome: o.assinaturaNome,
+    atualizadoEm: instante(o.atualizadoEm),
+    instrucoes: modelo?.instrucoes ?? null,
+    exigeAssinatura: modelo?.exigeAssinatura ?? false,
     checklist: o.checklist.map((i) => ({
       id: i.id,
       ordem: i.ordem,
@@ -131,17 +180,60 @@ export function serializarOrdem(o: OsCompleta) {
       obrigatorio: i.obrigatorio,
       concluido: i.concluido,
       observacao: i.observacao,
+      secao: i.secao,
+      ajuda: i.ajuda,
+      tipoResposta: i.tipoResposta,
+      opcoes: i.opcoes ?? [],
+      unidade: i.unidade,
+      fotosMinimas: i.fotosMinimas,
+      apenasCamera: i.apenasCamera,
+      valor: i.valor ?? null,
+      respondidoEm: instante(i.respondidoEm),
+    })),
+    anexos: o.anexos.map((a) => ({
+      id: a.id,
+      itemId: a.checklistItemId,
+      categoria: a.categoria,
+      capturadoEm: instante(a.capturadoEm),
+      enviadoPorId: a.enviadoPorId,
+    })),
+    // O caminho do relatório público (`/r/…`), que o app junta ao endereço do
+    // servidor para mandar ao cliente. Só existe depois de concluída.
+    relatorio: o.relatorioToken ? `/r/${o.relatorioToken}` : null,
+    historico: o.eventos.map((e) => ({
+      id: e.id,
+      tipo: e.tipo,
+      titulo: EVENTO_ROTULO[e.tipo] ?? e.tipo,
+      detalhe: detalheDoEvento(e) || null,
+      quem: e.usuario?.nome ?? (e.origem === "sistema" ? "Selebi" : null),
+      origem: e.origem,
+      ocorridoEm: instante(e.ocorridoEm),
+    })),
+    notas: notas.map((n) => ({
+      id: n.id,
+      texto: n.texto,
+      autorId: n.autor?.id ?? null,
+      autor: n.autor?.nome ?? null,
+      criadoEm: instante(n.criadoEm),
     })),
   };
 }
 
 export type OrdemApp = ReturnType<typeof serializarOrdem>;
 
+function porOs(notas: Nota[]): Map<string, Nota[]> {
+  const mapa = new Map<string, Nota[]>();
+  for (const n of notas) mapa.set(n.entidadeId, [...(mapa.get(n.entidadeId) ?? []), n]);
+  return mapa;
+}
+
 export async function ordensDoUsuario(usuario: UsuarioApp): Promise<OrdemApp[]> {
-  const ordens = await buscar(
-    and(eq(osTable.empresaId, usuario.empresaId), escopo(usuario), janela()),
-  );
-  return ordens.map(serializarOrdem);
+  const [ordens, modelos] = await Promise.all([
+    buscar(and(eq(osTable.empresaId, usuario.empresaId), escopo(usuario), janela())),
+    modelosDa(usuario.empresaId),
+  ]);
+  const notas = porOs(await notasDasOs(usuario.empresaId, ordens.map((o) => o.id)));
+  return ordens.map((o) => serializarOrdem(o, modelos.get(o.tipo), notas.get(o.id)));
 }
 
 /** Uma OS, só se estiver no escopo de quem pede — senão, como se não existisse. */
@@ -149,8 +241,11 @@ export async function ordemDoUsuario(
   usuario: UsuarioApp,
   id: string,
 ): Promise<OrdemApp | null> {
-  const [ordem] = await buscar(
-    and(eq(osTable.id, id), eq(osTable.empresaId, usuario.empresaId), escopo(usuario)),
-  );
-  return ordem ? serializarOrdem(ordem) : null;
+  const [[ordem], modelos] = await Promise.all([
+    buscar(and(eq(osTable.id, id), eq(osTable.empresaId, usuario.empresaId), escopo(usuario))),
+    modelosDa(usuario.empresaId),
+  ]);
+  if (!ordem) return null;
+  const notas = await notasDasOs(usuario.empresaId, [ordem.id]);
+  return serializarOrdem(ordem, modelos.get(ordem.tipo), notas);
 }

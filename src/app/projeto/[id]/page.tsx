@@ -1,7 +1,13 @@
 import { and, asc, desc, eq } from "drizzle-orm";
+import Link from "next/link";
 import { notFound } from "next/navigation";
 
 import { exigirUsuario } from "@/auth/sessao";
+import { atorDaWeb } from "@/os/acesso";
+import { listarOs, vistoriaDoProjeto } from "@/os/consultas";
+import { textoDaResposta } from "@/os/formatar";
+import { formatarRelogio } from "@/os/relogio";
+import { numeroOs, STATUS_ROTULO, TIPO_ROTULO } from "@/os/tipos";
 import { db } from "@/db";
 import {
   comentario as comentarioTable,
@@ -40,12 +46,15 @@ export default async function DetalheProjeto({
   params: Promise<{ id: string }>;
   searchParams: Promise<{ serial?: string }>;
 }) {
-  await exigirUsuario();
+  const usuario = await exigirUsuario();
+  const ator = atorDaWeb(usuario);
   const { id } = await params;
   const { serial: aviso } = await searchParams;
 
+  // Da empresa de quem pede: sem isto, um id de projeto de outra empresa
+  // abriria aqui — o sistema é multiempresa desde a primeira migration.
   const projeto = await db.query.projeto.findFirst({
-    where: eq(projetoTable.id, id),
+    where: and(eq(projetoTable.id, id), eq(projetoTable.empresaId, usuario.empresaId)),
     with: {
       cliente: true,
       usina: true,
@@ -71,6 +80,11 @@ export default async function DetalheProjeto({
     orderBy: asc(comentarioTable.criadoEm),
   });
 
+  const [ordens, vistoria] = await Promise.all([
+    listarOs(ator, { projetoId: id, aba: "todas" }),
+    vistoriaDoProjeto(usuario.empresaId, id),
+  ]);
+
   const diasNaEtapa = Math.floor(
     (Date.now() - projeto.etapaDesde.getTime()) / 86_400_000,
   );
@@ -91,6 +105,42 @@ export default async function DetalheProjeto({
       </header>
 
       <div className="os-detalhe">
+        <section className="bloco">
+          <h2>
+            Ordens de serviço
+            <span className="contador">{ordens.length}</span>
+          </h2>
+          {ordens.length === 0 ? (
+            <p className="nota">
+              Nenhuma OS nesta venda. A vistoria e a instalação abertas por aqui andam a esteira sozinhas quando
+              são concluídas, e as fotos que viram documento entram no dossiê.
+            </p>
+          ) : (
+            <ul className="lista-os-projeto">
+              {ordens.map((o) => (
+                <li key={o.id}>
+                  <Link href={`/os/${o.id}`} className="forte">
+                    {numeroOs(o.numero)}
+                  </Link>{" "}
+                  {TIPO_ROTULO[o.tipo] ?? o.tipo}{" "}
+                  <span className={`pilula st-${o.status}`}>{STATUS_ROTULO[o.status] ?? o.status}</span>
+                  <span className="fraco">
+                    {o.agendadaPara ? ` · ${formatarRelogio(o.agendadaPara)}` : ""}
+                    {o.responsavel ? ` · ${o.responsavel.nome}` : ""}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          )}
+          {ator.gestao && (
+            <p>
+              <Link href={`/os/nova?projeto=${projeto.id}`} className="botao">
+                Nova OS nesta venda
+              </Link>
+            </p>
+          )}
+        </section>
+
         {/* Etapa 2 */}
         <section className="bloco">
           <h2>Informações do cliente</h2>
@@ -148,6 +198,40 @@ export default async function DetalheProjeto({
             Feita pelo técnico, antes de vender. Não confundir com o pedido de
             vistoria da etapa 11, que é da Energisa para ligar o sistema.
           </p>
+          {vistoria && (
+            <div className="vistoria-os">
+              <p className="nota">
+                Do app:{" "}
+                <Link href={`/os/${vistoria.id}`}>
+                  {numeroOs(vistoria.numero)} · {STATUS_ROTULO[vistoria.status] ?? vistoria.status}
+                </Link>
+                {vistoria.responsavel ? ` · ${vistoria.responsavel.nome}` : ""}
+                {vistoria.status !== "concluida" && " — ainda em andamento, as respostas podem mudar"}
+              </p>
+              <dl className="campos">
+                {vistoria.checklist
+                  .filter((i) => i.respondidoEm || i.anexos.length)
+                  .map((i) => (
+                    <div key={i.id}>
+                      <dt>{i.descricao}</dt>
+                      <dd>
+                        {textoDaResposta(i)}
+                        {i.observacao ? <span className="fraco"> · {i.observacao}</span> : null}
+                        {i.anexos.length > 0 && i.tipoResposta !== "foto" && (
+                          <span className="fraco">
+                            {" "}
+                            · {i.anexos.length} foto{i.anexos.length > 1 ? "s" : ""}
+                          </span>
+                        )}
+                      </dd>
+                    </div>
+                  ))}
+              </dl>
+              {vistoria.checklist.every((i) => !i.respondidoEm && !i.anexos.length) && (
+                <p className="nota">Nenhuma resposta ainda.</p>
+              )}
+            </div>
+          )}
           <form action={salvarVistoria.bind(null, projeto.id)} className="form-ficha">
             <label className="curto">
               Data da vistoria
