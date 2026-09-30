@@ -36,5 +36,5 @@ export const config = {
    * login no Selebi: quem abre é quem recebeu o link, e a rota confere a chave
    * longa e aleatória do link no banco.
    */
-  matcher: ["/((?!_next/static|_next/image|favicon.ico|api/app/|r/).*)"],
+  matcher: ["/((?!_next/static|_next/image|favicon.ico|api/app/|r/|privacidade).*)"],
 };
