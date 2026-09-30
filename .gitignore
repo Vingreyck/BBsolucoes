@@ -31,3 +31,8 @@ logs/
 
 # Cópias do banco: dado real de cliente, nunca vão para o repositório.
 backups/
+
+# Chaves de assinatura do app: nunca no Git
+*.jks
+*.keystore
+keystore.properties
