@@ -123,6 +123,7 @@ export async function criarProjeto(dados: FormData): Promise<void> {
   });
 
   revalidatePath("/");
+  revalidatePath("/esteira");
   redirect(`/projeto/${projeto.id}`);
 }
 
@@ -244,7 +245,7 @@ export async function anotarSerial(
     ),
     columns: { id: true },
   });
-  if (!projeto) redirect("/");
+  if (!projeto) redirect("/esteira");
 
   try {
     await db.insert(serialInstalado).values({

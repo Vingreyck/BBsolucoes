@@ -2,6 +2,9 @@ import { NextResponse, type NextRequest } from "next/server";
 
 import { COOKIE_SESSAO } from "@/auth/constantes";
 
+/** Telas de quem ainda não entrou. */
+const PUBLICAS = new Set(["/login", "/solicitar-acesso"]);
+
 /**
  * Primeira barreira: quem não tem cookie nem chega a carregar a página.
  *
@@ -15,7 +18,7 @@ export function middleware(requisicao: NextRequest) {
   const { pathname } = requisicao.nextUrl;
   const temCookie = requisicao.cookies.has(COOKIE_SESSAO);
 
-  if (!temCookie && pathname !== "/login") {
+  if (!temCookie && !PUBLICAS.has(pathname)) {
     const destino = new URL("/login", requisicao.url);
     return NextResponse.redirect(destino);
   }
@@ -36,5 +39,5 @@ export const config = {
    * login no Selebi: quem abre é quem recebeu o link, e a rota confere a chave
    * longa e aleatória do link no banco.
    */
-  matcher: ["/((?!_next/static|_next/image|favicon.ico|api/app/|r/|privacidade).*)"],
+  matcher: ["/((?!_next/static|_next/image|favicon.ico|api/app/|r/|privacidade|excluir-conta).*)"],
 };

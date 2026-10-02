@@ -31,7 +31,7 @@ async function main() {
     process.exit(1);
   }
   if (!ehPapelApp(papel)) {
-    console.error("Papel: adm, engenheiro ou tecnico.");
+    console.error("Papel: adm, engenheiro, tecnico ou vendedor.");
     process.exit(1);
   }
 

@@ -1,17 +1,16 @@
 /**
  * Quem entra no app e o que cada um vê.
  *
- * O app nasce para três papéis. Vendedor e estoque continuam no navegador —
- * mas as vistorias de julho a setembro mostraram que 6 de 9 foram feitas pelo
- * Luan, que é do comercial. Quando a vistoria vier para o app, acrescentar
- * `vendedor` aqui é o que basta para ele entrar.
+ * O app nasceu para três papéis; o vendedor entrou porque as vistorias de julho
+ * a setembro mostraram que 6 de 9 foram feitas pelo Luan, que é do comercial.
+ * Só o estoque continua no navegador.
  *
  * O app não decide nada pelo nome do papel: recebe a lista de permissões no
  * login e mostra ou esconde telas por ela. Mudar o que um papel pode é mexer
  * só aqui, sem publicar versão nova do app.
  */
 
-export const PAPEIS_APP = ["adm", "engenheiro", "tecnico"] as const;
+export const PAPEIS_APP = ["adm", "engenheiro", "tecnico", "vendedor"] as const;
 export type PapelApp = (typeof PAPEIS_APP)[number];
 
 export function ehPapelApp(papel: string): papel is PapelApp {
@@ -28,6 +27,8 @@ const PERMISSOES: Record<PapelApp, readonly Permissao[]> = {
   adm: ["os.ver_todas", "equipe.gerir"],
   engenheiro: ["os.ver_todas"],
   tecnico: [],
+  /** Faz vistoria: vê só as OS que são dele, como o técnico. */
+  vendedor: [],
 };
 
 export function permissoesDe(papel: PapelApp): readonly Permissao[] {

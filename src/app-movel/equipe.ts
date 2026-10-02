@@ -93,7 +93,7 @@ export async function aprovarCadastro(
   id: string,
   papel: string,
 ): Promise<ResultadoEquipe> {
-  if (!ehPapelApp(papel)) return negar(400, "validacao", "Escolha técnico, engenheiro ou administrador.");
+  if (!ehPapelApp(papel)) return negar(400, "validacao", "Escolha técnico, vendedor, engenheiro ou administrador.");
 
   const alvo = await alvoDaEmpresa(adm, id);
   if (!alvo) return negar(404, "nao_encontrado", "Cadastro não encontrado.");
@@ -137,7 +137,7 @@ export async function alterarMembro(
     return negar(409, "propria_conta", "Você não pode mudar a própria conta por aqui.");
   }
   if (mudanca.papel !== undefined && !ehPapelApp(mudanca.papel)) {
-    return negar(400, "validacao", "Escolha técnico, engenheiro ou administrador.");
+    return negar(400, "validacao", "Escolha técnico, vendedor, engenheiro ou administrador.");
   }
 
   const alvo = await alvoDaEmpresa(adm, id);

@@ -28,7 +28,7 @@ export default async function SemAcesso() {
           ver esta tela, peça à administração para ajustar o seu perfil.
         </p>
         <p>
-          <a href="/">Voltar para a esteira</a>
+          <a href="/">Voltar para o início</a>
         </p>
       </div>
     </main>

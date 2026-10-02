@@ -113,7 +113,7 @@ export default async function NovoProjeto({
           </section>
 
           <div className="ficha-acoes">
-            <a href="/" className="filtro">
+            <a href="/esteira" className="filtro">
               Cancelar
             </a>
             <button type="submit" className="primario">

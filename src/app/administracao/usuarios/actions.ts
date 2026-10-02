@@ -1,6 +1,6 @@
 "use server";
 
-import { and, eq } from "drizzle-orm";
+import { and, eq, isNull } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 
@@ -98,8 +98,8 @@ export async function alternarAtivo(usuarioId: string): Promise<void> {
   });
   if (!alvo) return;
 
-  // Ativar um cadastro que veio do app é aprová-lo — com o papel técnico, que é
-  // o que o cadastro traz. Trocar o papel fica para o app, na tela de equipe.
+  // Pedido de acesso se aprova em `aprovarPedido`, escolhendo o papel. Se mesmo
+  // assim chegar aqui, aprova com o papel que o cadastro traz (técnico).
   const aprovacao =
     !alvo.ativo && !alvo.aprovadoEm ? { aprovadoEm: new Date(), aprovadoPorId: adm.id } : {};
 
@@ -143,4 +143,73 @@ export async function reiniciarSenha(
 
   revalidatePath("/administracao/usuarios");
   return { senha, nome: alvo.nome };
+}
+
+/**
+ * Pedido de acesso (do app ou do site): o administrador libera e escolhe o
+ * papel na mesma hora. A pessoa nunca escolhe o próprio papel.
+ */
+export async function aprovarPedido(dados: FormData): Promise<void> {
+  const adm = await exigirAdm();
+  const usuarioId = String(dados.get("usuarioId") ?? "");
+  const papel = String(dados.get("papel") ?? "");
+  if (!PAPEIS.has(papel)) return;
+
+  await db
+    .update(schema.usuario)
+    .set({ papel: papel as never, ativo: true, aprovadoEm: new Date(), aprovadoPorId: adm.id })
+    .where(
+      and(
+        eq(schema.usuario.id, usuarioId),
+        eq(schema.usuario.empresaId, adm.empresaId),
+        isNull(schema.usuario.aprovadoEm),
+      ),
+    );
+
+  revalidatePath("/administracao/usuarios");
+  revalidatePath("/", "layout");
+}
+
+/**
+ * Recusar apaga o pedido — e só o pedido.
+ *
+ * Conta que já foi aprovada nunca se apaga (ver `alternarAtivo`), mas um pedido
+ * nunca liberado não fez nada no sistema: não há trilha para preservar, e
+ * guardá-lo só deixaria o CPF de um estranho parado no banco.
+ */
+export async function recusarPedido(dados: FormData): Promise<void> {
+  const adm = await exigirAdm();
+  const usuarioId = String(dados.get("usuarioId") ?? "");
+
+  await db
+    .delete(schema.usuario)
+    .where(
+      and(
+        eq(schema.usuario.id, usuarioId),
+        eq(schema.usuario.empresaId, adm.empresaId),
+        isNull(schema.usuario.aprovadoEm),
+      ),
+    );
+
+  revalidatePath("/administracao/usuarios");
+  revalidatePath("/", "layout");
+}
+
+/** Troca o papel de quem já tem conta. O próprio adm não troca o seu: não se tranca para fora. */
+export async function mudarPapel(dados: FormData): Promise<void> {
+  const adm = await exigirAdm();
+  const usuarioId = String(dados.get("usuarioId") ?? "");
+  const papel = String(dados.get("papel") ?? "");
+  if (!PAPEIS.has(papel) || usuarioId === adm.id) return;
+
+  await db
+    .update(schema.usuario)
+    .set({ papel: papel as never })
+    .where(and(eq(schema.usuario.id, usuarioId), eq(schema.usuario.empresaId, adm.empresaId)));
+
+  // As permissões do app vêm no login: derrubar as sessões faz a pessoa entrar
+  // de novo já com o papel novo, em vez de seguir com o antigo até sair.
+  await db.delete(schema.sessao).where(eq(schema.sessao.usuarioId, usuarioId));
+
+  revalidatePath("/administracao/usuarios");
 }

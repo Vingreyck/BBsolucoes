@@ -17,10 +17,17 @@ import * as schema from "./schema";
  * dois lados: o build passa, e quem chamar uma consulta sem `DATABASE_URL`
  * continua recebendo a mesma mensagem clara, só que na hora certa.
  */
-let conexao: ReturnType<typeof postgres> | null = null;
+/**
+ * A conexão mora no `globalThis`, e não numa variável do módulo, por causa do
+ * `next dev`: a cada arquivo salvo ele recarrega os módulos, e cada recarga
+ * abria um pool novo de 10 sem fechar o anterior — em meia hora de edição o
+ * Postgres recusava tudo com "too many clients already". Em produção o módulo
+ * carrega uma vez só e isto não muda nada.
+ */
+const global = globalThis as { __selebiConexao?: ReturnType<typeof postgres> };
 
 function cliente() {
-  if (conexao) return conexao;
+  if (global.__selebiConexao) return global.__selebiConexao;
 
   const url = process.env.DATABASE_URL;
   if (!url) {
@@ -31,8 +38,8 @@ function cliente() {
    * O coletor roda em processo separado e abre sua própria conexão. Aqui o pool
    * fica pequeno de propósito: a aplicação web não é o gargalo desse sistema.
    */
-  conexao = postgres(url, { max: 10 });
-  return conexao;
+  global.__selebiConexao = postgres(url, { max: 10 });
+  return global.__selebiConexao;
 }
 
 /**

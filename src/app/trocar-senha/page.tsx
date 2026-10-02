@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 
 import { usuarioAtual } from "@/auth/sessao";
 
+import { CascaAcesso } from "../_acesso/casca";
 import { Formulario } from "./formulario";
 
 export const dynamic = "force-dynamic";
@@ -18,27 +19,26 @@ export default async function TrocarSenha() {
   if (!usuario) redirect("/login");
 
   return (
-    <main className="login">
-      <div className="cartao-login">
-        <h1>{usuario.deveTrocarSenha ? "Crie sua senha" : "Trocar senha"}</h1>
-
-        {usuario.deveTrocarSenha ? (
-          <p>
-            Sua conta está com uma <strong>senha provisória</strong>, que outra
-            pessoa conhece. Escolha uma senha sua antes de continuar — é ela que
-            faz o seu nome nos registros do sistema significar alguma coisa.
-          </p>
+    <CascaAcesso
+      titulo={usuario.deveTrocarSenha ? "Crie a sua senha" : "Trocar senha"}
+      subtitulo={
+        usuario.deveTrocarSenha ? (
+          <>
+            Sua conta está com uma <strong>senha provisória</strong>, que outra pessoa conhece.
+            Escolha uma senha sua antes de continuar — é ela que faz o seu nome nos registros do
+            sistema significar alguma coisa.
+          </>
         ) : (
-          <p>Escolha uma senha nova para a sua conta.</p>
-        )}
+          "Escolha uma senha nova para a sua conta."
+        )
+      }
+    >
+      <Formulario />
 
-        <Formulario />
-
-        <p className="nota">
-          Ao trocar, todas as sessões abertas com a senha antiga são encerradas,
-          inclusive esta. Você entra de novo com a senha nova.
-        </p>
-      </div>
-    </main>
+      <p className="acesso-nota">
+        Ao trocar, todas as sessões abertas com a senha antiga são encerradas, inclusive esta. Você
+        entra de novo com a senha nova.
+      </p>
+    </CascaAcesso>
   );
 }

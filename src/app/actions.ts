@@ -25,4 +25,5 @@ export async function moverProjeto(
     usuarioId: usuario.id,
   });
   revalidatePath("/");
+  revalidatePath("/esteira");
 }

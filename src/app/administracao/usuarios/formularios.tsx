@@ -2,7 +2,8 @@
 
 import { useActionState } from "react";
 
-import { criarUsuario, reiniciarSenha, type ResultadoUsuario } from "./actions";
+import { criarUsuario, mudarPapel, reiniciarSenha, type ResultadoUsuario } from "./actions";
+import { OPCOES_PAPEL } from "./papeis";
 
 /**
  * A senha provisória aparece uma vez e some no próximo carregamento.
@@ -72,5 +73,27 @@ export function Reiniciar({ usuarioId, nome }: { usuarioId: string; nome: string
       </form>
       <Senha estado={estado} />
     </>
+  );
+}
+
+/** Trocar o papel salva ao escolher — sem botão a mais em cada linha. */
+export function SeletorPapel({ usuarioId, papel }: { usuarioId: string; papel: string }) {
+  return (
+    <form action={mudarPapel}>
+      <input type="hidden" name="usuarioId" value={usuarioId} />
+      <select
+        name="papel"
+        defaultValue={papel}
+        className="select-compacto"
+        aria-label="Papel"
+        onChange={(e) => e.currentTarget.form?.requestSubmit()}
+      >
+        {OPCOES_PAPEL.map(([valor, rotulo]) => (
+          <option key={valor} value={valor}>
+            {rotulo}
+          </option>
+        ))}
+      </select>
+    </form>
   );
 }

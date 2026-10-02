@@ -1,12 +1,13 @@
 import { asc, eq } from "drizzle-orm";
 import { redirect } from "next/navigation";
 
-import { ocultarCpf } from "@/auth/cpf";
+import { formatarCpf, ocultarCpf } from "@/auth/cpf";
 import { exigirUsuario } from "@/auth/sessao";
 import { db, schema } from "@/db";
 
-import { Criar, Reiniciar } from "./formularios";
-import { alternarAtivo } from "./actions";
+import { Criar, Reiniciar, SeletorPapel } from "./formularios";
+import { OPCOES_PAPEL } from "./papeis";
+import { alternarAtivo, aprovarPedido, recusarPedido } from "./actions";
 
 export const dynamic = "force-dynamic";
 
@@ -51,7 +52,7 @@ export default async function Usuarios() {
         )}
         {pendentes.length > 0 && (
           <span className="alerta">
-            {pendentes.length} {pendentes.length === 1 ? "cadastro" : "cadastros"} do app
+            {pendentes.length} {pendentes.length === 1 ? "pedido" : "pedidos"} de acesso
             esperando aprovação
           </span>
         )}
@@ -68,6 +69,50 @@ export default async function Usuarios() {
           registros de quem baixou documento e de quem anotou serial não
           identificam ninguém.
         </p>
+      )}
+
+      {pendentes.length > 0 && (
+        <section className="bloco">
+          <h2>Pedidos de acesso</h2>
+          <p className="nota">
+            Quem pediu acesso pelo app ou pelo site. Confira se a pessoa é mesmo da equipe, escolha o
+            papel dela e libere. Recusar apaga o pedido.
+          </p>
+          <ul className="pedidos">
+            {pendentes.map((u) => (
+              <li key={u.id} className="pedido">
+                <div className="pedido-quem">
+                  <strong>{u.nome}</strong>
+                  <small>
+                    {u.cpf ? `CPF ${formatarCpf(u.cpf)}` : "sem CPF"}
+                    {u.email ? ` · ${u.email}` : ""}
+                    {" · pediu em "}
+                    {u.criadoEm.toLocaleDateString("pt-BR", { timeZone: "America/Maceio" })}
+                  </small>
+                </div>
+                <form action={aprovarPedido} className="pedido-aprovar">
+                  <input type="hidden" name="usuarioId" value={u.id} />
+                  <select name="papel" defaultValue="tecnico" aria-label={`Papel de ${u.nome}`}>
+                    {OPCOES_PAPEL.map(([valor, rotulo]) => (
+                      <option key={valor} value={valor}>
+                        {rotulo}
+                      </option>
+                    ))}
+                  </select>
+                  <button type="submit" className="botao">
+                    Aprovar
+                  </button>
+                </form>
+                <form action={recusarPedido}>
+                  <input type="hidden" name="usuarioId" value={u.id} />
+                  <button type="submit" className="botao secundario">
+                    Recusar
+                  </button>
+                </form>
+              </li>
+            ))}
+          </ul>
+        </section>
       )}
 
       <section className="bloco">
@@ -100,7 +145,13 @@ export default async function Usuarios() {
                 <td className="fraco">
                   {u.email ?? (u.cpf ? `CPF ${ocultarCpf(u.cpf)}` : "—")}
                 </td>
-                <td className="fraco">{PAPEL_ROTULO[u.papel] ?? u.papel}</td>
+                <td className="fraco">
+                  {u.aprovadoEm && u.id !== usuario.id ? (
+                    <SeletorPapel usuarioId={u.id} papel={u.papel} />
+                  ) : (
+                    (PAPEL_ROTULO[u.papel] ?? u.papel)
+                  )}
+                </td>
                 <td>
                   {!u.aprovadoEm ? (
                     <span className="pilula sev-atencao">aguardando aprovação</span>
@@ -119,10 +170,10 @@ export default async function Usuarios() {
                 </td>
                 <td className="acoes-usuario">
                   <Reiniciar usuarioId={u.id} nome={u.nome} />
-                  {u.id !== usuario.id && (
+                  {u.id !== usuario.id && u.aprovadoEm && (
                     <form action={alternarAtivo.bind(null, u.id)}>
                       <button type="submit">
-                        {!u.aprovadoEm ? "aprovar" : u.ativo ? "desativar" : "reativar"}
+                        {u.ativo ? "desativar" : "reativar"}
                       </button>
                     </form>
                   )}
