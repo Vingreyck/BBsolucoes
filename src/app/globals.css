@@ -4959,7 +4959,8 @@ a.resultado:hover {
   font-size: 0.84rem;
 }
 
-.ui-cartao-corpo a:not(.botao):not(.linha-os):not(.link-acao) {
+/* links no meio do texto do cartão; listas e botões têm a cor deles */
+.ui-cartao-corpo :is(p, dd, small, .nota, .faixa-info) a:not(.botao):not(.link-acao) {
   color: var(--accent);
 }
 
@@ -5390,4 +5391,802 @@ a.resultado:hover {
 
 .mover button {
   border-radius: 6px;
+}
+
+/* =========================================================================
+ * Demais telas: listas, filtros, agenda, cadastro, dossiê, administração
+ * ========================================================================= */
+
+/* ---- corpo de página e larguras --------------------------------------- */
+
+.pagina-corpo-topo {
+  padding-bottom: 0;
+}
+
+.pagina-estreita {
+  display: grid;
+  gap: 1rem;
+  max-width: 820px;
+  padding: 1rem clamp(1rem, 3vw, 2rem) 3rem;
+}
+
+.pilha {
+  display: grid;
+  gap: 1rem;
+}
+
+.tabela-no-cartao {
+  margin: 0;
+  box-shadow: none;
+}
+
+/* ---- abas (lista de OS) ------------------------------------------------- */
+
+.abas {
+  gap: 0.15rem;
+  background: var(--surface);
+  overflow-x: auto;
+  flex-wrap: nowrap;
+  scrollbar-width: thin;
+}
+
+.aba {
+  white-space: nowrap;
+  padding: 0.6rem 0.8rem;
+  border-bottom-width: 2px;
+  font-weight: 500;
+  transition: color 0.12s, border-color 0.12s;
+}
+
+.aba:hover {
+  color: var(--ink);
+  border-bottom-color: var(--line);
+}
+
+.aba.ativa .contagem {
+  background: var(--accent-soft);
+  border-color: color-mix(in srgb, var(--accent) 30%, transparent);
+  color: var(--accent);
+}
+
+.aba .contagem {
+  border-radius: 999px;
+}
+
+/* ---- barra de filtros e campo de busca com ícone ------------------------ */
+
+.barra-filtros {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.9rem clamp(1rem, 3vw, 2rem) 0;
+}
+
+.campo-busca {
+  position: relative;
+  display: flex;
+  align-items: center;
+  flex: 1;
+  min-width: 14rem;
+  max-width: 26rem;
+}
+
+.campo-busca > svg {
+  position: absolute;
+  left: 0.7rem;
+  color: var(--ink-3);
+  pointer-events: none;
+}
+
+.campo-busca input {
+  width: 100%;
+  padding-left: 2.1rem !important;
+  border-radius: 8px;
+}
+
+.campo-busca-largo {
+  max-width: 34rem;
+}
+
+.barra-filtros select {
+  border-radius: 8px;
+}
+
+.caixa-filtros {
+  display: grid;
+  gap: 0.6rem;
+  margin: 1rem clamp(1rem, 3vw, 2rem) 0;
+  padding: 0.85rem 1rem;
+  background: var(--surface);
+  border: 1px solid var(--line-soft);
+  border-radius: var(--raio);
+  box-shadow: var(--shadow);
+}
+
+.linha-filtro {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.4rem 0.75rem;
+}
+
+/* ---- tabelas: célula de duas linhas, número, progresso ------------------ */
+
+.celula-dupla {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  color: inherit;
+  text-decoration: none;
+  line-height: 1.3;
+}
+
+a.celula-dupla:hover strong {
+  color: var(--accent);
+}
+
+.celula-dupla strong {
+  font-weight: 600;
+}
+
+.celula-dupla small {
+  font-size: 0.76rem;
+  color: var(--ink-3);
+}
+
+.numero-os {
+  color: var(--accent);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  text-decoration: none;
+}
+
+.mini-progresso {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+}
+
+.mini-progresso .progresso {
+  width: 56px;
+  height: 6px;
+}
+
+.mini-progresso small {
+  font-size: 0.74rem;
+  color: var(--ink-3);
+  font-variant-numeric: tabular-nums;
+}
+
+.progresso-largo {
+  width: 100%;
+}
+
+.status-ok {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-size: 0.8rem;
+  color: var(--ok);
+}
+
+.status-ok span {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--ok);
+}
+
+.etiqueta-portal {
+  display: inline-block;
+  margin-right: 0.25rem;
+  padding: 0.05rem 0.45rem;
+  border-radius: 6px;
+  border: 1px solid var(--line-soft);
+  background: var(--surface-2);
+  font-size: 0.76rem;
+  color: var(--ink-2);
+}
+
+.indicadores-pagina {
+  margin: 1rem clamp(1rem, 3vw, 2rem) 0;
+}
+
+/* ---- assistente de nova OS ---------------------------------------------- */
+
+.busca-grande {
+  display: flex;
+  gap: 0.5rem;
+  margin-bottom: 0.85rem;
+}
+
+.busca-grande .campo-busca {
+  max-width: none;
+}
+
+.busca-grande .campo-busca input {
+  padding-top: 0.6rem;
+  padding-bottom: 0.6rem;
+  font-size: 0.95rem;
+}
+
+.lista-escolha-nova {
+  list-style: none;
+  margin: 0 0 0.75rem;
+  padding: 0;
+  display: grid;
+  gap: 0.4rem;
+}
+
+.lista-escolha-nova a {
+  display: flex;
+  align-items: center;
+  gap: 0.7rem;
+  padding: 0.6rem 0.75rem;
+  border: 1px solid var(--line-soft);
+  border-radius: var(--raio-p);
+  color: var(--ink);
+  text-decoration: none;
+  transition: border-color 0.12s, background 0.12s;
+}
+
+.lista-escolha-nova a:hover {
+  border-color: color-mix(in srgb, var(--accent) 45%, var(--line-soft));
+  background: var(--accent-soft);
+}
+
+.lista-escolha-nova a .celula-dupla {
+  flex: 1;
+}
+
+.lista-escolha-nova a > svg {
+  color: var(--ink-3);
+}
+
+.barra-enviar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.85rem 1rem;
+  background: var(--surface);
+  border: 1px solid var(--line-soft);
+  border-radius: var(--raio);
+  box-shadow: var(--shadow);
+}
+
+.separador-ou {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  margin: 0;
+  font-size: 0.76rem;
+  color: var(--ink-3);
+}
+
+.separador-ou::before,
+.separador-ou::after {
+  content: "";
+  flex: 1;
+  height: 1px;
+  background: var(--line-soft);
+}
+
+/* ---- agenda --------------------------------------------------------------- */
+
+.grupo-segmentado {
+  display: inline-flex;
+  border: 1px solid var(--line);
+  border-radius: var(--raio-p);
+  background: var(--surface);
+  box-shadow: var(--shadow);
+  overflow: hidden;
+}
+
+.grupo-segmentado a {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.4rem 0.7rem;
+  color: var(--ink);
+  font-size: 0.84rem;
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.grupo-segmentado a + a {
+  border-left: 1px solid var(--line-soft);
+}
+
+.grupo-segmentado a:hover {
+  background: var(--surface-2);
+  color: var(--accent);
+}
+
+.fila-agendar {
+  box-shadow: var(--shadow);
+}
+
+.fila-agendar h2 {
+  align-items: center;
+}
+
+.fila-agendar h2 svg {
+  color: var(--accent);
+}
+
+.fila-agendar ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 0.45rem;
+}
+
+.grade-wrap {
+  box-shadow: var(--shadow);
+}
+
+.grade-semana thead th {
+  padding: 0.55rem 0.4rem;
+  text-align: left;
+  background: var(--surface-2);
+}
+
+.dia-semana {
+  display: block;
+  font-size: 0.7rem;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+}
+
+.dia-numero {
+  font-size: 0.95rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.grade-semana th.hoje .dia-numero {
+  color: var(--accent);
+}
+
+.grade-semana th.pessoa {
+  background: var(--surface);
+}
+
+.cartao-os {
+  border-radius: 8px;
+  transition: box-shadow 0.12s, transform 0.12s;
+}
+
+.cartao-os:hover {
+  box-shadow: var(--shadow-alta);
+  transform: translateY(-1px);
+}
+
+/* ---- em campo ------------------------------------------------------------- */
+
+.selo-ao-vivo {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.15rem 0.55rem;
+  border-radius: 999px;
+  background: var(--ok-soft);
+  color: var(--ok);
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+
+.selo-ao-vivo span {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--ok);
+  animation: pulsar 1.6s ease-in-out infinite;
+}
+
+@keyframes pulsar {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 color-mix(in srgb, var(--ok) 55%, transparent);
+  }
+  50% {
+    box-shadow: 0 0 0 5px transparent;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .selo-ao-vivo span {
+    animation: none;
+  }
+}
+
+/* o mapa desconta a barra de cima e o cabeçalho novo */
+.campo {
+  height: calc(100vh - 200px);
+}
+
+/* ---- coleta: página de status ---------------------------------------------- */
+
+.grade-portais {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 1rem;
+  padding: 1rem clamp(1rem, 3vw, 2rem) 0;
+}
+
+.portal-status {
+  display: grid;
+  gap: 0.85rem;
+  padding: 1rem 1.1rem;
+  background: var(--surface);
+  border: 1px solid var(--line-soft);
+  border-radius: var(--raio);
+  box-shadow: var(--shadow);
+}
+
+.portal-status header {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+}
+
+.portal-status header div {
+  flex: 1;
+  min-width: 0;
+}
+
+.portal-status h2 {
+  margin: 0;
+  font-size: 1rem;
+  font-weight: 650;
+}
+
+.portal-status header small {
+  font-size: 0.76rem;
+  color: var(--ink-3);
+}
+
+.portal-luz {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--ok);
+  box-shadow: 0 0 0 4px var(--ok-soft);
+  flex-shrink: 0;
+}
+
+.portal-estado {
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--ok);
+}
+
+.estado-atrasado .portal-luz {
+  background: var(--warn);
+  box-shadow: 0 0 0 4px var(--warn-soft);
+}
+
+.estado-atrasado .portal-estado {
+  color: var(--warn);
+}
+
+.estado-parado .portal-luz,
+.estado-nunca .portal-luz {
+  background: var(--crit);
+  box-shadow: 0 0 0 4px var(--crit-soft);
+}
+
+.estado-parado .portal-estado,
+.estado-nunca .portal-estado {
+  color: var(--crit);
+}
+
+.estado-parado,
+.estado-nunca {
+  border-color: color-mix(in srgb, var(--crit) 30%, var(--line-soft));
+}
+
+.portal-cobertura {
+  display: grid;
+  gap: 0.35rem;
+  font-size: 0.82rem;
+  color: var(--ink-2);
+}
+
+.portal-erro {
+  display: flex;
+  gap: 0.35rem;
+  align-items: flex-start;
+  margin: 0;
+  padding: 0.5rem 0.6rem;
+  border-radius: var(--raio-p);
+  background: var(--crit-soft);
+  color: var(--crit);
+  font-size: 0.76rem;
+  overflow-wrap: anywhere;
+}
+
+.portal-erro svg {
+  flex-shrink: 0;
+  margin-top: 0.1rem;
+}
+
+/* ---- cadastro de usina (ficha em passos) ------------------------------------ */
+
+.trilha-ficha {
+  display: grid;
+  gap: 0.5rem;
+}
+
+.caminho-link {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  min-width: 0;
+  color: inherit;
+  text-decoration: none;
+}
+
+.caminho-link:hover .caminho-nome {
+  text-decoration: underline;
+}
+
+.ficha .form-ficha fieldset {
+  box-shadow: var(--shadow);
+}
+
+.ficha .form-ficha legend {
+  font-size: 0.8rem;
+  letter-spacing: 0.04em;
+}
+
+/* ---- usinas sem dono -------------------------------------------------------- */
+
+main > .cartoes {
+  padding: 1rem clamp(1rem, 3vw, 2rem) 3rem;
+  gap: 0.85rem;
+}
+
+.cartao-orfa,
+.cartao-documento {
+  background: var(--surface);
+  padding: 0.85rem 1rem;
+  border-radius: var(--raio);
+  gap: 0.4rem;
+}
+
+.cartao-orfa h3 {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.cartao-orfa h3 svg {
+  color: var(--accent);
+}
+
+/* ---- dossiê ------------------------------------------------------------------ */
+
+.regua-dossie {
+  display: grid;
+  gap: 0.45rem;
+  padding: 0.85rem 1rem;
+  background: var(--surface);
+  border: 1px solid var(--line-soft);
+  border-radius: var(--raio);
+  box-shadow: var(--shadow);
+  font-size: 0.86rem;
+  color: var(--ink-2);
+}
+
+.regua-dossie .progresso {
+  height: 10px;
+}
+
+.cartoes-no-cartao {
+  padding: 0;
+  overflow: visible;
+}
+
+.funil-solto {
+  padding: 0;
+}
+
+a.funil-rotulo {
+  color: var(--ink-2);
+  text-decoration: none;
+}
+
+a.funil-rotulo:hover {
+  color: var(--accent);
+  text-decoration: underline;
+}
+
+/* ---- modelos de OS -------------------------------------------------------------- */
+
+.grade-modelos {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 1rem;
+  padding: 1rem clamp(1rem, 3vw, 2rem) 3rem;
+}
+
+.modelo-cartao {
+  display: grid;
+  gap: 0.85rem;
+  padding: 1rem 1.1rem;
+  background: var(--surface);
+  border: 1px solid var(--line-soft);
+  border-radius: var(--raio);
+  box-shadow: var(--shadow);
+  color: var(--ink);
+  text-decoration: none;
+  transition: box-shadow 0.15s, transform 0.15s, border-color 0.15s;
+}
+
+.modelo-cartao:hover {
+  box-shadow: var(--shadow-alta);
+  transform: translateY(-1px);
+  border-color: color-mix(in srgb, var(--accent) 35%, var(--line-soft));
+}
+
+.modelo-cartao header {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+}
+
+.modelo-cartao header div {
+  display: flex;
+  flex-direction: column;
+}
+
+.modelo-cartao header small {
+  font-size: 0.76rem;
+  color: var(--ink-3);
+}
+
+.modelo-numeros {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 0.4rem;
+}
+
+.modelo-numeros span {
+  display: flex;
+  flex-direction: column;
+  padding: 0.45rem 0.55rem;
+  border-radius: var(--raio-p);
+  background: var(--surface-2);
+  border: 1px solid var(--line-soft);
+  font-size: 0.74rem;
+  color: var(--ink-3);
+}
+
+.modelo-numeros strong {
+  font-size: 1.15rem;
+  color: var(--ink);
+  font-variant-numeric: tabular-nums;
+}
+
+.modelo-regras {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 0.3rem;
+  font-size: 0.8rem;
+  color: var(--ink-2);
+}
+
+.modelo-regras li {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.modelo-regras svg {
+  color: var(--ink-3);
+}
+
+.modelo-editar {
+  justify-self: start;
+}
+
+.itens-modelo {
+  list-style: none;
+  padding: 0;
+}
+
+.itens-modelo li {
+  padding: 0.6rem 0.75rem;
+  border: 1px solid var(--line-soft);
+  border-radius: var(--raio-p);
+  background: var(--surface);
+}
+
+.item-ordem {
+  display: inline-grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: var(--surface-2);
+  border: 1px solid var(--line);
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: var(--ink-2);
+}
+
+/* ---- páginas públicas (privacidade, exclusão de conta) ------------------------- */
+
+.pagina-publica {
+  min-height: 100vh;
+  padding: 0 1rem 3rem;
+  background:
+    radial-gradient(900px 400px at 50% -10%, var(--accent-soft), transparent 60%),
+    var(--bg);
+}
+
+.publica-topo {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  max-width: 760px;
+  margin: 0 auto;
+  padding: 1.25rem 0;
+  font-weight: 700;
+  font-size: 1.05rem;
+  letter-spacing: -0.02em;
+}
+
+.documento-publico {
+  max-width: 760px;
+  margin: 0 auto;
+  padding: 2rem clamp(1.25rem, 4vw, 2.5rem);
+  background: var(--surface);
+  border: 1px solid var(--line-soft);
+  border-radius: 14px;
+  box-shadow: var(--shadow-alta);
+  line-height: 1.65;
+  font-size: 0.95rem;
+}
+
+.documento-publico h1 {
+  margin: 0;
+  font-size: 1.7rem;
+  letter-spacing: -0.03em;
+}
+
+.documento-publico h2 {
+  margin: 1.75rem 0 0.5rem;
+  font-size: 1.05rem;
+}
+
+.documento-publico .dica {
+  margin: 0.35rem 0 1.25rem;
+  color: var(--ink-3);
+  font-size: 0.85rem;
+}
+
+.documento-publico a {
+  color: var(--accent);
+}
+
+/* a semana cabe sem rolar numa tela comum; só rola no celular */
+.grade-semana {
+  min-width: 720px;
+}
+
+.grade-semana th.pessoa {
+  width: 150px;
+}
+
+/* na lista de OS, o nome do cliente é texto, e não cor de link */
+.tabela a.celula-dupla {
+  color: var(--ink);
 }

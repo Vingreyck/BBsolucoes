@@ -1,7 +1,10 @@
 import { asc, eq, sql } from "drizzle-orm";
+import { AlertTriangle, Info } from "lucide-react";
 
 import { exigirUsuario } from "@/auth/sessao";
 import { db, schema } from "@/db";
+
+import { Cabecalho, Dados } from "../_ui";
 
 export const dynamic = "force-dynamic";
 
@@ -113,92 +116,105 @@ export default async function Coleta() {
   const totalUsinas = linhas.reduce((n, l) => n + l.usinas, 0);
   const totalFrescas = linhas.reduce((n, l) => n + l.frescas, 0);
 
+  const ESTADO_ROTULO: Record<string, string> = {
+    ok: "Em dia",
+    atrasado: "Atrasada",
+    parado: "Parada",
+    nunca: "Nunca coletou",
+  };
+
   return (
     <main>
-      <header className="topo">
-        <h1>Coleta</h1>
-        <span className="sub">
-          {totalFrescas} de {totalUsinas} usinas com dado dos últimos 2 dias
-        </span>
-        {parados.length > 0 && (
-          <span className="alerta">
-            {parados.length} {parados.length === 1 ? "portal parado" : "portais parados"}
+      <Cabecalho
+        trilha={[{ href: "/usinas", rotulo: "Usinas" }]}
+        titulo="Coleta dos portais"
+        selos={
+          parados.length > 0 ? (
+            <span className="pilula sev-critico">
+              {parados.length} {parados.length === 1 ? "portal parado" : "portais parados"}
+            </span>
+          ) : (
+            <span className="pilula sev-info">todos em dia</span>
+          )
+        }
+        meta={
+          <span>
+            {totalFrescas} de {totalUsinas} usinas com dado dos últimos 2 dias
           </span>
-        )}
-      </header>
+        }
+      />
 
       {parados.length > 0 && (
-        <p className="aviso">
-          <strong>Dado velho é pior que dado ausente.</strong> Uma usina que
-          parou de gerar há dez dias continua aparecendo como &quot;gerando&quot;
-          se ninguém olhar a data da última leitura, e o alerta não abre porque
-          não houve leitura nova para disparar a detecção. Rode{" "}
-          <code>npm run atualizar</code>.
+        <p className="aviso erro">
+          <strong>Dado velho é pior que dado ausente.</strong> Uma usina que parou de gerar há dez dias continua
+          aparecendo como &quot;gerando&quot; se ninguém olhar a data da última leitura, e o alerta não abre porque não houve
+          leitura nova para disparar a detecção. Na VM, confira o coletor com <code>docker compose logs --tail=50 coletor</code>.
         </p>
       )}
 
-      <div className="tabela-wrap">
-        <table className="tabela">
-          <thead>
-            <tr>
-              <th>Portal</th>
-              <th>Última coleta</th>
-              <th>Cadência</th>
-              <th>Usinas</th>
-              <th>Com dado recente</th>
-              <th>Último erro</th>
-            </tr>
-          </thead>
-          <tbody>
-            {linhas.map(({ conta, horas, cadencia, usinas, frescas, estado }) => (
-              <tr key={conta.id}>
-                <td className="forte">
-                  {FABRICANTE_ROTULO[conta.fabricante] ?? conta.fabricante}
-                  {conta.apelido && conta.apelido !== conta.fabricante && (
-                    <span className="fraco"> · {conta.apelido}</span>
-                  )}
-                </td>
-                <td>
-                  <span
-                    className={`pilula ${
-                      estado === "ok"
-                        ? "sev-info"
-                        : estado === "atrasado"
-                          ? "sev-atencao"
-                          : "sev-critico"
-                    }`}
-                  >
-                    {quandoFoi(horas)}
-                  </span>
-                </td>
-                <td className="fraco">{cadencia} min</td>
-                <td className="fraco">{usinas}</td>
-                <td className={frescas < usinas ? "fraco" : ""}>
-                  {frescas} de {usinas}
-                </td>
-                <td className="fraco">
-                  {conta.ultimoErro ? conta.ultimoErro.slice(0, 70) : "—"}
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+      <div className="grade-portais">
+        {linhas.map(({ conta, horas, cadencia, usinas, frescas, estado }) => {
+          const cobertura = usinas ? Math.round((frescas / usinas) * 100) : 0;
+          return (
+            <section key={conta.id} className={`portal-status estado-${estado}`}>
+              <header>
+                <span className="portal-luz" aria-hidden />
+                <div>
+                  <h2>{FABRICANTE_ROTULO[conta.fabricante] ?? conta.fabricante}</h2>
+                  {conta.apelido && conta.apelido !== conta.fabricante && <small>{conta.apelido}</small>}
+                </div>
+                <span className="portal-estado">{ESTADO_ROTULO[estado] ?? estado}</span>
+              </header>
+
+              <Dados
+                itens={[
+                  ["Última coleta", quandoFoi(horas)],
+                  ["Cadência", `a cada ${cadencia} min`],
+                  ["Usinas", String(usinas)],
+                ]}
+              />
+
+              <div className="portal-cobertura">
+                <span>
+                  Com dado recente <strong>{frescas} de {usinas}</strong>
+                </span>
+                <span className="progresso progresso-largo">
+                  <span style={{ width: `${cobertura}%` }} />
+                </span>
+              </div>
+
+              {conta.ultimoErro && (
+                <p className="portal-erro" title={conta.ultimoErro}>
+                  <AlertTriangle size={13} aria-hidden /> {conta.ultimoErro.slice(0, 120)}
+                </p>
+              )}
+            </section>
+          );
+        })}
       </div>
 
-      <p className="aviso">
-        <strong>Os portais não coletam à noite.</strong> Entre 20h e 4h nenhuma
-        usina gera, e o total do dia já fechou na rodada das 19h — consultar
-        nessas horas gastaria quase 40% do orçamento de chamadas para reler o
-        mesmo número. O orçamento é a parte escassa: a Growatt bloqueia IP por
-        frequência, e a Northbound da Huawei tem teto diário.
-      </p>
-
-      <p className="aviso">
-        <strong>Cobertura parcial nem sempre é defeito.</strong> A Growatt tem
-        143 usinas e é varrida em lotes de 40 por rodada, para não estourar o
-        limite — logo depois de ligar ela aparece com poucas, e completa o
-        parque em cerca de quatro horas.
-      </p>
+      <details className="como-ler">
+        <summary>
+          <Info size={15} aria-hidden /> Como a coleta funciona
+        </summary>
+        <div>
+          <p>
+            <strong>Os portais não coletam à noite.</strong> Entre 20h e 4h nenhuma usina gera, e o total do dia já fechou
+            na rodada das 19h — consultar nessas horas gastaria quase 40% do orçamento de chamadas para reler o mesmo
+            número. O orçamento é a parte escassa: a Growatt bloqueia IP por frequência, e a Northbound da Huawei tem teto
+            diário.
+          </p>
+          <p>
+            <strong>Cobertura parcial nem sempre é defeito.</strong> A Growatt tem 143 usinas e é varrida em lotes de 40
+            por rodada, para não estourar o limite — logo depois de ligar ela aparece com poucas, e completa o parque em
+            cerca de quatro horas.
+          </p>
+          <p>
+            <strong>Atrasada</strong> é passar de duas vezes a cadência; <strong>parada</strong> é ficar mais de{" "}
+            {HORAS_PARA_ALARME} h sem coletar.
+          </p>
+        </div>
+      </details>
     </main>
   );
 }

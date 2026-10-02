@@ -1,3 +1,4 @@
+import { SunMedium } from "lucide-react";
 import type { Metadata } from "next";
 
 export const metadata: Metadata = {
@@ -13,8 +14,14 @@ const CONTATO = process.env.CONTATO_PRIVACIDADE ?? "";
 
 export default function Privacidade() {
   return (
-    <main className="login" style={{ alignItems: "flex-start" }}>
-      <article className="cartao-login" style={{ maxWidth: 720, lineHeight: 1.6 }}>
+    <main className="pagina-publica">
+      <header className="publica-topo">
+        <span className="marca-selo" aria-hidden>
+          <SunMedium size={16} />
+        </span>
+        BBSolution
+      </header>
+      <article className="documento-publico">
         <h1>Política de privacidade</h1>
         <p className="dica">Aplicativo BBSolution · atualizada em 30/09/2026</p>
 

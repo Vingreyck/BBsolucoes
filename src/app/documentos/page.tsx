@@ -1,8 +1,10 @@
 import { asc, eq } from "drizzle-orm";
-import { Info } from "lucide-react";
+import { FolderOpen, Info, Search, SearchX, TrendingUp } from "lucide-react";
 
 import { exigirAcessoDocumentos } from "@/auth/permissao";
 import { db, schema } from "@/db";
+
+import { Cabecalho, Cartao, Vazio } from "../_ui";
 
 export const dynamic = "force-dynamic";
 
@@ -209,16 +211,13 @@ export default async function Documentos({
   if (linhas.length === 0) {
     return (
       <main>
-        <header className="topo">
-          <h1>Dossiês</h1>
-        </header>
-        <div className="vazio">
-          <p>
-            Nenhum dossiê ainda. Rode <code>scripts/listar-drive.gs</code> no
-            Apps Script da conta do Google, baixe o CSV para <code>dados/</code>{" "}
-            e então <code>npm run import:drive -- &quot;dados/arquivo.csv&quot;</code>{" "}
-            seguido de <code>npm run dossies</code>.
-          </p>
+        <Cabecalho titulo="Dossiês" />
+        <div className="pagina-corpo">
+          <Vazio icone={<FolderOpen size={20} />} titulo="Nenhum dossiê ainda">
+            Rode <code>scripts/listar-drive.gs</code> no Apps Script da conta do Google, baixe o CSV para{" "}
+            <code>dados/</code> e então <code>npm run import:drive -- &quot;dados/arquivo.csv&quot;</code> seguido de{" "}
+            <code>npm run dossies</code>.
+          </Vazio>
         </div>
       </main>
     );
@@ -226,51 +225,51 @@ export default async function Documentos({
 
   return (
     <main>
-      <header className="topo">
-        <h1>Dossiês</h1>
-        <span className="sub">
-          {filtradas.length === base.length
-            ? `${base.length} ${filtro === "concluidos" ? "dossiês" : "em andamento"}`
-            : `${filtradas.length} de ${base.length}`}
-        </span>
-        {pendentes > 0 && (
-          <span className="alerta">{pendentes} esperando documento</span>
-        )}
-      </header>
+      <Cabecalho
+        titulo="Dossiês"
+        selos={pendentes > 0 ? <span className="pilula sev-atencao">{pendentes} esperando documento</span> : undefined}
+        meta={
+          <span>
+            {filtradas.length === base.length
+              ? `${base.length} ${filtro === "concluidos" ? "dossiês" : "em andamento"}`
+              : `${filtradas.length} de ${base.length}`}
+          </span>
+        }
+      />
 
       {maioresGargalos.length > 0 && (
-        <p className="aviso">
-          <strong>O que está segurando mais gente:</strong>{" "}
-          {maioresGargalos.map(([tipo, n], i) => (
-            <span key={tipo}>
-              {i > 0 && " · "}
-              <a href={montar({ filtro: "pendentes", busca })}>
-                {ROTULO[tipo] ?? tipo}
-              </a>{" "}
-              em <strong>{n}</strong> dossiês
-            </span>
-          ))}
-          . Resolver o papel de cima destrava mais do que ligar para cliente por
-          cliente.
-        </p>
+        <div className="pagina-corpo pagina-corpo-topo">
+          <Cartao
+            titulo="O que está segurando mais gente"
+            icone={<TrendingUp size={16} />}
+            ajuda="Resolver o papel de cima destrava mais do que ligar para cliente por cliente."
+          >
+            <ul className="funil funil-solto">
+              {maioresGargalos.map(([tipo, n]) => (
+                <li key={tipo}>
+                  <a className="funil-rotulo" href={montar({ filtro: "pendentes", busca })}>
+                    {ROTULO[tipo] ?? tipo}
+                  </a>
+                  <span className="funil-barra">
+                    <span style={{ width: `${Math.max(4, (n / Math.max(1, ...maioresGargalos.map(([, n]) => n))) * 100)}%` }} />
+                  </span>
+                  <span className="funil-num">{n}</span>
+                </li>
+              ))}
+            </ul>
+          </Cartao>
+        </div>
       )}
 
-      <div className="barra-usinas">
-        <form className="busca" action="/documentos">
-          <input
-            type="search"
-            name="busca"
-            placeholder="Nome do cliente"
-            defaultValue={busca}
-            aria-label="Buscar cliente"
-          />
+      <div className="caixa-filtros">
+        <form className="campo-busca campo-busca-largo" action="/documentos">
+          <Search size={15} aria-hidden />
+          <input type="search" name="busca" placeholder="Nome do cliente" defaultValue={busca} aria-label="Buscar cliente" />
           {filtro && <input type="hidden" name="filtro" value={filtro} />}
           {etapaFiltro && <input type="hidden" name="etapa" value={etapaFiltro} />}
-          <button type="submit">Buscar</button>
         </form>
-      </div>
 
-      <div className="barra-usinas">
+        <div className="linha-filtro">
         <span className="rotulo-filtro">Situação</span>
         <nav className="filtros">
           <Filtro atual={filtro} valor="" busca={busca} etapa={etapaFiltro}>
@@ -298,7 +297,7 @@ export default async function Documentos({
         </nav>
       </div>
 
-      <div className="barra-usinas">
+        <div className="linha-filtro">
         <span className="rotulo-filtro">Etapa</span>
         <nav className="filtros">
           <FiltroEtapa atual={etapaFiltro} valor="" busca={busca} filtro={filtro}>
@@ -318,6 +317,8 @@ export default async function Documentos({
               </FiltroEtapa>
             ))}
         </nav>
+      </div>
+
       </div>
 
       {!acesso.tudo && (
@@ -423,8 +424,16 @@ export default async function Documentos({
       </div>
 
       {filtradas.length === 0 && (
-        <div className="vazio">
-          <p>Nenhum dossiê bate com esse filtro.</p>
+        <div className="pagina-corpo">
+          <Vazio
+            icone={<SearchX size={20} />}
+            titulo="Nenhum dossiê bate com esse filtro"
+            acao={
+              <a href="/documentos" className="botao secundario">
+                Limpar filtros
+              </a>
+            }
+          />
         </div>
       )}
     </main>

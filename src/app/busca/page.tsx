@@ -7,6 +7,7 @@ import { atorDaWeb, ehGestaoWeb } from "@/os/acesso";
 import { listarOs } from "@/os/consultas";
 import { numeroOs, STATUS_ROTULO, TIPO_ROTULO } from "@/os/tipos";
 
+import { Cabecalho } from "../_ui";
 import { kWp } from "../formatar";
 
 export const dynamic = "force-dynamic";
@@ -44,10 +45,7 @@ export default async function Busca({ searchParams }: { searchParams: Promise<{ 
   if (termo.length < 2) {
     return (
       <main>
-        <header className="topo">
-          <h1>Busca</h1>
-          <span className="sub">digite pelo menos 2 letras</span>
-        </header>
+        <Cabecalho titulo="Busca" meta="Digite pelo menos 2 letras." />
         <div className="busca-vazia">
           <Search size={28} aria-hidden />
           <p>Procure por nome do cliente, número da OS, cidade, CPF/CNPJ, telefone ou nome da usina.</p>
@@ -113,12 +111,10 @@ export default async function Busca({ searchParams }: { searchParams: Promise<{ 
 
   return (
     <main>
-      <header className="topo">
-        <h1>Resultados para “{q.trim()}”</h1>
-        <span className="sub">
-          {total === 0 ? "nada encontrado" : `${total} ${total === 1 ? "resultado" : "resultados"}`}
-        </span>
-      </header>
+      <Cabecalho
+        titulo={`Resultados para “${q.trim()}”`}
+        meta={total === 0 ? "nada encontrado" : `${total} ${total === 1 ? "resultado" : "resultados"}`}
+      />
 
       {total === 0 ? (
         <div className="busca-vazia">

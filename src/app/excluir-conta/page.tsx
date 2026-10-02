@@ -1,3 +1,4 @@
+import { SunMedium } from "lucide-react";
 import type { Metadata } from "next";
 
 export const metadata: Metadata = {
@@ -12,8 +13,14 @@ const CONTATO = process.env.CONTATO_PRIVACIDADE ?? "";
 
 export default function ExcluirConta() {
   return (
-    <main className="login" style={{ alignItems: "flex-start" }}>
-      <article className="cartao-login" style={{ maxWidth: 720, lineHeight: 1.6 }}>
+    <main className="pagina-publica">
+      <header className="publica-topo">
+        <span className="marca-selo" aria-hidden>
+          <SunMedium size={16} />
+        </span>
+        BBSolution
+      </header>
+      <article className="documento-publico">
         <h1>Excluir conta e dados</h1>
         <p className="dica">Aplicativo BBSolution · BB Soluções</p>
 

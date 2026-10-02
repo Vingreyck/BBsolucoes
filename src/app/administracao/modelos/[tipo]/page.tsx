@@ -1,5 +1,5 @@
 import { and, asc, eq } from "drizzle-orm";
-import Link from "next/link";
+import { ListChecks, Plus, Settings2 } from "lucide-react";
 import { notFound, redirect } from "next/navigation";
 
 import { exigirUsuario } from "@/auth/sessao";
@@ -7,6 +7,7 @@ import { db, schema } from "@/db";
 import { garantirModelos } from "@/os/modelos";
 import { TIPO_RESPOSTA_ROTULO, TIPO_ROTULO, TIPOS_RESPOSTA, type TipoOs, type TipoResposta } from "@/os/tipos";
 
+import { Cabecalho, Cartao, Vazio } from "../../../_ui";
 import { moverItem, removerItem, salvarItem, salvarModelo } from "../actions";
 
 export const dynamic = "force-dynamic";
@@ -124,15 +125,16 @@ export default async function EditarModelo({
 
   return (
     <main>
-      <header className="topo">
-        <h1>{modelo.nome}</h1>
-        <span className="sub">modelo de OS · {TIPO_ROTULO[modelo.tipo]}</span>
-        <span className="acao-topo acoes-topo">
-          <Link href="/administracao/modelos" className="botao secundario">
-            ← Modelos
-          </Link>
-        </span>
-      </header>
+      <Cabecalho
+        trilha={[{ href: "/administracao/modelos", rotulo: "Modelos de OS" }]}
+        titulo={modelo.nome}
+        meta={
+          <>
+            <span>Modelo de OS · {TIPO_ROTULO[modelo.tipo]}</span>
+            <span>{modelo.itens.length} itens no checklist</span>
+          </>
+        }
+      />
       {ok && <p className="aviso ok">{ok}</p>}
       {erro && (
         <p className="aviso erro" role="alert">
@@ -140,11 +142,77 @@ export default async function EditarModelo({
         </p>
       )}
 
-      <div className="os-form largo">
-        <form action={salvarModelo.bind(null, modelo.tipo)} className="form-ficha">
-          <fieldset>
-            <legend>O modelo</legend>
-            <div className="dupla">
+      <div className="registro-grade">
+        <div className="registro-principal">
+          <Cartao titulo="Checklist" icone={<ListChecks size={16} />} contador={`${modelo.itens.length} itens`}>
+            {modelo.itens.length === 0 ? (
+              <Vazio icone={<ListChecks size={20} />} titulo="Nenhum item ainda">
+                Acrescente o primeiro no cartão abaixo.
+              </Vazio>
+            ) : (
+              <ol className="itens-modelo">
+                {modelo.itens.map((item, i) => (
+                  <li key={item.id} id={`item-${item.id}`}>
+                    <div className="item-topo">
+                      <span className="item-ordem">{i + 1}</span>
+                      <span className="item-nome">{item.descricao}</span>
+                      {item.secao && <span className="fraco">{item.secao}</span>}
+                      <span className="pilula">
+                        {TIPO_RESPOSTA_ROTULO[item.tipoResposta as TipoResposta] ?? item.tipoResposta}
+                      </span>
+                      {item.obrigatorio && <span className="obrigatorio">obrigatório</span>}
+                      {item.fotosMinimas > 0 && <span className="fraco">{item.fotosMinimas} foto(s)</span>}
+                      {item.tipoDocumento && <span className="fraco">→ dossiê</span>}
+                      <span className="mover">
+                        <form action={moverItem.bind(null, modelo.tipo, item.id, "subir")}>
+                          <button type="submit" disabled={i === 0} aria-label="Subir">
+                            ↑
+                          </button>
+                        </form>
+                        <form action={moverItem.bind(null, modelo.tipo, item.id, "descer")}>
+                          <button type="submit" disabled={i === modelo.itens.length - 1} aria-label="Descer">
+                            ↓
+                          </button>
+                        </form>
+                      </span>
+                    </div>
+                    <details className="dobra">
+                      <summary>Editar</summary>
+                      <form action={salvarItem.bind(null, modelo.tipo, item.id)} className="form-ficha compacto">
+                        <CamposItem item={item} />
+                        <div className="ficha-acoes">
+                          <button type="submit">Salvar item</button>
+                        </div>
+                      </form>
+                      <form action={removerItem.bind(null, modelo.tipo, item.id)} className="form-mini">
+                        <button type="submit" className="link-perigo">
+                          tirar este item do modelo
+                        </button>
+                      </form>
+                    </details>
+                  </li>
+                ))}
+              </ol>
+            )}
+          </Cartao>
+
+          <Cartao titulo="Acrescentar item" icone={<Plus size={16} />} id="novo">
+            <form action={salvarItem.bind(null, modelo.tipo, null)} className="form-ficha">
+              <CamposItem />
+              <div className="ficha-acoes">
+                <button type="submit">Acrescentar</button>
+              </div>
+            </form>
+          </Cartao>
+        </div>
+
+        <aside className="registro-lateral">
+          <Cartao
+            titulo="Regras do modelo"
+            icone={<Settings2 size={16} />}
+            ajuda="Com uma etapa escolhida: quando a OS é concluída como resolvida e o projeto dela está parado nessa etapa, o projeto anda para a próxima sozinho, e o histórico diz qual OS o moveu."
+          >
+            <form action={salvarModelo.bind(null, modelo.tipo)} className="form-ficha">
               <label>
                 Nome
                 <input type="text" name="nome" defaultValue={modelo.nome} required maxLength={120} />
@@ -171,83 +239,20 @@ export default async function EditarModelo({
                   ))}
                 </select>
               </label>
-            </div>
-            <label>
-              Instruções para o técnico
-              <textarea name="instrucoes" rows={2} defaultValue={modelo.instrucoes ?? ""} maxLength={2000} />
-            </label>
-            <label className="linha-check">
-              <input type="checkbox" name="exigeAssinatura" value="sim" defaultChecked={modelo.exigeAssinatura} /> Exige a
-              assinatura do cliente para concluir como resolvido
-            </label>
-            <p className="ajuda">
-              Com uma etapa escolhida: quando a OS é concluída como resolvida e o projeto dela está parado nessa etapa,
-              o projeto anda para a próxima sozinho, e o histórico diz qual OS o moveu.
-            </p>
-            <div className="ficha-acoes">
-              <button type="submit">Salvar modelo</button>
-            </div>
-          </fieldset>
-        </form>
-
-        <section className="bloco">
-          <h2>
-            Checklist <span className="contador">{modelo.itens.length} itens</span>
-          </h2>
-          {modelo.itens.length === 0 && <p className="nota">Nenhum item ainda. Acrescente o primeiro abaixo.</p>}
-          <ol className="itens-modelo">
-            {modelo.itens.map((item, i) => (
-              <li key={item.id} id={`item-${item.id}`}>
-                <div className="item-topo">
-                  <span className="item-nome">{item.descricao}</span>
-                  {item.secao && <span className="fraco">{item.secao}</span>}
-                  <span className="pilula">
-                    {TIPO_RESPOSTA_ROTULO[item.tipoResposta as TipoResposta] ?? item.tipoResposta}
-                  </span>
-                  {item.obrigatorio && <span className="obrigatorio">obrigatório</span>}
-                  {item.fotosMinimas > 0 && <span className="fraco">{item.fotosMinimas} foto(s)</span>}
-                  {item.tipoDocumento && <span className="fraco">→ dossiê</span>}
-                  <span className="mover">
-                    <form action={moverItem.bind(null, modelo.tipo, item.id, "subir")}>
-                      <button type="submit" disabled={i === 0} aria-label="Subir">
-                        ↑
-                      </button>
-                    </form>
-                    <form action={moverItem.bind(null, modelo.tipo, item.id, "descer")}>
-                      <button type="submit" disabled={i === modelo.itens.length - 1} aria-label="Descer">
-                        ↓
-                      </button>
-                    </form>
-                  </span>
-                </div>
-                <details className="dobra">
-                  <summary>Editar</summary>
-                  <form action={salvarItem.bind(null, modelo.tipo, item.id)} className="form-ficha compacto">
-                    <CamposItem item={item} />
-                    <div className="ficha-acoes">
-                      <button type="submit">Salvar item</button>
-                    </div>
-                  </form>
-                  <form action={removerItem.bind(null, modelo.tipo, item.id)} className="form-mini">
-                    <button type="submit" className="link-perigo">
-                      tirar este item do modelo
-                    </button>
-                  </form>
-                </details>
-              </li>
-            ))}
-          </ol>
-        </section>
-
-        <form action={salvarItem.bind(null, modelo.tipo, null)} className="form-ficha" id="novo">
-          <fieldset>
-            <legend>Acrescentar item</legend>
-            <CamposItem />
-            <div className="ficha-acoes">
-              <button type="submit">Acrescentar</button>
-            </div>
-          </fieldset>
-        </form>
+              <label>
+                Instruções para o técnico
+                <textarea name="instrucoes" rows={3} defaultValue={modelo.instrucoes ?? ""} maxLength={2000} />
+              </label>
+              <label className="linha-check">
+                <input type="checkbox" name="exigeAssinatura" value="sim" defaultChecked={modelo.exigeAssinatura} /> Exige a
+                assinatura do cliente para concluir como resolvido
+              </label>
+              <div className="ficha-acoes">
+                <button type="submit">Salvar regras</button>
+              </div>
+            </form>
+          </Cartao>
+        </aside>
       </div>
     </main>
   );

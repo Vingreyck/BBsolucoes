@@ -157,8 +157,23 @@ export async function salvarPasso1(dados: FormData): Promise<void> {
   redirect(`/cadastro/${id}/2`);
 }
 
+/**
+ * Os passos 2 a 5 recebem o id da usina pela URL. Sem conferir a empresa, o id
+ * de uma usina de outra empresa seria aceito e alterado — o sistema é
+ * multiempresa desde a primeira migration.
+ */
+async function exigirUsinaDaEmpresa(usinaId: string) {
+  const usuario = await exigirUsuario();
+  const usina = await db.query.usina.findFirst({
+    where: and(eq(usinaTable.id, usinaId), eq(usinaTable.empresaId, usuario.empresaId)),
+    columns: { id: true },
+  });
+  if (!usina) redirect("/usinas");
+  return usuario;
+}
+
 export async function salvarPasso2(usinaId: string, dados: FormData): Promise<void> {
-  await exigirUsuario();
+  await exigirUsinaDaEmpresa(usinaId);
   await db
     .update(usinaTable)
     .set({
@@ -172,7 +187,7 @@ export async function salvarPasso2(usinaId: string, dados: FormData): Promise<vo
 
 /** Passo 3: o inversor e, se houver, o datalogger que o acompanha. */
 export async function salvarPasso3(usinaId: string, dados: FormData): Promise<void> {
-  const usuario = await exigirUsuario();
+  const usuario = await exigirUsinaDaEmpresa(usinaId);
 
   const serie = texto(dados, "numeroSerie");
   if (serie) {
@@ -225,7 +240,7 @@ export async function salvarPasso3(usinaId: string, dados: FormData): Promise<vo
  * exatamente o que a Conta Azul, controlando só quantidade, não responde.
  */
 export async function salvarPasso4(usinaId: string, dados: FormData): Promise<void> {
-  const usuario = await exigirUsuario();
+  const usuario = await exigirUsinaDaEmpresa(usinaId);
 
   const quantidade = numero(dados, "quantidade");
   const marca = texto(dados, "marcaModulo");
@@ -251,7 +266,7 @@ export async function salvarPasso4(usinaId: string, dados: FormData): Promise<vo
 
 /** Passo 5: fecha a ficha. O contrato fica no projeto, não na usina. */
 export async function salvarPasso5(usinaId: string, dados: FormData): Promise<void> {
-  await exigirUsuario();
+  await exigirUsinaDaEmpresa(usinaId);
 
   const valor = numero(dados, "valor");
   const projeto = await db.query.projeto.findFirst({

@@ -1,5 +1,7 @@
 import { and, asc, eq, sql } from "drizzle-orm";
 
+import { AlertTriangle, FileWarning, Plus, Search, SearchX, Sun, Unlink, WifiOff } from "lucide-react";
+
 import { exigirUsuario } from "@/auth/sessao";
 import { db } from "@/db";
 import {
@@ -8,6 +10,7 @@ import {
   usina as usinaTable,
 } from "@/db/schema";
 
+import { Cabecalho, Vazio } from "../_ui";
 import { kWh, kWp } from "../formatar";
 
 export const dynamic = "force-dynamic";
@@ -67,10 +70,12 @@ export default async function Usinas({
 }: {
   searchParams: Promise<{ busca?: string; filtro?: string; portal?: string }>;
 }) {
-  await exigirUsuario();
+  const usuario = await exigirUsuario();
   const { busca = "", filtro = "", portal = "" } = await searchParams;
 
+  // Da empresa de quem pede: o sistema é multiempresa desde a primeira migration.
   const usinas = await db.query.usina.findMany({
+    where: eq(usinaTable.empresaId, usuario.empresaId),
     with: {
       cliente: true,
       equipamentos: true,
@@ -94,7 +99,7 @@ export default async function Usinas({
       total: sql<number>`sum(${leituraTable.energiaKwh})::float8`,
     })
     .from(leituraTable)
-    .where(eq(leituraTable.granularidade, "dia"))
+    .where(and(eq(leituraTable.granularidade, "dia"), eq(leituraTable.empresaId, usuario.empresaId)))
     .groupBy(leituraTable.usinaId);
 
   const porUsina = new Map(series.map((s) => [s.usinaId, s]));
@@ -117,7 +122,7 @@ export default async function Usinas({
       quantos: sql<number>`count(*)::int`,
     })
     .from(alertaTable)
-    .where(and(eq(alertaTable.status, "aberto")))
+    .where(and(eq(alertaTable.status, "aberto"), eq(alertaTable.empresaId, usuario.empresaId)))
     .groupBy(alertaTable.usinaId, alertaTable.tipo);
 
   /** Da mais grave para a menos: parada pesa mais que gerando pouco. */
@@ -208,181 +213,216 @@ export default async function Usinas({
   ).length;
   const potenciaTotal = filtradas.reduce((s, l) => s + (l.potencia ?? 0), 0);
 
+  const gerando = linhas.length - comProblema;
+  const pendenciasCadastro = suspeitas + semEquipamento;
+
   return (
     <main>
-      <header className="topo">
-        <h1>Usinas</h1>
-        <span className="sub">
-          {filtradas.length === linhas.length
-            ? `${linhas.length} cadastradas`
-            : `${filtradas.length} de ${linhas.length}`}{" "}
-          · {kWp(potenciaTotal)}
-        </span>
-      </header>
+      <Cabecalho
+        titulo="Usinas"
+        meta={
+          <>
+            <span>
+              {filtradas.length === linhas.length ? `${linhas.length} cadastradas` : `${filtradas.length} de ${linhas.length}`}
+            </span>
+            <span>{kWp(potenciaTotal)}</span>
+          </>
+        }
+        acoes={
+          <>
+            <a href="/usinas/sem-dono" className="botao secundario">
+              <Unlink size={15} aria-hidden /> Sem dono
+            </a>
+            <a href="/cadastro" className="botao">
+              <Plus size={15} aria-hidden /> Nova usina
+            </a>
+          </>
+        }
+      />
 
-      <div className="barra-usinas">
-        <form className="busca" action="/usinas">
-          <input
-            type="search"
-            name="busca"
-            placeholder="Cliente, usina ou cidade"
-            defaultValue={busca}
-            aria-label="Buscar usina"
-          />
+      <section className="indicadores indicadores-pagina" aria-label="Resumo do parque">
+        <a href="/usinas" className="indicador tom-ok">
+          <span className="indicador-icone" aria-hidden>
+            <Sun size={18} />
+          </span>
+          <span className="indicador-valor">{gerando}</span>
+          <span className="indicador-rotulo">Sem problema</span>
+          <span className="indicador-detalhe">gerando normalmente</span>
+        </a>
+        <a href="/usinas?filtro=problema" className={`indicador${comProblema ? " tom-perigo" : ""}`}>
+          <span className="indicador-icone" aria-hidden>
+            <AlertTriangle size={18} />
+          </span>
+          <span className="indicador-valor">{comProblema}</span>
+          <span className="indicador-rotulo">Com problema</span>
+          <span className="indicador-detalhe">alerta aberto agora</span>
+        </a>
+        <a href="/usinas?filtro=sem-comunicacao" className={`indicador${semComunicacao ? " tom-atencao" : ""}`}>
+          <span className="indicador-icone" aria-hidden>
+            <WifiOff size={18} />
+          </span>
+          <span className="indicador-valor">{semComunicacao}</span>
+          <span className="indicador-rotulo">Sem comunicação</span>
+          <span className="indicador-detalhe">inversor parou de mandar dado</span>
+        </a>
+        <a href="/usinas?filtro=potencia" className={`indicador${pendenciasCadastro ? " tom-atencao" : ""}`}>
+          <span className="indicador-icone" aria-hidden>
+            <FileWarning size={18} />
+          </span>
+          <span className="indicador-valor">{pendenciasCadastro}</span>
+          <span className="indicador-rotulo">Cadastro a corrigir</span>
+          <span className="indicador-detalhe">
+            {suspeitas} potência errada · {semEquipamento} sem equipamento
+          </span>
+        </a>
+      </section>
+
+      <div className="caixa-filtros">
+        <form className="campo-busca campo-busca-largo" action="/usinas">
+          <Search size={15} aria-hidden />
+          <input type="search" name="busca" placeholder="Cliente, usina ou cidade" defaultValue={busca} aria-label="Buscar usina" />
           {filtro && <input type="hidden" name="filtro" value={filtro} />}
           {portal && <input type="hidden" name="portal" value={portal} />}
-          <button type="submit">Buscar</button>
         </form>
-      </div>
 
-      <div className="barra-usinas">
-        <span className="rotulo-filtro">Portal</span>
-        <nav className="filtros">
-          <Filtro tipo="portal" atual={portal} valor="" busca={busca} filtro={filtro}>
-            Todos ({linhas.length})
-          </Filtro>
-          {portaisOrdenados.map(([p, n]) => (
-            <Filtro
-              key={p}
-              tipo="portal"
-              atual={portal}
-              valor={p}
-              busca={busca}
-              filtro={filtro}
-              perigo={p === "sem_portal"}
-            >
-              {p === "sem_portal" ? "Sem portal" : (PORTAL_ROTULO[p] ?? p)} ({n})
+        <div className="linha-filtro">
+          <span className="rotulo-filtro">Portal</span>
+          <nav className="filtros">
+            <Filtro tipo="portal" atual={portal} valor="" busca={busca} filtro={filtro}>
+              Todos ({linhas.length})
             </Filtro>
-          ))}
-        </nav>
-      </div>
+            {portaisOrdenados.map(([p, n]) => (
+              <Filtro key={p} tipo="portal" atual={portal} valor={p} busca={busca} filtro={filtro} perigo={p === "sem_portal"}>
+                {p === "sem_portal" ? "Sem portal" : (PORTAL_ROTULO[p] ?? p)} ({n})
+              </Filtro>
+            ))}
+          </nav>
+        </div>
 
-      <div className="barra-usinas">
-        <span className="rotulo-filtro">Situação</span>
-        <nav className="filtros">
-          <Filtro atual={filtro} valor="" busca={busca} portal={portal}>
-            Todas ({linhas.length})
-          </Filtro>
-          <Filtro atual={filtro} valor="problema" busca={busca} portal={portal} perigo>
-            Com problema ({comProblema})
-          </Filtro>
-          <Filtro
-            atual={filtro}
-            valor="sem-comunicacao"
-            busca={busca}
-            portal={portal}
-            perigo
-          >
-            Sem comunicação ({semComunicacao})
-          </Filtro>
-        </nav>
-      </div>
+        <div className="linha-filtro">
+          <span className="rotulo-filtro">Situação</span>
+          <nav className="filtros">
+            <Filtro atual={filtro} valor="" busca={busca} portal={portal}>
+              Todas ({linhas.length})
+            </Filtro>
+            <Filtro atual={filtro} valor="problema" busca={busca} portal={portal} perigo>
+              Com problema ({comProblema})
+            </Filtro>
+            <Filtro atual={filtro} valor="sem-comunicacao" busca={busca} portal={portal} perigo>
+              Sem comunicação ({semComunicacao})
+            </Filtro>
+          </nav>
+        </div>
 
-      <div className="barra-usinas">
-        <span className="rotulo-filtro">Cadastro</span>
-        <nav className="filtros">
-          <Filtro atual={filtro} valor="" busca={busca} portal={portal}>
-            Tudo ({linhas.length})
-          </Filtro>
-          <Filtro atual={filtro} valor="potencia" busca={busca} portal={portal} perigo>
-            Potência errada ({suspeitas})
-          </Filtro>
-          <Filtro atual={filtro} valor="sem-equipamento" busca={busca} portal={portal}>
-            Sem equipamento ({semEquipamento})
-          </Filtro>
-          <Filtro atual={filtro} valor="sem-serie" busca={busca} portal={portal}>
-            Sem geração ({semSerie})
-          </Filtro>
-        </nav>
+        <div className="linha-filtro">
+          <span className="rotulo-filtro">Cadastro</span>
+          <nav className="filtros">
+            <Filtro atual={filtro} valor="potencia" busca={busca} portal={portal} perigo>
+              Potência errada ({suspeitas})
+            </Filtro>
+            <Filtro atual={filtro} valor="sem-equipamento" busca={busca} portal={portal}>
+              Sem equipamento ({semEquipamento})
+            </Filtro>
+            <Filtro atual={filtro} valor="sem-serie" busca={busca} portal={portal}>
+              Sem geração ({semSerie})
+            </Filtro>
+          </nav>
+        </div>
       </div>
 
       {filtro === "potencia" && suspeitas > 0 && (
         <p className="aviso">
-          A potência dessas usinas exigiria mais de {HORAS_IMPOSSIVEIS} horas de sol
-          pleno num único dia para gerar o que elas geraram — o que não existe. É
-          erro de cadastro <strong>no portal da Growatt</strong>, provavelmente kWp
-          digitado em campo que espera watts, e precisa ser corrigido lá. Enquanto
-          não for, o alerta de geração abaixo do esperado não funciona nessas usinas.
+          A potência dessas usinas exigiria mais de {HORAS_IMPOSSIVEIS} horas de sol pleno num único dia para gerar o que
+          elas geraram — o que não existe. É erro de cadastro <strong>no portal da Growatt</strong>, provavelmente kWp
+          digitado em campo que espera watts, e precisa ser corrigido lá. Enquanto não for, o alerta de geração abaixo do
+          esperado não funciona nessas usinas.
         </p>
       )}
 
-      <div className="tabela-wrap">
-        <table className="tabela">
-          <thead>
-            <tr>
-              <th>Cliente</th>
-              <th>Situação</th>
-              <th>Usina</th>
-              <th>Portal</th>
-              <th>Cidade</th>
-              <th className="num">Potência</th>
-              <th className="num">Instalada</th>
-              <th className="num">Equip.</th>
-              <th className="num">Geração no banco</th>
-            </tr>
-          </thead>
-          <tbody>
-            {filtradas.map(({ usina, serie, potenciaSuspeita, semEquipamento, portais, situacao }) => (
-              <tr key={usina.id}>
-                <td className="forte">
-                  {usina.cliente ? (
-                    usina.cliente.nome
-                  ) : (
-                    <a href="/usinas/sem-dono" className="pilula sev-atencao">
-                      sem dono
-                    </a>
-                  )}
-                </td>
-                <td>
-                  {situacao ? (
-                    <span
-                      className={`pilula ${
-                        situacao.tipo === "geracao_baixa" ? "sev-atencao" : "sev-critico"
-                      }`}
-                      title={`Desde ${new Date(`${situacao.desde}T12:00:00Z`).toLocaleDateString("pt-BR")}`}
-                    >
-                      {SITUACAO_ROTULO[situacao.tipo] ?? situacao.tipo}
-                      {situacao.dias > 0 ? ` · ${situacao.dias}d` : ""}
-                    </span>
-                  ) : (
-                    <span className="fraco">gerando</span>
-                  )}
-                </td>
-                <td>{usina.nome}</td>
-                <td className={portais.length ? "" : "fraco"}>
-                  {portais.length
-                    ? [...new Set(portais)]
-                        .map((p) => PORTAL_ROTULO[p] ?? p)
-                        .join(", ")
-                    : "nenhum"}
-                </td>
-                <td>{usina.cidade ?? "—"}</td>
-                <td className={`num ${potenciaSuspeita ? "ruim" : ""}`}>
-                  {kWp(usina.potenciaKwp) ?? "—"}
-                  {potenciaSuspeita && <span className="marca" title="Potência impossível para a geração registrada">!</span>}
-                </td>
-                <td className="num">
-                  {usina.dataInstalacao
-                    ? usina.dataInstalacao.toLocaleDateString("pt-BR")
-                    : "—"}
-                </td>
-                <td className={`num ${semEquipamento ? "fraco" : ""}`}>
-                  {usina.equipamentos.length || "—"}
-                </td>
-                <td className="num">
-                  {serie
-                    ? `${serie.dias} ${serie.dias === 1 ? "dia" : "dias"} · ${kWh(serie.total)}`
-                    : "—"}
-                </td>
+      {filtradas.length === 0 ? (
+        <div className="pagina-corpo">
+          <Vazio
+            icone={<SearchX size={20} />}
+            titulo="Nenhuma usina bate com esse filtro"
+            acao={
+              <a href="/usinas" className="botao secundario">
+                Limpar filtros
+              </a>
+            }
+          />
+        </div>
+      ) : (
+        <div className="tabela-wrap">
+          <table className="tabela">
+            <thead>
+              <tr>
+                <th>Cliente e usina</th>
+                <th>Situação</th>
+                <th>Portal</th>
+                <th>Cidade</th>
+                <th className="num">Potência</th>
+                <th className="num">Instalada</th>
+                <th className="num">Equip.</th>
+                <th className="num">Geração no banco</th>
               </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-
-      {filtradas.length === 0 && (
-        <div className="vazio">
-          <p>Nenhuma usina bate com esse filtro.</p>
+            </thead>
+            <tbody>
+              {filtradas.map(({ usina, serie, potenciaSuspeita, semEquipamento, portais, situacao }) => (
+                <tr key={usina.id}>
+                  <td>
+                    <span className="celula-dupla">
+                      {usina.cliente ? (
+                        <strong>{usina.cliente.nome}</strong>
+                      ) : (
+                        <a href="/usinas/sem-dono" className="pilula sev-atencao">
+                          sem dono
+                        </a>
+                      )}
+                      <small>{usina.nome}</small>
+                    </span>
+                  </td>
+                  <td>
+                    {situacao ? (
+                      <span
+                        className={`pilula ${situacao.tipo === "geracao_baixa" ? "sev-atencao" : "sev-critico"}`}
+                        title={`Desde ${new Date(`${situacao.desde}T12:00:00Z`).toLocaleDateString("pt-BR")}`}
+                      >
+                        {SITUACAO_ROTULO[situacao.tipo] ?? situacao.tipo}
+                        {situacao.dias > 0 ? ` · ${situacao.dias}d` : ""}
+                      </span>
+                    ) : (
+                      <span className="status-ok">
+                        <span aria-hidden /> gerando
+                      </span>
+                    )}
+                  </td>
+                  <td className={portais.length ? "" : "fraco"}>
+                    {portais.length
+                      ? [...new Set(portais)].map((p) => (
+                          <span key={p} className="etiqueta-portal">
+                            {PORTAL_ROTULO[p] ?? p}
+                          </span>
+                        ))
+                      : "nenhum"}
+                  </td>
+                  <td>{usina.cidade ?? "—"}</td>
+                  <td className={`num ${potenciaSuspeita ? "ruim" : ""}`}>
+                    {kWp(usina.potenciaKwp) ?? "—"}
+                    {potenciaSuspeita && (
+                      <span className="marca" title="Potência impossível para a geração registrada">
+                        !
+                      </span>
+                    )}
+                  </td>
+                  <td className="num">{usina.dataInstalacao ? usina.dataInstalacao.toLocaleDateString("pt-BR") : "—"}</td>
+                  <td className={`num ${semEquipamento ? "fraco" : ""}`}>{usina.equipamentos.length || "—"}</td>
+                  <td className="num">
+                    {serie ? `${serie.dias} ${serie.dias === 1 ? "dia" : "dias"} · ${kWh(serie.total)}` : "—"}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
         </div>
       )}
     </main>

@@ -1,4 +1,15 @@
 import { and, asc, eq, or, sql } from "drizzle-orm";
+import {
+  ArrowLeft,
+  CalendarClock,
+  Check,
+  ChevronRight,
+  MapPin,
+  Search,
+  SearchX,
+  UserRound,
+  Wrench,
+} from "lucide-react";
 import Link from "next/link";
 
 import { db, schema } from "@/db";
@@ -7,6 +18,7 @@ import { responsaveisPossiveis } from "@/os/consultas";
 import { garantirModelos } from "@/os/modelos";
 import { PRIORIDADE_ROTULO, TIPO_ROTULO } from "@/os/tipos";
 
+import { Cabecalho, Caminho, Cartao, Dados, Vazio } from "../../_ui";
 import { criarOsAction } from "../actions";
 
 export const dynamic = "force-dynamic";
@@ -16,6 +28,17 @@ const TIPO_DA_ETAPA: Record<string, string> = {
   vistoria_tecnica: "vistoria",
   execucao: "instalacao",
 };
+
+/** Os dois passos do assistente. */
+const PASSOS = [
+  { id: "cliente", nome: "Cliente" },
+  { id: "dados", nome: "Dados da OS" },
+];
+
+function iniciais(nome: string): string {
+  const p = nome.trim().split(/\s+/);
+  return ((p[0]?.[0] ?? "") + (p.length > 1 ? p[p.length - 1][0] : "")).toUpperCase();
+}
 
 const PAPEL: Record<string, string> = {
   tecnico: "técnico",
@@ -88,43 +111,62 @@ export default async function NovaOs({
 
     return (
       <main>
-        <header className="topo">
-          <h1>Nova ordem de serviço</h1>
-          <span className="sub">Passo 1 de 2 · para qual cliente?</span>
-        </header>
-        <div className="os-form">
-          <form method="get" action="/os/nova" className="busca-cliente">
-            <input
-              type="search"
-              name="q"
-              defaultValue={busca}
-              placeholder="Nome, cidade ou CPF/CNPJ do cliente"
-              autoFocus
-              aria-label="Buscar cliente"
-            />
-            <button type="submit" className="botao">
-              Buscar
-            </button>
-          </form>
-          {busca && achados.length === 0 && (
-            <p className="nota">Nenhum cliente encontrado para “{busca}”.</p>
-          )}
-          {achados.length > 0 && (
-            <ul className="lista-escolha">
-              {achados.map((c) => (
-                <li key={c.id}>
-                  <Link href={`/os/nova?cliente=${c.id}`}>
-                    <strong>{c.nome}</strong>
-                    <span className="fraco">{[c.cidade, c.uf].filter(Boolean).join(" - ")}</span>
-                  </Link>
-                </li>
-              ))}
-            </ul>
-          )}
-          <p className="nota">
-            Também dá para abrir uma OS direto da tela do projeto, já com a venda ligada, ou de um{" "}
-            <Link href="/alertas">alerta de usina</Link>.
-          </p>
+        <Cabecalho trilha={[{ href: "/os", rotulo: "Ordens de serviço" }]} titulo="Nova ordem de serviço" />
+        <div className="faixa-caminho">
+          <Caminho etapas={PASSOS} atual={0} rotuloAtual="passo atual" />
+        </div>
+
+        <div className="pagina-estreita">
+          <Cartao titulo="Para qual cliente?" icone={<UserRound size={16} />}>
+            <form method="get" action="/os/nova" className="busca-grande">
+              <label className="campo-busca">
+                <Search size={16} aria-hidden />
+                <input
+                  type="search"
+                  name="q"
+                  defaultValue={busca}
+                  placeholder="Nome, cidade ou CPF/CNPJ do cliente"
+                  autoFocus
+                  aria-label="Buscar cliente"
+                />
+              </label>
+              <button type="submit" className="botao">
+                Buscar
+              </button>
+            </form>
+
+            {busca && achados.length === 0 && (
+              <Vazio icone={<SearchX size={20} />} titulo={`Nenhum cliente encontrado para “${busca}”`}>
+                Tente só o primeiro nome, a cidade, ou os números do CPF sem pontos.
+              </Vazio>
+            )}
+
+            {achados.length > 0 && (
+              <ul className="lista-escolha-nova">
+                {achados.map((c) => (
+                  <li key={c.id}>
+                    <Link href={`/os/nova?cliente=${c.id}`}>
+                      <span className="avatar-mini" aria-hidden>
+                        {iniciais(c.nome)}
+                      </span>
+                      <span className="celula-dupla">
+                        <strong>{c.nome}</strong>
+                        <small>{[c.cidade, c.uf].filter(Boolean).join(" - ") || "cidade não informada"}</small>
+                      </span>
+                      <ChevronRight size={16} aria-hidden />
+                    </Link>
+                  </li>
+                ))}
+              </ul>
+            )}
+
+            {!busca && (
+              <p className="nota">
+                Também dá para abrir uma OS direto da tela do projeto, já com a venda ligada, ou de um{" "}
+                <Link href="/alertas">alerta de usina</Link>.
+              </p>
+            )}
+          </Cartao>
         </div>
       </main>
     );
@@ -147,12 +189,22 @@ export default async function NovaOs({
     (p.tipo && p.tipo in TIPO_ROTULO ? p.tipo : undefined) ?? (etapaSlug ? TIPO_DA_ETAPA[etapaSlug] : undefined) ?? "corretiva";
   const usinaEscolhida = p.usina ?? (cliente.usinas.length === 1 ? cliente.usinas[0].id : "");
 
+  const cidade = [cliente.cidade, cliente.uf].filter(Boolean).join(" - ");
+
   return (
     <main>
-      <header className="topo">
-        <h1>Nova ordem de serviço</h1>
-        <span className="sub">Passo 2 de 2 · {cliente.nome}</span>
-      </header>
+      <Cabecalho
+        trilha={[{ href: "/os", rotulo: "Ordens de serviço" }]}
+        titulo="Nova ordem de serviço"
+        meta={
+          <span className="meta-pessoa">
+            <UserRound size={14} aria-hidden /> {cliente.nome}
+          </span>
+        }
+      />
+      <div className="faixa-caminho">
+        <Caminho etapas={PASSOS} atual={1} rotuloAtual="passo atual" />
+      </div>
 
       {p.erro && (
         <p className="aviso erro" role="alert">
@@ -160,123 +212,142 @@ export default async function NovaOs({
         </p>
       )}
 
-      <div className="os-form">
-        <form action={criarOsAction} className="form-ficha">
-          <input type="hidden" name="clienteId" value={cliente.id} />
+      <form action={criarOsAction} className="registro-grade">
+        <input type="hidden" name="clienteId" value={cliente.id} />
 
-          <fieldset>
-            <legend>O que fazer</legend>
-            <div className="dupla">
-              <label>
-                Tipo <span className="req">*</span>
-                <select name="tipo" defaultValue={tipoSugerido} required>
-                  {modelos
-                    .sort((a, b) => (TIPO_ROTULO[a.tipo] ?? "").localeCompare(TIPO_ROTULO[b.tipo] ?? ""))
-                    .map((m) => (
-                      <option key={m.tipo} value={m.tipo}>
-                        {m.nome}
-                        {m.prazoHoras ? ` (prazo ${m.prazoHoras} h)` : ""}
+        <div className="registro-principal">
+          <Cartao titulo="O que fazer" icone={<Wrench size={16} />}>
+            <div className="form-ficha">
+              <div className="dupla">
+                <label>
+                  Tipo <span className="req">*</span>
+                  <select name="tipo" defaultValue={tipoSugerido} required>
+                    {modelos
+                      .sort((a, b) => (TIPO_ROTULO[a.tipo] ?? "").localeCompare(TIPO_ROTULO[b.tipo] ?? ""))
+                      .map((m) => (
+                        <option key={m.tipo} value={m.tipo}>
+                          {m.nome}
+                          {m.prazoHoras ? ` (prazo ${m.prazoHoras} h)` : ""}
+                        </option>
+                      ))}
+                  </select>
+                </label>
+                <label>
+                  Prioridade
+                  <select name="prioridade" defaultValue="normal">
+                    {Object.entries(PRIORIDADE_ROTULO).map(([v, r]) => (
+                      <option key={v} value={v}>
+                        {r}
                       </option>
                     ))}
-                </select>
-              </label>
+                  </select>
+                </label>
+                <label>
+                  Quem pediu
+                  <select name="origem" defaultValue="manual">
+                    <option value="manual">A empresa</option>
+                    <option value="cliente">O cliente</option>
+                  </select>
+                </label>
+              </div>
               <label>
-                Prioridade
-                <select name="prioridade" defaultValue="normal">
-                  {Object.entries(PRIORIDADE_ROTULO).map(([v, r]) => (
-                    <option key={v} value={v}>
-                      {r}
-                    </option>
-                  ))}
-                </select>
+                Descrição <span className="req">*</span>
+                <textarea
+                  name="descricao"
+                  rows={4}
+                  required
+                  maxLength={4000}
+                  placeholder="O que o técnico precisa saber antes de sair: o problema, o que levar, com quem falar."
+                />
               </label>
-              <label>
-                Quem pediu
-                <select name="origem" defaultValue="manual">
-                  <option value="manual">A empresa</option>
-                  <option value="cliente">O cliente</option>
-                </select>
-              </label>
+              <p className="ajuda">
+                O checklist vem do modelo do tipo escolhido — dá para ajustar os modelos em{" "}
+                {ator.papel === "adm" ? <Link href="/administracao/modelos">Modelos de OS</Link> : "Modelos de OS (adm)"}.
+              </p>
             </div>
-            <label>
-              Descrição <span className="req">*</span>
-              <textarea
-                name="descricao"
-                rows={4}
-                required
-                maxLength={4000}
-                placeholder="O que o técnico precisa saber antes de sair: o problema, o que levar, com quem falar."
-              />
-            </label>
-            <p className="ajuda">
-              O checklist vem do modelo do tipo escolhido — dá para ajustar os modelos em{" "}
-              {ator.papel === "adm" ? <Link href="/administracao/modelos">Modelos de OS</Link> : "Modelos de OS (adm)"}.
-            </p>
-          </fieldset>
+          </Cartao>
 
-          <fieldset>
-            <legend>Onde</legend>
-            <div className="dupla">
-              <label>
-                Usina
-                <select name="usinaId" defaultValue={usinaEscolhida}>
-                  <option value="">Nenhuma (ou ainda não existe)</option>
-                  {cliente.usinas.map((u) => (
-                    <option key={u.id} value={u.id}>
-                      {u.nome}
-                      {u.cidade ? ` · ${u.cidade}` : ""}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <label>
-                Venda (projeto)
-                <select name="projetoId" defaultValue={projetoEscolhido}>
-                  <option value="">Nenhuma — não é de uma venda</option>
-                  {projetos.map((pr) => (
-                    <option key={pr.id} value={pr.id}>
-                      {pr.titulo} · {pr.etapa.nome}
-                    </option>
-                  ))}
-                </select>
-              </label>
+          <Cartao titulo="Onde" icone={<MapPin size={16} />}>
+            <div className="form-ficha">
+              <div className="dupla">
+                <label>
+                  Usina
+                  <select name="usinaId" defaultValue={usinaEscolhida}>
+                    <option value="">Nenhuma (ou ainda não existe)</option>
+                    {cliente.usinas.map((u) => (
+                      <option key={u.id} value={u.id}>
+                        {u.nome}
+                        {u.cidade ? ` · ${u.cidade}` : ""}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label>
+                  Venda (projeto)
+                  <select name="projetoId" defaultValue={projetoEscolhido}>
+                    <option value="">Nenhuma — não é de uma venda</option>
+                    {projetos.map((pr) => (
+                      <option key={pr.id} value={pr.id}>
+                        {pr.titulo} · {pr.etapa.nome}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              </div>
+              <p className="ajuda">
+                Ligada à venda, a OS aparece no projeto, as fotos que viram documento entram no dossiê e, concluída, a
+                vistoria ou a instalação andam a esteira sozinhas.
+              </p>
             </div>
-            <p className="ajuda">
-              Ligada à venda, a OS aparece no projeto, as fotos que viram documento entram no dossiê e,
-              concluída, a vistoria ou a instalação andam a esteira sozinhas.
-            </p>
-          </fieldset>
+          </Cartao>
 
-          <fieldset>
-            <legend>Quem e quando</legend>
-            <div className="dupla">
-              <label>
-                Responsável
-                <select name="responsavelId" defaultValue="">
-                  <option value="">Definir depois</option>
-                  {pessoas.map((u) => (
-                    <option key={u.id} value={u.id}>
-                      {u.nome} ({PAPEL[u.papel] ?? u.papel})
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <label>
-                Agendar para
-                <input type="datetime-local" name="agendadaPara" />
-              </label>
+          <Cartao titulo="Quem e quando" icone={<CalendarClock size={16} />}>
+            <div className="form-ficha">
+              <div className="dupla">
+                <label>
+                  Responsável
+                  <select name="responsavelId" defaultValue="">
+                    <option value="">Definir depois</option>
+                    {pessoas.map((u) => (
+                      <option key={u.id} value={u.id}>
+                        {u.nome} ({PAPEL[u.papel] ?? u.papel})
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label>
+                  Agendar para
+                  <input type="datetime-local" name="agendadaPara" />
+                </label>
+              </div>
+              <p className="ajuda">Sem data, a OS entra na fila “A agendar” da agenda.</p>
             </div>
-            <p className="ajuda">Sem data, a OS entra na fila “A agendar” da agenda.</p>
-          </fieldset>
+          </Cartao>
 
-          <div className="ficha-acoes">
-            <Link href="/os/nova" className="voltar">
-              ← trocar de cliente
+          <div className="barra-enviar">
+            <Link href="/os/nova" className="botao secundario">
+              <ArrowLeft size={15} aria-hidden /> Trocar de cliente
             </Link>
-            <button type="submit">Abrir OS</button>
+            <button type="submit" className="botao">
+              <Check size={15} aria-hidden /> Abrir OS
+            </button>
           </div>
-        </form>
-      </div>
+        </div>
+
+        <aside className="registro-lateral">
+          <Cartao titulo="Cliente" icone={<UserRound size={16} />}>
+            <Dados
+              itens={[
+                ["Nome", cliente.nome],
+                ["Cidade", cidade],
+                ["Telefone", cliente.telefone],
+                ["Usinas", cliente.usinas.length ? String(cliente.usinas.length) : null],
+                ["Vendas em aberto", projetos.length ? String(projetos.length) : null],
+              ]}
+            />
+          </Cartao>
+        </aside>
+      </form>
     </main>
   );
 }

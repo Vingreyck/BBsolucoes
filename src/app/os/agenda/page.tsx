@@ -1,3 +1,4 @@
+import { CalendarCheck, CalendarClock, ChevronLeft, ChevronRight, List } from "lucide-react";
 import Link from "next/link";
 
 import { exigirAtorWeb } from "@/os/acesso";
@@ -5,12 +6,19 @@ import { agendaDaSemana } from "@/os/consultas";
 import { formatarRelogio, inicioDaSemana, relogioAgora, relogioDoCampo } from "@/os/relogio";
 import { numeroOs, PRIORIDADE_ROTULO, STATUS_ROTULO, TIPO_ROTULO } from "@/os/tipos";
 
+import { Cabecalho, Vazio } from "../../_ui";
+
 export const dynamic = "force-dynamic";
 
 const DIAS = ["Seg", "Ter", "Qua", "Qui", "Sex", "Sáb", "Dom"];
 
 function dm(d: Date): string {
   return `${String(d.getUTCDate()).padStart(2, "0")}/${String(d.getUTCMonth() + 1).padStart(2, "0")}`;
+}
+
+function iniciais(nome: string): string {
+  const p = nome.trim().split(/\s+/);
+  return ((p[0]?.[0] ?? "") + (p.length > 1 ? p[p.length - 1][0] : "")).toUpperCase();
 }
 
 function iso(d: Date): string {
@@ -59,34 +67,46 @@ export default async function Agenda({ searchParams }: { searchParams: Promise<{
 
   return (
     <main>
-      <header className="topo">
-        <h1>Agenda</h1>
-        <span className="sub">
-          Semana de {dm(dias[0])} a {dm(dias[6])} · {marcadas.length} {marcadas.length === 1 ? "OS marcada" : "OS marcadas"}
-        </span>
-        <span className="acao-topo acoes-topo">
-          <Link href={`/os/agenda?semana=${anterior}`} className="botao secundario">
-            ← anterior
-          </Link>
-          <Link href="/os/agenda" className="botao secundario">
-            Hoje
-          </Link>
-          <Link href={`/os/agenda?semana=${proxima}`} className="botao secundario">
-            próxima →
-          </Link>
-          <Link href="/os" className="botao secundario">
-            Lista
-          </Link>
-        </span>
-      </header>
+      <Cabecalho
+        trilha={[{ href: "/os", rotulo: "Ordens de serviço" }]}
+        titulo="Agenda"
+        meta={
+          <>
+            <span>
+              Semana de {dm(dias[0])} a {dm(dias[6])}
+            </span>
+            <span>
+              {marcadas.length} {marcadas.length === 1 ? "OS marcada" : "OS marcadas"}
+            </span>
+          </>
+        }
+        acoes={
+          <>
+            <span className="grupo-segmentado" role="group" aria-label="Trocar de semana">
+              <Link href={`/os/agenda?semana=${anterior}`} title="Semana anterior" aria-label="Semana anterior">
+                <ChevronLeft size={16} aria-hidden />
+              </Link>
+              <Link href="/os/agenda">Hoje</Link>
+              <Link href={`/os/agenda?semana=${proxima}`} title="Próxima semana" aria-label="Próxima semana">
+                <ChevronRight size={16} aria-hidden />
+              </Link>
+            </span>
+            <Link href="/os" className="botao secundario">
+              <List size={15} aria-hidden /> Lista
+            </Link>
+          </>
+        }
+      />
 
       <div className="agenda">
         <aside className="fila-agendar">
           <h2>
-            A agendar <span className="contador">{aAgendar.length}</span>
+            <CalendarClock size={16} aria-hidden /> A agendar <span className="contador-cinza">{aAgendar.length}</span>
           </h2>
           {aAgendar.length === 0 ? (
-            <p className="nota">Nada esperando data.</p>
+            <Vazio icone={<CalendarCheck size={20} />} titulo="Nada esperando data">
+              Toda OS aberta já tem dia marcado.
+            </Vazio>
           ) : (
             <ul>
               {aAgendar.map((o) => (
@@ -118,7 +138,8 @@ export default async function Agenda({ searchParams }: { searchParams: Promise<{
                 <th className="pessoa">Responsável</th>
                 {dias.map((d, i) => (
                   <th key={i} className={iso(d) === iso(hoje) ? "hoje" : ""}>
-                    {DIAS[i]} <span className="fraco">{dm(d)}</span>
+                    <span className="dia-semana">{DIAS[i]}</span>
+                    <span className="dia-numero">{dm(d)}</span>
                   </th>
                 ))}
               </tr>
@@ -133,7 +154,14 @@ export default async function Agenda({ searchParams }: { searchParams: Promise<{
               ) : (
                 ordenadas.map(([pessoa, nome]) => (
                   <tr key={pessoa || "ninguem"}>
-                    <th className="pessoa">{nome}</th>
+                    <th className="pessoa">
+                      <span className="meta-pessoa">
+                        <span className="avatar-mini" aria-hidden>
+                          {pessoa ? iniciais(nome) : "?"}
+                        </span>
+                        {nome}
+                      </span>
+                    </th>
                     {dias.map((d, i) => (
                       <td key={i} className={iso(d) === iso(hoje) ? "hoje" : ""}>
                         {doDia(pessoa, d).map((o) => (

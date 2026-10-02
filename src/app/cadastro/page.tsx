@@ -1,5 +1,6 @@
 import { exigirUsuario } from "@/auth/sessao";
 
+import { Cabecalho } from "../_ui";
 import { salvarPasso1 } from "./actions";
 import { Trilha } from "./trilha";
 
@@ -26,10 +27,11 @@ export default async function CadastroPasso1({
 
   return (
     <main>
-      <header className="topo">
-        <h1>Nova usina</h1>
-        <span className="sub">Cadastro completo em 5 passos</span>
-      </header>
+      <Cabecalho
+        trilha={[{ href: "/usinas", rotulo: "Usinas" }]}
+        titulo="Nova usina"
+        meta="Cadastro completo em 5 passos. Dá para parar e continuar depois."
+      />
 
       <div className="ficha">
         <Trilha atual={1} />

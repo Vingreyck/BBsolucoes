@@ -63,6 +63,15 @@ export async function criarProjeto(dados: FormData): Promise<void> {
 
   let clienteId = clienteExistente;
 
+  // O id vem do formulário: precisa ser um cliente desta empresa.
+  if (clienteId) {
+    const daEmpresa = await db.query.cliente.findFirst({
+      where: and(eq(clienteTable.id, clienteId), eq(clienteTable.empresaId, usuario.empresaId)),
+      columns: { id: true },
+    });
+    if (!daEmpresa) redirect("/projeto/novo?erro=cliente");
+  }
+
   if (!clienteId && nomeNovo) {
     // Nome repetido vira o mesmo cliente: a planilha dos portais não traz CPF,
     // então é o melhor critério que existe hoje.

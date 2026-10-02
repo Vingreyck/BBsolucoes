@@ -1,10 +1,11 @@
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { notFound } from "next/navigation";
 
 import { exigirUsuario } from "@/auth/sessao";
 import { db } from "@/db";
 import { usina as usinaTable } from "@/db/schema";
 
+import { Cabecalho } from "../../../_ui";
 import {
   salvarPasso2,
   salvarPasso3,
@@ -21,24 +22,29 @@ export default async function CadastroPasso({
 }: {
   params: Promise<{ id: string; passo: string }>;
 }) {
-  await exigirUsuario();
+  const usuario = await exigirUsuario();
   const { id, passo } = await params;
 
   const numero = Number(passo);
   if (!passoPorNumero(numero) || numero < 2) notFound();
 
+  // Da empresa de quem pede: o id vem da URL.
   const usina = await db.query.usina.findFirst({
-    where: eq(usinaTable.id, id),
+    where: and(eq(usinaTable.id, id), eq(usinaTable.empresaId, usuario.empresaId)),
     with: { cliente: true, equipamentos: true },
   });
   if (!usina) notFound();
 
   return (
     <main>
-      <header className="topo">
-        <h1>{usina.cliente?.nome ?? usina.nome}</h1>
-        <span className="sub">{usina.nome}</span>
-      </header>
+      <Cabecalho
+        trilha={[
+          { href: "/usinas", rotulo: "Usinas" },
+          { href: "/cadastro", rotulo: "Nova usina" },
+        ]}
+        titulo={usina.cliente?.nome ?? usina.nome}
+        meta={<span>{usina.nome}</span>}
+      />
 
       <div className="ficha">
         <Trilha atual={numero} usinaId={usina.id} concluidos={usina.cadastroPasso} />

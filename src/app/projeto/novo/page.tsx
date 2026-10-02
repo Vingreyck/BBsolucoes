@@ -1,9 +1,11 @@
-import { asc } from "drizzle-orm";
+import { and, asc, eq } from "drizzle-orm";
+import { Check, FileText, UserRound } from "lucide-react";
 
 import { exigirUsuario } from "@/auth/sessao";
 import { db } from "@/db";
 import { cliente as clienteTable, etapa as etapaTable } from "@/db/schema";
 
+import { Cabecalho, Cartao } from "../../_ui";
 import { criarProjeto } from "../actions";
 
 export const dynamic = "force-dynamic";
@@ -19,37 +21,43 @@ export default async function NovoProjeto({
 }: {
   searchParams: Promise<{ erro?: string }>;
 }) {
-  await exigirUsuario();
+  const usuario = await exigirUsuario();
   const { erro } = await searchParams;
 
-  const clientes = await db.query.cliente.findMany({
-    orderBy: asc(clienteTable.nome),
-  });
-
-  const primeira = await db.query.etapa.findFirst({
-    orderBy: asc(etapaTable.ordem),
-  });
+  // Da empresa de quem pede, como tudo: o sistema é multiempresa.
+  const [clientes, primeira] = await Promise.all([
+    db.query.cliente.findMany({
+      where: eq(clienteTable.empresaId, usuario.empresaId),
+      orderBy: asc(clienteTable.nome),
+    }),
+    db.query.etapa.findFirst({
+      where: and(eq(etapaTable.empresaId, usuario.empresaId), eq(etapaTable.ativa, true)),
+      orderBy: asc(etapaTable.ordem),
+    }),
+  ]);
 
   return (
     <main>
-      <header className="topo">
-        <h1>Novo projeto</h1>
-        {primeira && <span className="pilula st-aberta">{primeira.nome}</span>}
-        <span className="sub">entra na primeira etapa da esteira</span>
-      </header>
+      <Cabecalho
+        trilha={[{ href: "/esteira", rotulo: "Esteira de projetos" }]}
+        titulo="Novo projeto"
+        selos={primeira ? <span className="ui-selo ui-selo-marca">entra em {primeira.nome}</span> : undefined}
+        meta="Uma venda nova na esteira. Os dados que ainda não existem podem ficar em branco."
+      />
 
-      {erro && <p className="aviso">{ERROS[erro] ?? "Não consegui criar o projeto."}</p>}
+      {erro && (
+        <p className="aviso erro" role="alert">
+          {ERROS[erro] ?? "Não consegui criar o projeto."}
+        </p>
+      )}
 
-      <div className="os-detalhe">
-        <form action={criarProjeto} className="form-ficha">
-          <section className="bloco">
-            <h2>Cliente</h2>
-            <p className="nota">
-              Quem já tem usina instalada provavelmente está na lista — o cadastro
-              veio dos portais dos fabricantes. Quem chegou agora para orçamento
-              ainda não está: escreva o nome no campo de baixo.
-            </p>
-
+      <form action={criarProjeto} className="pagina-estreita">
+        <Cartao
+          titulo="Cliente"
+          icone={<UserRound size={16} />}
+          ajuda="Quem já tem usina instalada provavelmente está na lista — o cadastro veio dos portais dos fabricantes. Quem chegou agora para orçamento ainda não está: escreva o nome no campo de baixo."
+        >
+          <div className="form-ficha">
             <label>
               Cliente já cadastrado
               <select name="clienteId" defaultValue="">
@@ -63,44 +71,43 @@ export default async function NovoProjeto({
               </select>
             </label>
 
+            <p className="separador-ou">
+              <span>ou um cliente novo</span>
+            </p>
+
             <div className="dupla">
               <label>
-                Ou um cliente novo
+                Nome completo
                 <input name="clienteNovo" placeholder="Nome completo" />
               </label>
               <label>
                 Cidade
                 <input name="cidade" placeholder="Itabaiana" />
               </label>
+              <label>
+                Telefone
+                <input name="telefone" inputMode="tel" placeholder="(79) 90000-0000" />
+              </label>
             </div>
+          </div>
+        </Cartao>
 
-            <label className="curto">
-              Telefone
-              <input name="telefone" inputMode="tel" placeholder="(79) 90000-0000" />
-            </label>
-          </section>
-
-          <section className="bloco">
-            <h2>O projeto</h2>
-            <label>
-              Título
-              <input
-                name="titulo"
-                placeholder="Ex.: 8 kWp — Itabaiana"
-                defaultValue=""
-              />
-            </label>
-
-            <p className="nota">
-              O consumo médio é a base do dimensionamento e sai da conta de luz —
-              uma fatura da Energisa traz 13 meses de histórico numa página só.
-              Pode ficar em branco agora e ser preenchido depois da vistoria.
-            </p>
-
-            <label className="curto">
-              Consumo médio (kWh/mês)
-              <input name="consumoMedioKwh" inputMode="decimal" placeholder="632" />
-            </label>
+        <Cartao
+          titulo="O projeto"
+          icone={<FileText size={16} />}
+          ajuda="O consumo médio é a base do dimensionamento e sai da conta de luz — uma fatura da Energisa traz 13 meses de histórico numa página só. Pode ficar em branco agora e ser preenchido depois da vistoria."
+        >
+          <div className="form-ficha">
+            <div className="dupla">
+              <label>
+                Título
+                <input name="titulo" placeholder="Ex.: 8 kWp — Itabaiana" defaultValue="" />
+              </label>
+              <label>
+                Consumo médio (kWh/mês)
+                <input name="consumoMedioKwh" inputMode="decimal" placeholder="632" />
+              </label>
+            </div>
 
             <label>
               O que o cliente pediu
@@ -110,18 +117,18 @@ export default async function NovoProjeto({
                 placeholder="Como chegou até a empresa, o que quer resolver, aparelhos que pretende acrescentar"
               />
             </label>
-          </section>
-
-          <div className="ficha-acoes">
-            <a href="/esteira" className="filtro">
-              Cancelar
-            </a>
-            <button type="submit" className="primario">
-              Criar projeto
-            </button>
           </div>
-        </form>
-      </div>
+        </Cartao>
+
+        <div className="barra-enviar">
+          <a href="/esteira" className="botao secundario">
+            Cancelar
+          </a>
+          <button type="submit" className="botao">
+            <Check size={15} aria-hidden /> Criar projeto
+          </button>
+        </div>
+      </form>
     </main>
   );
 }

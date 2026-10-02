@@ -1,8 +1,10 @@
 import { asc, eq, sql } from "drizzle-orm";
+import { CheckCircle2, Info, Sun } from "lucide-react";
 
 import { exigirUsuario } from "@/auth/sessao";
 import { db, schema } from "@/db";
 
+import { Cabecalho, Vazio } from "../../_ui";
 import { Ligar } from "./ligar";
 
 export const dynamic = "force-dynamic";
@@ -90,17 +92,19 @@ export default async function SemDono() {
   if (orfas.length === 0) {
     return (
       <main>
-        <header className="topo">
-          <h1>Usinas sem dono</h1>
-        </header>
-        <div className="vazio">
-          <p>
-            Nenhuma usina esperando. Toda usina dos portais está ligada a um
-            cliente.
-          </p>
-          <p>
-            <a href="/usinas">Ver todas as usinas</a>
-          </p>
+        <Cabecalho trilha={[{ href: "/usinas", rotulo: "Usinas" }]} titulo="Usinas sem dono" />
+        <div className="pagina-corpo">
+          <Vazio
+            icone={<CheckCircle2 size={20} />}
+            titulo="Nenhuma usina esperando"
+            acao={
+              <a href="/usinas" className="botao secundario">
+                Ver todas as usinas
+              </a>
+            }
+          >
+            Toda usina dos portais está ligada a um cliente.
+          </Vazio>
         </div>
       </main>
     );
@@ -108,33 +112,38 @@ export default async function SemDono() {
 
   return (
     <main>
-      <header className="topo">
-        <h1>Usinas sem dono</h1>
-        <span className="sub">{orfas.length} esperando</span>
-      </header>
+      <Cabecalho
+        trilha={[{ href: "/usinas", rotulo: "Usinas" }]}
+        titulo="Usinas sem dono"
+        selos={<span className="pilula sev-atencao">{orfas.length} esperando</span>}
+        meta="Ligue cada usina ao cliente certo: assim o alerta dela encontra o contrato, o telefone e a ART."
+      />
 
-      <p className="aviso">
-        Estas usinas apareceram no portal do fabricante e o sistema{" "}
-        <strong>não inventou um dono para elas</strong>. O nome que vem do
-        portal é login de técnico, não de pessoa — <code>José Fernando7</code>,{" "}
-        <code>micaely 03</code> —, e criar cliente a partir dele foi o que
-        encheu o cadastro de gente repetida.
-      </p>
-
-      <p className="aviso">
-        Ligue cada uma ao cliente certo. Feito isso, o alerta daquela usina
-        passa a encontrar o contrato, o telefone e a ART no dossiê. A sugestão
-        prioriza quem <strong>tem documento</strong>, porque é o registro que
-        veio do contrato assinado — mas confira: juntar duas pessoas diferentes
-        não se desfaz olhando a tela.
-      </p>
+      <details className="como-ler">
+        <summary>
+          <Info size={15} aria-hidden /> Por que essas usinas não têm dono
+        </summary>
+        <div>
+          <p>
+            Estas usinas apareceram no portal do fabricante e o sistema <strong>não inventou um dono para elas</strong>. O
+            nome que vem do portal é login de técnico, não de pessoa — <code>José Fernando7</code>, <code>micaely 03</code>{" "}
+            —, e criar cliente a partir dele foi o que encheu o cadastro de gente repetida.
+          </p>
+          <p>
+            A sugestão prioriza quem <strong>tem documento</strong>, porque é o registro que veio do contrato assinado — mas
+            confira: juntar duas pessoas diferentes não se desfaz olhando a tela.
+          </p>
+        </div>
+      </details>
 
       <div className="cartoes">
         {orfas.map((u) => {
           const portal = u.vinculosPortal[0]?.contaPortal?.fabricante ?? "—";
           return (
-            <div key={u.id} className="cartao">
-              <h3>{u.nome}</h3>
+            <div key={u.id} className="cartao cartao-orfa">
+              <h3>
+                <Sun size={16} aria-hidden /> {u.nome}
+              </h3>
               <p className="fraco">
                 {portal}
                 {u.cidade ? ` · ${u.cidade}` : ""}

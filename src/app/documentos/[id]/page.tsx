@@ -1,10 +1,21 @@
 import { and, asc, eq } from "drizzle-orm";
+import {
+  CheckCircle2,
+  Clock,
+  Download,
+  ExternalLink,
+  FileWarning,
+  FolderOpen,
+  KanbanSquare,
+} from "lucide-react";
+import Link from "next/link";
 import { notFound } from "next/navigation";
 
 import { exigirAcessoDocumentos } from "@/auth/permissao";
 import { db, schema } from "@/db";
 import { driveConfigurado } from "@/documentos/drive";
 
+import { Cabecalho, Caminho, Cartao, Vazio } from "../../_ui";
 import { EnvioDocumento } from "./envio";
 
 export const dynamic = "force-dynamic";
@@ -169,157 +180,188 @@ export default async function Dossie({
 
   const semDrive = !driveConfigurado();
 
+  // Quanto do que já devia existir está na pasta: a régua do dossiê.
+  const devidos = ordenadas.filter((e) => e.obrigatorio && e.etapa.ordem <= atual);
+  const entregues = devidos.filter((e) => presentes.has(e.tipo)).length;
+  const indiceEtapa = etapas.findIndex((e) => e.id === projeto.etapaId);
+
   return (
     <main>
-      <header className="topo">
-        <h1>{projeto.titulo}</h1>
-        <span className="sub">{projeto.etapa.nome}</span>
-        {projeto.situacao === "concluido" && (
-          <span className="pilula sev-info">concluído</span>
-        )}
-        {pendentes.length > 0 && (
-          <span className="alerta">{pendentes.length} para esta etapa</span>
-        )}
-      </header>
-
-      <p className="aviso">
-        <a href="/documentos">← Todos os dossiês</a>
-        {projeto.observacoes && (
+      <Cabecalho
+        trilha={[
+          { href: "/documentos", rotulo: "Dossiês" },
+          { href: `/projeto/${projeto.id}`, rotulo: projeto.cliente.nome },
+        ]}
+        titulo={`Dossiê · ${projeto.cliente.nome}`}
+        selos={
           <>
-            {" · "}
-            <span className="fraco">{projeto.observacoes}</span>
+            <span className="ui-selo ui-selo-marca">{projeto.etapa.nome}</span>
+            {projeto.situacao === "concluido" && <span className="pilula sev-info">concluído</span>}
+            {pendentes.length > 0 && <span className="pilula sev-atencao">{pendentes.length} faltando nesta etapa</span>}
           </>
-        )}
-      </p>
+        }
+        meta={
+          <>
+            <span>{projeto.titulo}</span>
+            {projeto.observacoes && <span className="fraco">{projeto.observacoes}</span>}
+          </>
+        }
+        acoes={
+          <Link href={`/projeto/${projeto.id}`} className="botao secundario">
+            <KanbanSquare size={15} aria-hidden /> Ver o projeto
+          </Link>
+        }
+      />
+
+      {indiceEtapa >= 0 && (
+        <div className="faixa-caminho">
+          <Caminho etapas={etapas} atual={indiceEtapa} compacto />
+        </div>
+      )}
 
       {semDrive && (
         <p className="aviso">
-          <strong>O Drive ainda não está conectado neste servidor.</strong> Dá
-          para ver o dossiê e abrir o link do Drive, mas enviar e baixar pelo
-          Selebi só funciona depois de rodar{" "}
-          <code>npm run drive:autorizar</code> e colocar as três variáveis do
-          Google no <code>.env</code>. As instruções estão no cabeçalho de{" "}
+          <strong>O Drive ainda não está conectado neste servidor.</strong> Dá para ver o dossiê e abrir o link do
+          Drive, mas enviar e baixar pelo Selebi só funciona depois de rodar <code>npm run drive:autorizar</code> e
+          colocar as três variáveis do Google no <code>.env</code>. As instruções estão no cabeçalho de{" "}
           <code>src/documentos/autorizar-drive.ts</code>.
         </p>
       )}
 
-      <h2 className="secao">Falta nesta etapa</h2>
-      {pendentes.length === 0 ? (
-        <p className="aviso">Nada falta para {projeto.etapa.nome.toLowerCase()}.</p>
-      ) : (
-        <div className="cartoes">
-          {pendentes.map((e) => (
-            <div key={e.tipo} className="cartao">
-              <h3>{ROTULO[e.tipo] ?? e.tipo}</h3>
-              <p className="fraco">{e.observacao}</p>
-              <EnvioDocumento
-                projetoId={projeto.id}
-                tipo={e.tipo}
-                exigeAssinatura={e.exigeAssinatura}
-                desabilitado={semDrive}
-              />
-            </div>
-          ))}
-        </div>
-      )}
-
-      <h2 className="secao">Na pasta ({visiveis.length})</h2>
-      {ocultos > 0 && (
-        <p className="aviso">
-          Outros {ocultos} documentos deste dossiê são de outras etapas e não
-          aparecem para o seu perfil. Documento de cliente guarda CNH, CPF e
-          conta de luz — cada um enxerga o que precisa para trabalhar.
-        </p>
-      )}
-      <div className="tabela-wrap">
-        <table className="tabela">
-          <thead>
-            <tr>
-              <th>Tipo</th>
-              <th>Arquivo</th>
-              <th>Situação</th>
-              <th>Versão</th>
-              <th>De</th>
-              <th>Quem enviou</th>
-              <th></th>
-            </tr>
-          </thead>
-          <tbody>
-            {visiveis.map((d) => (
-              <tr key={d.id}>
-                <td className="forte">{ROTULO[d.tipo] ?? d.tipo}</td>
-                {/* `title` porque o nome é cortado: os do Drive passam de 80
-                    caracteres e sem isto a informação some de vez. */}
-                <td className="fraco nome-arquivo" title={d.nomeArquivo}>
-                  {d.nomeArquivo}
-                </td>
-                <td>
-                  {STATUS_ROTULO[d.status] ? (
-                    <span
-                      className={`pilula ${
-                        d.status === "assinado" ? "sev-info" : "sev-atencao"
-                      }`}
-                    >
-                      {STATUS_ROTULO[d.status]}
-                    </span>
-                  ) : (
-                    <span className="fraco">—</span>
-                  )}
-                </td>
-                <td className="fraco">{d.versao > 1 ? `v${d.versao}` : "—"}</td>
-                <td className="fraco">{d.daVenda ? "desta venda" : "da pessoa"}</td>
-                <td className="fraco">
-                  {d.enviadoPor ?? "importado do Drive"}
-                </td>
-                <td>
-                  {semDrive ? (
-                    d.linkDrive ? (
-                      <a href={d.linkDrive} target="_blank" rel="noreferrer">
-                        abrir no Google
-                      </a>
-                    ) : (
-                      "—"
-                    )
-                  ) : (
-                    <a href={`/documentos/arquivo/${d.id}`}>baixar</a>
-                  )}
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-
-      {futuras.length > 0 && (
-        <>
-          <h2 className="secao">Ainda não é hora</h2>
-          <p className="aviso">
-            Estes documentos passam a ser cobrados mais adiante na esteira. Se
-            já tiver em mãos, pode subir agora — não faz mal adiantar.
-          </p>
-          <div className="cartoes">
-            {futuras.map((e) => (
-              <div key={e.tipo} className="cartao">
-                <h3>
-                  {ROTULO[e.tipo] ?? e.tipo}{" "}
-                  <span className="fraco">· {e.etapa.nome}</span>
-                </h3>
-                <p className="fraco">{e.observacao}</p>
-                <EnvioDocumento
-                  projetoId={projeto.id}
-                  tipo={e.tipo}
-                  exigeAssinatura={e.exigeAssinatura}
-                  desabilitado={semDrive}
-                />
-              </div>
-            ))}
+      <div className="pagina-corpo pilha">
+        {devidos.length > 0 && (
+          <div className="regua-dossie">
+            <span>
+              <strong>
+                {entregues} de {devidos.length}
+              </strong>{" "}
+              documentos exigidos até {projeto.etapa.nome.toLowerCase()}
+            </span>
+            <span className="progresso progresso-largo">
+              <span style={{ width: `${Math.round((entregues / devidos.length) * 100)}%` }} />
+            </span>
           </div>
-        </>
-      )}
+        )}
 
-      <p className="aviso fraco">
-        Esteira: {etapas.map((e) => e.nome).join(" → ")}
-      </p>
+        <Cartao
+          titulo="Falta nesta etapa"
+          icone={<FileWarning size={16} />}
+          contador={pendentes.length || undefined}
+          destaque={pendentes.length > 0}
+        >
+          {pendentes.length === 0 ? (
+            <Vazio icone={<CheckCircle2 size={20} />} titulo={`Nada falta para ${projeto.etapa.nome.toLowerCase()}`} />
+          ) : (
+            <div className="cartoes cartoes-no-cartao">
+              {pendentes.map((e) => (
+                <div key={e.tipo} className="cartao cartao-documento">
+                  <h3>{ROTULO[e.tipo] ?? e.tipo}</h3>
+                  <p className="fraco">{e.observacao}</p>
+                  <EnvioDocumento
+                    projetoId={projeto.id}
+                    tipo={e.tipo}
+                    exigeAssinatura={e.exigeAssinatura}
+                    desabilitado={semDrive}
+                  />
+                </div>
+              ))}
+            </div>
+          )}
+        </Cartao>
+
+        <Cartao titulo="Na pasta" icone={<FolderOpen size={16} />} contador={visiveis.length}>
+          {ocultos > 0 && (
+            <p className="nota">
+              Outros {ocultos} documentos deste dossiê são de outras etapas e não aparecem para o seu perfil. Documento de
+              cliente guarda CNH, CPF e conta de luz — cada um enxerga o que precisa para trabalhar.
+            </p>
+          )}
+          {visiveis.length === 0 ? (
+            <Vazio icone={<FolderOpen size={20} />} titulo="Nenhum documento ainda" />
+          ) : (
+            <div className="tabela-wrap tabela-no-cartao">
+              <table className="tabela">
+                <thead>
+                  <tr>
+                    <th>Tipo</th>
+                    <th>Arquivo</th>
+                    <th>Situação</th>
+                    <th>Versão</th>
+                    <th>De</th>
+                    <th>Quem enviou</th>
+                    <th></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {visiveis.map((d) => (
+                    <tr key={d.id}>
+                      <td className="forte">{ROTULO[d.tipo] ?? d.tipo}</td>
+                      {/* `title` porque o nome é cortado: os do Drive passam de 80
+                          caracteres e sem isto a informação some de vez. */}
+                      <td className="fraco nome-arquivo" title={d.nomeArquivo}>
+                        {d.nomeArquivo}
+                      </td>
+                      <td>
+                        {STATUS_ROTULO[d.status] ? (
+                          <span className={`pilula ${d.status === "assinado" ? "sev-info" : "sev-atencao"}`}>
+                            {STATUS_ROTULO[d.status]}
+                          </span>
+                        ) : (
+                          <span className="fraco">—</span>
+                        )}
+                      </td>
+                      <td className="fraco">{d.versao > 1 ? `v${d.versao}` : "—"}</td>
+                      <td className="fraco">{d.daVenda ? "desta venda" : "da pessoa"}</td>
+                      <td className="fraco">{d.enviadoPor ?? "importado do Drive"}</td>
+                      <td>
+                        {semDrive ? (
+                          d.linkDrive ? (
+                            <a href={d.linkDrive} target="_blank" rel="noreferrer" className="link-acao">
+                              <ExternalLink size={13} aria-hidden /> abrir no Google
+                            </a>
+                          ) : (
+                            "—"
+                          )
+                        ) : (
+                          <a href={`/documentos/arquivo/${d.id}`} className="link-acao">
+                            <Download size={13} aria-hidden /> baixar
+                          </a>
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </Cartao>
+
+        {futuras.length > 0 && (
+          <Cartao
+            titulo="Ainda não é hora"
+            icone={<Clock size={16} />}
+            contador={futuras.length}
+            ajuda="Estes documentos passam a ser cobrados mais adiante na esteira. Se já tiver em mãos, pode subir agora — não faz mal adiantar."
+          >
+            <div className="cartoes cartoes-no-cartao">
+              {futuras.map((e) => (
+                <div key={e.tipo} className="cartao cartao-documento">
+                  <h3>
+                    {ROTULO[e.tipo] ?? e.tipo} <span className="fraco">· {e.etapa.nome}</span>
+                  </h3>
+                  <p className="fraco">{e.observacao}</p>
+                  <EnvioDocumento
+                    projetoId={projeto.id}
+                    tipo={e.tipo}
+                    exigeAssinatura={e.exigeAssinatura}
+                    desabilitado={semDrive}
+                  />
+                </div>
+              ))}
+            </div>
+          </Cartao>
+        )}
+      </div>
     </main>
   );
 }

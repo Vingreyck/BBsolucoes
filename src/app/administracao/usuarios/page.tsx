@@ -1,10 +1,12 @@
 import { asc, eq } from "drizzle-orm";
+import { Info, KeyRound, UserPlus } from "lucide-react";
 import { redirect } from "next/navigation";
 
 import { formatarCpf, ocultarCpf } from "@/auth/cpf";
 import { exigirUsuario } from "@/auth/sessao";
 import { db, schema } from "@/db";
 
+import { Cabecalho, Cartao } from "../../_ui";
 import { Criar, Reiniciar, SeletorPapel } from "./formularios";
 import { OPCOES_PAPEL } from "./papeis";
 import { alternarAtivo, aprovarPedido, recusarPedido } from "./actions";
@@ -44,19 +46,22 @@ export default async function Usuarios() {
 
   return (
     <main>
-      <header className="topo">
-        <h1>Usuários</h1>
-        <span className="sub">{usuarios.length} contas</span>
-        {provisorias.length > 0 && (
-          <span className="alerta">{provisorias.length} com senha provisória</span>
-        )}
-        {pendentes.length > 0 && (
-          <span className="alerta">
-            {pendentes.length} {pendentes.length === 1 ? "pedido" : "pedidos"} de acesso
-            esperando aprovação
-          </span>
-        )}
-      </header>
+      <Cabecalho
+        titulo="Usuários"
+        selos={
+          <>
+            {pendentes.length > 0 && (
+              <span className="pilula sev-atencao">
+                {pendentes.length} {pendentes.length === 1 ? "pedido" : "pedidos"} de acesso
+              </span>
+            )}
+            {provisorias.length > 0 && (
+              <span className="pilula sev-critico">{provisorias.length} com senha provisória</span>
+            )}
+          </>
+        }
+        meta={<span>{usuarios.length} contas</span>}
+      />
 
       {genericas.length > 0 && (
         <p className="aviso">
@@ -72,8 +77,8 @@ export default async function Usuarios() {
       )}
 
       {pendentes.length > 0 && (
-        <section className="bloco">
-          <h2>Pedidos de acesso</h2>
+        <div className="pagina-corpo pagina-corpo-topo">
+        <Cartao titulo="Pedidos de acesso" icone={<UserPlus size={16} />} contador={pendentes.length} destaque>
           <p className="nota">
             Quem pediu acesso pelo app ou pelo site. Confira se a pessoa é mesmo da equipe, escolha o
             papel dela e libere. Recusar apaga o pedido.
@@ -112,11 +117,12 @@ export default async function Usuarios() {
               </li>
             ))}
           </ul>
-        </section>
+        </Cartao>
+        </div>
       )}
 
-      <section className="bloco">
-        <h2>Nova conta</h2>
+      <div className="pagina-corpo pagina-corpo-topo">
+      <Cartao titulo="Nova conta" icone={<KeyRound size={16} />}>
         <p className="nota">
           A senha sai sorteada e aparece <strong>uma vez só</strong> aqui na
           tela. Entregue à pessoa; ela é obrigada a trocar no primeiro acesso, e
@@ -124,7 +130,8 @@ export default async function Usuarios() {
           nos registros valer alguma coisa.
         </p>
         <Criar />
-      </section>
+      </Cartao>
+      </div>
 
       <div className="tabela-wrap">
         <table className="tabela">
@@ -184,12 +191,18 @@ export default async function Usuarios() {
         </table>
       </div>
 
-      <p className="aviso">
-        Contas são <strong>desativadas, nunca apagadas</strong>. Apagar levaria
-        junto quem enviou cada documento e quem anotou cada número de série — a
-        trilha sumiria justamente quando alguém sai da empresa, que é quando ela
-        mais importa. Desativado não entra mais e continua nomeado no histórico.
-      </p>
+      <details className="como-ler">
+        <summary>
+          <Info size={15} aria-hidden /> Por que as contas não são apagadas
+        </summary>
+        <div>
+          <p>
+            Contas são <strong>desativadas, nunca apagadas</strong>. Apagar levaria junto quem enviou cada documento e quem
+            anotou cada número de série — a trilha sumiria justamente quando alguém sai da empresa, que é quando ela mais
+            importa. Desativado não entra mais e continua nomeado no histórico.
+          </p>
+        </div>
+      </details>
     </main>
   );
 }
