@@ -1,4 +1,20 @@
 import { headers } from "next/headers";
+import {
+  CalendarClock,
+  Camera,
+  FileDown,
+  FileText,
+  History,
+  ListChecks,
+  MapPinned,
+  MessageCircle,
+  MessageSquare,
+  Navigation,
+  Phone,
+  PlayCircle,
+  Route,
+  UserRound,
+} from "lucide-react";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 
@@ -32,6 +48,7 @@ import {
   removerAnexoAction,
   renovarLinkAction,
 } from "../actions";
+import { Cabecalho, Caminho, Cartao, Dados } from "../../_ui";
 import { FormMotivo, Historico, ItemChecklist } from "./partes";
 import Trajeto from "./trajeto";
 
@@ -91,6 +108,10 @@ export default async function DetalheOs({
   const avulsas = os.anexos.filter((a) => a.categoria !== "assinatura" && !a.checklistItemId);
   const obrigatorios = os.checklist.filter((i) => i.obrigatorio);
   const pendentes = obrigatorios.filter((i) => !i.concluido);
+  const feitos = obrigatorios.length
+    ? obrigatorios.length - pendentes.length
+    : os.checklist.filter((i) => i.concluido).length;
+  const progressoChecklist = Math.round((feitos / Math.max(1, obrigatorios.length || os.checklist.length)) * 100);
   const agora = relogioAgora();
   const prazoVencido = !fechada && os.prazoSla !== null && os.prazoSla < agora;
 
@@ -128,24 +149,85 @@ export default async function DetalheOs({
         ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(endereco)}`
         : null;
 
+  /** O caminho da OS, como no ServiceTitan: onde ela está entre abrir e concluir. */
+  const PASSOS = [
+    { id: "aberta", nome: "A agendar" },
+    { id: "agendada", nome: "Agendada" },
+    { id: "em_deslocamento", nome: "A caminho" },
+    { id: "em_andamento", nome: "Em atendimento" },
+    { id: "concluida", nome: "Concluída" },
+  ];
+  const passoAtual =
+    os.status === "concluida"
+      ? PASSOS.length
+      : os.status === "aguardando_peca"
+        ? 3
+        : Math.max(0, PASSOS.findIndex((p) => p.id === os.status));
+
   return (
-    <main>
-      <header className="topo">
-        <h1>OS {numeroOs(os.numero)}</h1>
-        <span className={`pilula st-${os.status}`}>{STATUS_ROTULO[os.status] ?? os.status}</span>
-        <span className={`pilula pr-${os.prioridade}`}>{PRIORIDADE_ROTULO[os.prioridade] ?? os.prioridade}</span>
-        <span className="sub">
-          {TIPO_ROTULO[os.tipo] ?? os.tipo} · {os.cliente.nome}
-        </span>
-        <span className="acao-topo acoes-topo">
-          <Link href="/os" className="botao secundario">
-            ← Lista
-          </Link>
-          <a href={`/os/${os.id}/relatorio`} className="botao secundario" target="_blank" rel="noopener">
-            Relatório PDF
-          </a>
-        </span>
-      </header>
+    <main className="registro">
+      <Cabecalho
+        trilha={[{ href: "/os", rotulo: "Ordens de serviço" }]}
+        titulo={`OS ${numeroOs(os.numero)}`}
+        selos={
+          <>
+            <span className={`pilula st-${os.status}`}>{STATUS_ROTULO[os.status] ?? os.status}</span>
+            {os.prioridade !== "normal" && (
+              <span className={`pilula pr-${os.prioridade}`}>{PRIORIDADE_ROTULO[os.prioridade] ?? os.prioridade}</span>
+            )}
+          </>
+        }
+        meta={
+          <>
+            <span>{TIPO_ROTULO[os.tipo] ?? os.tipo}</span>
+            <span className="meta-pessoa">
+              <UserRound size={14} aria-hidden /> {os.cliente.nome}
+            </span>
+            <span className={`meta-pessoa${prazoVencido ? " texto-perigo" : ""}`}>
+              <CalendarClock size={14} aria-hidden />
+              {os.agendadaPara ? formatarRelogio(os.agendadaPara) : "sem data"}
+              {prazoVencido ? " · prazo vencido" : ""}
+            </span>
+            <span className="meta-pessoa">
+              <span className="avatar-mini" aria-hidden>
+                {(os.responsavel?.nome ?? "?").slice(0, 1).toUpperCase()}
+              </span>
+              {os.responsavel?.nome ?? "sem responsável"}
+            </span>
+          </>
+        }
+        acoes={
+          <>
+            {os.cliente.telefone && (
+              <a href={`tel:${soDigitos(os.cliente.telefone)}`} className="botao secundario" title="Ligar para o cliente">
+                <Phone size={15} aria-hidden /> Ligar
+              </a>
+            )}
+            {wa && (
+              <a href={`https://wa.me/${wa}`} className="botao secundario" target="_blank" rel="noopener">
+                <MessageCircle size={15} aria-hidden /> WhatsApp
+              </a>
+            )}
+            {mapaCliente && (
+              <a href={mapaCliente} className="botao secundario" target="_blank" rel="noopener">
+                <Navigation size={15} aria-hidden /> Rota
+              </a>
+            )}
+            <a href={`/os/${os.id}/relatorio`} className="botao secundario" target="_blank" rel="noopener">
+              <FileDown size={15} aria-hidden /> PDF
+            </a>
+          </>
+        }
+      />
+
+      <div className="faixa-caminho">
+        {os.status === "cancelada" ? (
+          <p className="aviso erro">Esta OS foi cancelada.</p>
+        ) : (
+          <Caminho etapas={PASSOS} atual={passoAtual} rotuloAtual="situação atual" />
+        )}
+        {os.status === "aguardando_peca" && <p className="aviso">Pausada: aguardando peça ou o cliente.</p>}
+      </div>
 
       {ok && <p className="aviso ok">{ok}</p>}
       {erro && (
@@ -154,10 +236,9 @@ export default async function DetalheOs({
         </p>
       )}
 
-      <div className="os-pagina">
-        <div className="os-principal">
-          <section className="bloco">
-            <h2>Solicitação</h2>
+      <div className="registro-grade">
+        <div className="registro-principal">
+          <Cartao titulo="Solicitação" icone={<FileText size={16} />}>
             <p className="descricao-os">{os.descricao}</p>
             {gestao && !fechada && (
               <details className="dobra">
@@ -190,11 +271,10 @@ export default async function DetalheOs({
                 </form>
               </details>
             )}
-          </section>
+          </Cartao>
 
           {!fechada && executa && (
-            <section className="bloco acoes-os">
-              <h2>Atendimento</h2>
+            <Cartao titulo="Atendimento" icone={<PlayCircle size={16} />} destaque>
               <div className="botoes">
                 {(os.status === "aberta" || os.status === "agendada") && (
                   <form action={acaoOsAction.bind(null, os.id)}>
@@ -281,19 +361,21 @@ export default async function DetalheOs({
                   <FormMotivo osId={os.id} acao="cancelar" motivos={MOTIVOS_CANCELAMENTO} botao="Cancelar OS" perigo />
                 </details>
               )}
-            </section>
+            </Cartao>
           )}
 
           {fechada && (
-            <section className="bloco">
-              <h2>
-                {os.status === "concluida" ? "Conclusão" : "Cancelada"}
-                {os.resultado && (
+            <Cartao
+              titulo={os.status === "concluida" ? "Conclusão" : "Cancelada"}
+              icone={<ListChecks size={16} />}
+              acao={
+                os.resultado ? (
                   <span className={`pilula ${os.resultado === "resolvido" ? "st-concluida" : "st-aguardando_peca"}`}>
                     {RESULTADO_ROTULO[os.resultado] ?? os.resultado}
                   </span>
-                )}
-              </h2>
+                ) : null
+              }
+            >
               {os.laudo && <p className="descricao-os">{os.laudo}</p>}
               {os.status === "concluida" && (
                 <dl className="campos">
@@ -334,18 +416,25 @@ export default async function DetalheOs({
                   </details>
                 </div>
               )}
-            </section>
+            </Cartao>
           )}
 
-          <section className="bloco">
-            <h2>
-              Checklist
-              <span className="contador">
-                {obrigatorios.length
-                  ? `${obrigatorios.length - pendentes.length}/${obrigatorios.length} obrigatórios`
-                  : `${os.checklist.filter((i) => i.concluido).length}/${os.checklist.length}`}
-              </span>
-            </h2>
+          <Cartao
+            titulo="Checklist"
+            icone={<ListChecks size={16} />}
+            contador={
+              obrigatorios.length
+                ? `${obrigatorios.length - pendentes.length}/${obrigatorios.length} obrigatórios`
+                : `${os.checklist.filter((i) => i.concluido).length}/${os.checklist.length}`
+            }
+            acao={
+              os.checklist.length > 0 ? (
+                <span className="progresso" aria-hidden>
+                  <span style={{ width: `${progressoChecklist}%` }} />
+                </span>
+              ) : null
+            }
+          >
             {os.checklist.length === 0 ? (
               <p className="nota">Esta OS não tem checklist — o modelo do tipo dela está vazio.</p>
             ) : (
@@ -366,13 +455,9 @@ export default async function DetalheOs({
                 </div>
               ))
             )}
-          </section>
+          </Cartao>
 
-          <section className="bloco" id="anexos">
-            <h2>
-              Outras fotos e assinatura
-              <span className="contador">{avulsas.length + (assinatura ? 1 : 0)}</span>
-            </h2>
+          <Cartao id="anexos" titulo="Outras fotos e assinatura" icone={<Camera size={16} />} contador={avulsas.length + (assinatura ? 1 : 0)}>
             {avulsas.length === 0 && !assinatura && <p className="nota">Nenhum anexo fora do checklist.</p>}
             {(avulsas.length > 0 || assinatura) && (
               <div className="fotos-item">
@@ -411,10 +496,9 @@ export default async function DetalheOs({
                 </button>
               </form>
             )}
-          </section>
+          </Cartao>
 
-          <section className="bloco" id="relatorio">
-            <h2>Relatório para o cliente</h2>
+          <Cartao id="relatorio" titulo="Relatório para o cliente" icone={<FileDown size={16} />}>
             <p className="nota">
               O PDF é gerado na hora, com as fotos, o checklist e a assinatura.
               {!fechada && " Enquanto a OS não é concluída, ele sai marcado como parcial."}
@@ -451,13 +535,9 @@ export default async function DetalheOs({
             ) : (
               <p className="nota">O link para mandar ao cliente é criado quando a OS é concluída.</p>
             )}
-          </section>
+          </Cartao>
 
-          <section className="bloco" id="comentarios">
-            <h2>
-              Comentários
-              <span className="contador">{comentarios.length}</span>
-            </h2>
+          <Cartao id="comentarios" titulo="Comentários" icone={<MessageSquare size={16} />} contador={comentarios.length || undefined}>
             {comentarios.length > 0 && (
               <ul className="comentarios">
                 {comentarios.map((c) => (
@@ -476,71 +556,61 @@ export default async function DetalheOs({
                 Comentar
               </button>
             </form>
-          </section>
+          </Cartao>
         </div>
 
-        <aside className="os-lateral">
-          <section className="bloco">
-            <h2>Cliente</h2>
-            <dl className="campos">
-              <div>
-                <dt>Nome</dt>
-                <dd>{os.cliente.nome}</dd>
-              </div>
-              {os.cliente.telefone && (
-                <div>
-                  <dt>Telefone</dt>
-                  <dd>
-                    <a href={`tel:${soDigitos(os.cliente.telefone)}`}>{os.cliente.telefone}</a>
-                    {wa && (
-                      <>
-                        {" · "}
-                        <a href={`https://wa.me/${wa}`} target="_blank" rel="noopener">
-                          WhatsApp
-                        </a>
-                      </>
-                    )}
-                  </dd>
-                </div>
-              )}
-              <div>
-                <dt>Endereço</dt>
-                <dd>
-                  {endereco || <span className="fraco">não cadastrado</span>}
-                  {mapaCliente && (
+        <aside className="registro-lateral">
+          <Cartao titulo="Cliente" icone={<UserRound size={16} />}>
+            <Dados
+              itens={[
+                ["Nome", os.cliente.nome],
+                [
+                  "Telefone",
+                  os.cliente.telefone ? (
                     <>
-                      {" · "}
-                      <a href={mapaCliente} target="_blank" rel="noopener">
-                        mapa
-                      </a>
+                      <a href={`tel:${soDigitos(os.cliente.telefone)}`}>{os.cliente.telefone}</a>
+                      {wa && (
+                        <>
+                          {" · "}
+                          <a href={`https://wa.me/${wa}`} target="_blank" rel="noopener">
+                            WhatsApp
+                          </a>
+                        </>
+                      )}
                     </>
-                  )}
-                </dd>
-              </div>
-              {os.usina && (
-                <div>
-                  <dt>Usina</dt>
-                  <dd>{os.usina.nome}</dd>
-                </div>
-              )}
-              <div>
-                <dt>Venda</dt>
-                <dd>
-                  {os.projeto ? (
+                  ) : null,
+                ],
+                [
+                  "Endereço",
+                  endereco ? (
+                    <>
+                      {endereco}
+                      {mapaCliente && (
+                        <>
+                          {" · "}
+                          <a href={mapaCliente} target="_blank" rel="noopener">
+                            mapa
+                          </a>
+                        </>
+                      )}
+                    </>
+                  ) : null,
+                ],
+                ["Usina", os.usina?.nome],
+                [
+                  "Venda",
+                  os.projeto ? (
                     <>
                       <Link href={`/projeto/${os.projeto.id}`}>{os.projeto.titulo}</Link>
                       <span className="fraco"> · {os.projeto.etapa.nome}</span>
                     </>
-                  ) : (
-                    <span className="fraco">não ligada a uma venda</span>
-                  )}
-                </dd>
-              </div>
-            </dl>
-          </section>
+                  ) : null,
+                ],
+              ]}
+            />
+          </Cartao>
 
-          <section className="bloco">
-            <h2>Quem e quando</h2>
+          <Cartao titulo="Quem e quando" icone={<CalendarClock size={16} />}>
             <dl className="campos">
               <div>
                 <dt>Responsável</dt>
@@ -623,10 +693,9 @@ export default async function DetalheOs({
                 )}
               </>
             )}
-          </section>
+          </Cartao>
 
-          <section className="bloco">
-            <h2>Em campo</h2>
+          <Cartao titulo="Em campo" icone={<MapPinned size={16} />}>
             <dl className="campos">
               <div>
                 <dt>Chegada</dt>
@@ -651,19 +720,17 @@ export default async function DetalheOs({
                 <dd className={tempo.ms ? "" : "fraco"}>{tempo.ms ? formatarDuracao(tempo.ms) : "—"}</dd>
               </div>
             </dl>
-          </section>
+          </Cartao>
 
           {mostrarTrajeto && (
-            <section className="bloco" id="trajeto">
-              <h2>Trajeto</h2>
+            <Cartao id="trajeto" titulo="Trajeto" icone={<Route size={16} />}>
               <Trajeto osId={os.id} status={os.status} tecnico={os.responsavel?.nome ?? null} aoVivo={gestao} />
-            </section>
+            </Cartao>
           )}
 
-          <section className="bloco">
-            <h2>Histórico</h2>
+          <Cartao titulo="Histórico" icone={<History size={16} />}>
             <Historico eventos={os.eventos} />
-          </section>
+          </Cartao>
         </aside>
       </div>
     </main>

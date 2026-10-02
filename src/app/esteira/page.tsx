@@ -6,6 +6,9 @@ import { exigirUsuario } from "@/auth/sessao";
 import { db } from "@/db";
 import { etapa as etapaTable } from "@/db/schema";
 
+import { Info, Plus } from "lucide-react";
+
+import { Cabecalho } from "../_ui";
 import { moverProjeto } from "../actions";
 import { kWp } from "../formatar";
 
@@ -78,38 +81,45 @@ export default async function Esteira() {
 
   return (
     <main>
-      <header className="topo">
-        <h1>Esteira de projetos</h1>
-        <span className="sub">
-          {abertos.length} em aberto
-          {concluidos > 0 && ` · ${concluidos} concluídos`}
-        </span>
-        {parados.length > 0 && (
-          <span className="alerta">
-            {parados.length} parados há {DIAS_ATENCAO} dias ou mais
-          </span>
-        )}
-        <a href="/projeto/novo" className="botao acao-topo">
-          Novo projeto
-        </a>
-      </header>
+      <Cabecalho
+        titulo="Esteira de projetos"
+        selos={
+          parados.length > 0 ? (
+            <span className="pilula sev-atencao">
+              {parados.length} parados há {DIAS_ATENCAO}+ dias
+            </span>
+          ) : undefined
+        }
+        meta={
+          <>
+            <span>{abertos.length} em aberto</span>
+            {concluidos > 0 && <span>{concluidos} concluídos</span>}
+          </>
+        }
+        acoes={
+          <a href="/projeto/novo" className="botao">
+            <Plus size={15} aria-hidden /> Novo projeto
+          </a>
+        }
+      />
 
-      <p className="aviso">
-        As 13 etapas do fluxo, confirmadas com o cliente. A{" "}
-        <strong>Execução</strong> é a etapa que mais gera retrabalho, e para
-        onde o projeto volta quando a concessionária reprova — use a seta para
-        trás.
-      </p>
-
-      <p className="aviso">
-        Os dossiês vindos do Drive entraram com a etapa{" "}
-        <strong>deduzida pelos documentos que existem na pasta</strong>, não
-        informada por ninguém — um dossiê sem a conta de luz foi parar em coleta
-        de informações, um sem foto do padrão em vistoria técnica. Confira antes
-        de cobrar alguém por isso. Os {concluidos} concluídos são os que já têm
-        usina gerando e saem do quadro. Detalhe de cada um em{" "}
-        <a href="/documentos">Dossiês</a>.
-      </p>
+      <details className="como-ler">
+        <summary>
+          <Info size={15} aria-hidden /> Como ler a esteira
+        </summary>
+        <div>
+          <p>
+            As 13 etapas do fluxo, confirmadas com o cliente. A <strong>Execução</strong> é a etapa que mais gera
+            retrabalho, e para onde o projeto volta quando a concessionária reprova — use a seta para trás.
+          </p>
+          <p>
+            Os dossiês vindos do Drive entraram com a etapa <strong>deduzida pelos documentos que existem na pasta</strong>,
+            não informada por ninguém — um dossiê sem a conta de luz foi parar em coleta de informações, um sem foto do
+            padrão em vistoria técnica. Confira antes de cobrar alguém por isso. Os {concluidos} concluídos são os que já
+            têm usina gerando e saem do quadro. Detalhe de cada um em <a href="/documentos">Dossiês</a>.
+          </p>
+        </div>
+      </details>
 
       <div className="esteira">
         {etapas.map((e) => {

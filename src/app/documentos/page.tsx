@@ -1,4 +1,5 @@
 import { asc, eq } from "drizzle-orm";
+import { Info } from "lucide-react";
 
 import { exigirAcessoDocumentos } from "@/auth/permissao";
 import { db, schema } from "@/db";
@@ -328,25 +329,32 @@ export default async function Documentos({
         </p>
       )}
 
-      <p className="aviso">
-        <strong>Cada documento só é cobrado a partir da etapa em que deveria
-        existir.</strong>{" "}
-        A conta de luz na coleta de informações, as fotos do padrão na vistoria
-        técnica, o documento do titular na documentação, contrato e procuração
-        no contrato, projeto/memorial/ART no projeto, o protocolo na aprovação
-        da concessionária. Quem fechou ontem não aparece devendo ART. A regra
-        está na tabela <code>exigencia_documento</code> e é para o dono
-        corrigir olhando.
-      </p>
+      <details className="como-ler">
+        <summary>
+          <Info size={15} aria-hidden /> Como os documentos são cobrados
+        </summary>
+        <div>
+          <p>
+            <strong>Cada documento só é cobrado a partir da etapa em que deveria
+            existir.</strong>{" "}
+            A conta de luz na coleta de informações, as fotos do padrão na vistoria
+            técnica, o documento do titular na documentação, contrato e procuração
+            no contrato, projeto/memorial/ART no projeto, o protocolo na aprovação
+            da concessionária. Quem fechou ontem não aparece devendo ART. A regra
+            está na tabela <code>exigencia_documento</code> e é para o dono
+            corrigir olhando.
+          </p>
 
-      <p className="aviso">
-        <strong>Arquivo de trabalho não conta como documento.</strong> O{" "}
-        <code>.dwg</code> do projeto e a planilha <code>.xlsm</code> do memorial
-        são o meio do caminho — nove clientes tinham como único memorial a
-        planilha e passavam por completos. Documento pessoal fica com a pessoa,
-        não com a venda: quem já mandou a CNH não precisa mandar de novo no
-        segundo projeto.
-      </p>
+          <p>
+            <strong>Arquivo de trabalho não conta como documento.</strong> O{" "}
+            <code>.dwg</code> do projeto e a planilha <code>.xlsm</code> do memorial
+            são o meio do caminho — nove clientes tinham como único memorial a
+            planilha e passavam por completos. Documento pessoal fica com a pessoa,
+            não com a venda: quem já mandou a CNH não precisa mandar de novo no
+            segundo projeto.
+          </p>
+        </div>
+      </details>
 
       <div className="tabela-wrap">
         <table className="tabela">

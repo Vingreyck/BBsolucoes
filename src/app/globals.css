@@ -4177,3 +4177,1217 @@ a.resultado:hover {
     display: none;
   }
 }
+
+/* =========================================================================
+ * Telas internas: cabeçalho, cartões, caminho de etapas, página de registro.
+ * ========================================================================= */
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* botões com ícone: o ícone alinha com o texto */
+.botao {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.35rem;
+}
+
+.botao:disabled,
+.botao[aria-disabled="true"] {
+  opacity: 0.45;
+  cursor: default;
+  pointer-events: none;
+}
+
+.botao.secundario {
+  background: var(--surface);
+  border-color: var(--line);
+  color: var(--ink);
+  box-shadow: var(--shadow);
+}
+
+.botao.secundario:hover {
+  border-color: var(--ink-3);
+  background: var(--surface-2);
+}
+
+.grupo-botoes {
+  display: inline-flex;
+  gap: 0.35rem;
+}
+
+.grupo-botoes form {
+  display: contents;
+}
+
+/* ---- cabeçalho ------------------------------------------------------- */
+
+.cabecalho {
+  padding: 1.1rem clamp(1rem, 3vw, 2rem) 1.15rem;
+  background: var(--surface);
+  border-bottom: 1px solid var(--line-soft);
+}
+
+.ui-trilha {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.15rem;
+  margin-bottom: 0.45rem;
+  font-size: 0.8rem;
+}
+
+.ui-trilha span {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.15rem;
+  color: var(--ink-3);
+}
+
+.ui-trilha a {
+  color: var(--ink-3);
+  text-decoration: none;
+}
+
+.ui-trilha a:hover {
+  color: var(--accent);
+}
+
+.cabecalho-linha {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.85rem 1.5rem;
+}
+
+.cabecalho-texto {
+  min-width: 0;
+}
+
+.cabecalho-titulo {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem 0.65rem;
+}
+
+.cabecalho-titulo h1 {
+  margin: 0;
+  font-size: 1.55rem;
+  font-weight: 700;
+  letter-spacing: -0.03em;
+  line-height: 1.2;
+}
+
+.cabecalho-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.35rem 1rem;
+  margin-top: 0.4rem;
+  font-size: 0.85rem;
+  color: var(--ink-2);
+}
+
+.cabecalho-acoes {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.ui-selo {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.18rem 0.6rem;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+  background: var(--surface-2);
+  color: var(--ink-2);
+  font-size: 0.75rem;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.ui-selo-marca {
+  border-color: color-mix(in srgb, var(--accent) 35%, transparent);
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+
+.meta-pessoa {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.avatar-mini {
+  display: inline-grid;
+  place-items: center;
+  flex-shrink: 0;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: var(--accent-soft);
+  color: var(--accent);
+  font-size: 0.66rem;
+  font-weight: 700;
+}
+
+/* ---- caminho de etapas (o "Path") ------------------------------------- */
+
+.faixa-caminho {
+  padding: 1rem clamp(1rem, 3vw, 2rem) 0;
+}
+
+.caminho {
+  list-style: none;
+  display: flex;
+  margin: 0;
+  padding: 0;
+  overflow: hidden;
+  border-radius: 8px;
+}
+
+.caminho-passo {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  /* todas dividem a largura; o nome encolhe com reticências e aparece
+     inteiro no título (passar o mouse). Só a atual não encolhe. */
+  flex: 1 1 0;
+  min-width: 2.6rem;
+  padding: 0.45rem 0.9rem 0.45rem 1.35rem;
+  margin-right: -6px;
+  background: var(--surface);
+  color: var(--ink-3);
+  font-size: 0.76rem;
+  font-weight: 600;
+  white-space: nowrap;
+  clip-path: polygon(0 0, calc(100% - 10px) 0, 100% 50%, calc(100% - 10px) 100%, 0 100%, 10px 50%);
+  box-shadow: inset 0 0 0 1px var(--line-soft);
+}
+
+.caminho-passo:first-child {
+  padding-left: 0.85rem;
+  border-radius: 8px 0 0 8px;
+  clip-path: polygon(0 0, calc(100% - 10px) 0, 100% 50%, calc(100% - 10px) 100%, 0 100%);
+}
+
+.caminho-passo.feita {
+  background: color-mix(in srgb, var(--accent) 16%, var(--surface));
+  color: var(--accent);
+}
+
+.caminho-passo.atual {
+  background: var(--accent);
+  color: #fff;
+}
+
+.caminho-passo.atual {
+  flex: 0 0 auto;
+}
+
+/* feita: só o visto — o nome fica no título, ao passar o mouse */
+.caminho-compacto .caminho-passo.feita {
+  flex: 0 0 2.75rem;
+  justify-content: center;
+  padding-left: 1.1rem;
+  padding-right: 0.7rem;
+}
+
+.caminho-compacto .caminho-passo.feita:first-child {
+  padding-left: 0.6rem;
+}
+
+.caminho-compacto .caminho-passo.feita .caminho-nome {
+  display: none;
+}
+
+.caminho-nome {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.caminho-marca {
+  flex-shrink: 0;
+  display: inline-grid;
+  place-items: center;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: color-mix(in srgb, currentColor 16%, transparent);
+  font-size: 0.66rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.caminho-passo.atual .caminho-marca {
+  background: rgba(255, 255, 255, 0.25);
+}
+
+.guia {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.75rem 1rem;
+  margin-top: 0.75rem;
+  padding: 0.85rem 1rem;
+  border-radius: var(--raio);
+  background: var(--surface);
+  border: 1px solid var(--line-soft);
+  border-left: 3px solid var(--accent);
+  box-shadow: var(--shadow);
+}
+
+.guia-icone {
+  display: grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  border-radius: 8px;
+  background: var(--accent-soft);
+  color: var(--accent);
+  flex-shrink: 0;
+}
+
+.guia-texto {
+  flex: 1;
+  min-width: 14rem;
+}
+
+.guia-texto strong {
+  font-size: 0.9rem;
+}
+
+.guia-texto p {
+  margin: 0.15rem 0 0;
+  font-size: 0.84rem;
+  color: var(--ink-2);
+}
+
+/* ---- página de registro: conteúdo + resumo ------------------------------ */
+
+.registro-grade {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 340px;
+  gap: 1rem;
+  align-items: start;
+  padding: 1rem clamp(1rem, 3vw, 2rem) 3rem;
+}
+
+.registro-principal,
+.registro-lateral {
+  display: grid;
+  gap: 1rem;
+  min-width: 0;
+}
+
+.registro-lateral {
+  position: sticky;
+  top: 72px;
+}
+
+@media (max-width: 1100px) {
+  .registro-grade {
+    grid-template-columns: 1fr;
+  }
+
+  .registro-lateral {
+    position: static;
+    order: -1;
+  }
+}
+
+/* ---- cartão ------------------------------------------------------------ */
+
+.ui-cartao {
+  background: var(--surface);
+  border: 1px solid var(--line-soft);
+  border-radius: var(--raio);
+  box-shadow: var(--shadow);
+  min-width: 0;
+}
+
+.ui-cartao-destaque {
+  border-color: color-mix(in srgb, var(--accent) 40%, var(--line-soft));
+}
+
+.ui-cartao-topo {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 0.8rem 1.1rem;
+  border-bottom: 1px solid var(--line-soft);
+}
+
+.ui-cartao-topo h2 {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin: 0;
+  font-size: 0.95rem;
+  font-weight: 650;
+  letter-spacing: -0.01em;
+}
+
+.ui-cartao-icone {
+  display: grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  border-radius: 7px;
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+
+.ui-cartao-corpo {
+  padding: 1rem 1.1rem 1.1rem;
+}
+
+.ui-cartao-corpo > :last-child {
+  margin-bottom: 0;
+}
+
+.link-acao {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  color: var(--accent);
+  font-size: 0.82rem;
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.link-acao:hover {
+  text-decoration: underline;
+}
+
+/* lista que encosta nas bordas do cartão */
+.lista-colada {
+  margin: -1rem -1.1rem -1.1rem;
+}
+
+.lista-colada li:last-child a {
+  border-radius: 0 0 var(--raio) var(--raio);
+}
+
+/* ---- ajuda recolhida ("?") -------------------------------------------- */
+
+.ui-ajuda {
+  position: relative;
+  display: inline-flex;
+  font-weight: 400;
+}
+
+.ui-ajuda summary {
+  display: grid;
+  place-items: center;
+  list-style: none;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  color: var(--ink-3);
+  cursor: pointer;
+}
+
+.ui-ajuda summary::-webkit-details-marker {
+  display: none;
+}
+
+.ui-ajuda summary:hover,
+.ui-ajuda[open] summary {
+  color: var(--accent);
+  background: var(--accent-soft);
+}
+
+.ui-ajuda-texto {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: -0.5rem;
+  z-index: 30;
+  width: min(340px, 80vw);
+  padding: 0.75rem 0.85rem;
+  border-radius: var(--raio);
+  background: var(--surface);
+  border: 1px solid var(--line-soft);
+  box-shadow: var(--shadow-alta);
+  font-size: 0.82rem;
+  line-height: 1.5;
+  color: var(--ink-2);
+  letter-spacing: 0;
+}
+
+/* ---- estado vazio ------------------------------------------------------- */
+
+.vazio-novo {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.45rem;
+  padding: 1.25rem 1rem;
+  text-align: center;
+}
+
+.vazio-icone {
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  border-radius: 12px;
+  background: var(--surface-2);
+  border: 1px solid var(--line-soft);
+  color: var(--ink-3);
+}
+
+.vazio-novo strong {
+  font-size: 0.92rem;
+}
+
+.vazio-novo p {
+  margin: 0 0 0.35rem;
+  max-width: 34rem;
+  font-size: 0.84rem;
+  color: var(--ink-3);
+}
+
+/* ---- dados (rótulo e valor) -------------------------------------------- */
+
+.dados {
+  margin: 0;
+  display: grid;
+}
+
+.dados > div {
+  display: grid;
+  grid-template-columns: 8.5rem minmax(0, 1fr);
+  gap: 0.75rem;
+  padding: 0.5rem 0;
+  border-bottom: 1px dashed var(--line-soft);
+  font-size: 0.86rem;
+}
+
+.dados > div:first-child {
+  padding-top: 0;
+}
+
+.dados > div:last-child {
+  border-bottom: 0;
+  padding-bottom: 0;
+}
+
+.dados dt {
+  color: var(--ink-3);
+}
+
+.dados dd {
+  margin: 0;
+  font-weight: 500;
+  overflow-wrap: anywhere;
+}
+
+.dados-vazio {
+  color: var(--ink-3);
+  font-weight: 400;
+}
+
+/* as respostas da vistoria: duas colunas de pares, com o rótulo em cima */
+.dados-grade {
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 0.6rem;
+}
+
+.dados-grade > div,
+.dados-grade > div:first-child,
+.dados-grade > div:last-child {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  padding: 0.6rem 0.75rem;
+  border: 1px solid var(--line-soft);
+  border-radius: var(--raio-p);
+  background: var(--surface-2);
+}
+
+.dados-grade dt {
+  font-size: 0.76rem;
+}
+
+.faixa-info {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 0.75rem;
+  padding: 0.55rem 0.75rem;
+  border-radius: var(--raio-p);
+  background: var(--surface-2);
+  font-size: 0.86rem;
+}
+
+.faixa-info svg {
+  color: var(--accent);
+  flex-shrink: 0;
+}
+
+/* detalhes recolhidos dentro de um cartão */
+.dobra-limpa {
+  margin-top: 0.85rem;
+  border-top: 1px solid var(--line-soft);
+  padding-top: 0.75rem;
+}
+
+.dobra-limpa > summary {
+  cursor: pointer;
+  width: fit-content;
+  font-size: 0.84rem;
+  font-weight: 600;
+  color: var(--ink-2);
+}
+
+.dobra-limpa > summary:hover {
+  color: var(--accent);
+}
+
+.dobra-limpa[open] > summary {
+  margin-bottom: 0.75rem;
+}
+
+/* ---- conversa ----------------------------------------------------------- */
+
+.conversa {
+  list-style: none;
+  margin: 0 0 1rem;
+  padding: 0;
+  display: grid;
+  gap: 0.85rem;
+}
+
+.conversa li {
+  display: flex;
+  gap: 0.6rem;
+}
+
+.conversa .avatar-mini {
+  width: 30px;
+  height: 30px;
+  font-size: 0.72rem;
+}
+
+.conversa-autor {
+  font-size: 0.8rem;
+  font-weight: 600;
+}
+
+.conversa p {
+  margin: 0.2rem 0 0;
+  padding: 0.55rem 0.75rem;
+  border-radius: 4px var(--raio) var(--raio) var(--raio);
+  background: var(--surface-2);
+  border: 1px solid var(--line-soft);
+  font-size: 0.88rem;
+  white-space: pre-wrap;
+}
+
+.form-conversa {
+  display: flex;
+  gap: 0.5rem;
+  align-items: flex-end;
+}
+
+.form-conversa textarea {
+  flex: 1;
+  resize: vertical;
+  min-height: 2.6rem;
+}
+
+/* ---- linha do tempo ---------------------------------------------------- */
+
+.tempo {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  position: relative;
+}
+
+.tempo li {
+  position: relative;
+  display: flex;
+  gap: 0.75rem;
+  padding-bottom: 0.9rem;
+}
+
+.tempo li:last-child {
+  padding-bottom: 0;
+}
+
+/* o fio que liga os pontos */
+.tempo li:not(:last-child)::before {
+  content: "";
+  position: absolute;
+  left: 5px;
+  top: 14px;
+  bottom: 0;
+  width: 2px;
+  background: var(--line-soft);
+}
+
+.tempo-ponto {
+  flex-shrink: 0;
+  width: 12px;
+  height: 12px;
+  margin-top: 3px;
+  border-radius: 50%;
+  border: 2px solid var(--accent);
+  background: var(--surface);
+}
+
+.tempo li:first-child .tempo-ponto {
+  background: var(--accent);
+}
+
+.tempo strong {
+  display: block;
+  font-size: 0.85rem;
+}
+
+.tempo small {
+  font-size: 0.76rem;
+  color: var(--ink-3);
+}
+
+/* ---- peças antigas com o acabamento novo -------------------------------- */
+
+.bloco {
+  box-shadow: var(--shadow);
+}
+
+.bloco h2 {
+  align-items: center;
+}
+
+.bloco .contador {
+  padding: 0 0.45rem;
+  border-radius: 999px;
+  background: var(--surface-2);
+  border: 1px solid var(--line-soft);
+  font-size: 0.72rem;
+  font-weight: 600;
+}
+
+.form-ficha label {
+  font-size: 0.8rem;
+  color: var(--ink);
+}
+
+.form-ficha input,
+.form-ficha select,
+.form-ficha textarea {
+  background: var(--surface);
+  padding: 0.5rem 0.65rem;
+  border-radius: 8px;
+  transition: border-color 0.12s, box-shadow 0.12s;
+}
+
+.form-ficha input:focus-visible,
+.form-ficha select:focus-visible,
+.form-ficha textarea:focus-visible {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-soft);
+}
+
+.ficha-acoes {
+  justify-content: flex-end;
+}
+
+.ficha-acoes button {
+  border-radius: 8px;
+  color: #fff;
+  transition: background 0.12s;
+}
+
+.ficha-acoes button:hover {
+  background: var(--accent-forte);
+  border-color: var(--accent-forte);
+}
+
+.form-serial input {
+  flex: 1;
+  min-width: 10rem;
+}
+
+.seriais li {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.5rem 0.65rem;
+  border: 1px solid var(--line-soft);
+  border-radius: var(--raio-p);
+  background: var(--surface-2);
+}
+
+.seriais li form {
+  margin-left: auto;
+}
+
+.pilula.st-em_deslocamento {
+  color: var(--data);
+  background: color-mix(in srgb, var(--data) 14%, transparent);
+}
+
+.pilula {
+  border-radius: 999px;
+  padding: 0.12rem 0.55rem;
+}
+
+.erro {
+  color: var(--crit);
+  font-size: 0.84rem;
+}
+
+.ui-cartao-corpo a:not(.botao):not(.linha-os):not(.link-acao) {
+  color: var(--accent);
+}
+
+@media (max-width: 700px) {
+  /* no celular só a etapa atual mostra o nome */
+  .caminho-passo:not(.atual) .caminho-nome {
+    display: none;
+  }
+
+  .caminho-passo:not(.atual) {
+    flex: 0 0 2.6rem;
+    justify-content: center;
+    padding-left: 1rem;
+    padding-right: 0.6rem;
+  }
+}
+
+/* =========================================================================
+ * Tela da OS no formato novo
+ * ========================================================================= */
+
+.ui-cartao .botoes {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  align-items: center;
+}
+
+.faixa-caminho .aviso {
+  margin: 0.75rem 0 0;
+  max-width: none;
+}
+
+.registro > .aviso {
+  margin-left: clamp(1rem, 3vw, 2rem);
+  margin-right: clamp(1rem, 3vw, 2rem);
+  max-width: none;
+}
+
+/* barra de progresso do checklist, no canto do cartão */
+.progresso {
+  display: block;
+  width: 120px;
+  height: 8px;
+  border-radius: 999px;
+  background: var(--surface-2);
+  border: 1px solid var(--line-soft);
+  overflow: hidden;
+}
+
+.progresso span {
+  display: block;
+  height: 100%;
+  border-radius: 999px;
+  background: linear-gradient(90deg, var(--accent), #e5894a);
+  transition: width 0.3s ease;
+}
+
+/* itens do checklist: um cartão por item, com marca redonda */
+.itens-os {
+  gap: 0.6rem;
+}
+
+.item-os {
+  padding: 0.75rem 0.9rem;
+  background: var(--surface);
+  border: 1px solid var(--line-soft);
+  border-left-width: 1px;
+  border-radius: var(--raio);
+  transition: border-color 0.12s, box-shadow 0.12s;
+}
+
+.item-os:hover {
+  border-color: var(--line);
+}
+
+.item-os.cumprido {
+  background: color-mix(in srgb, var(--ok) 4%, var(--surface));
+  border-color: color-mix(in srgb, var(--ok) 28%, var(--line-soft));
+}
+
+.item-os.pendente {
+  border-color: color-mix(in srgb, var(--accent) 30%, var(--line-soft));
+}
+
+.item-topo {
+  align-items: center;
+}
+
+.marca-item {
+  display: inline-grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: var(--surface-2);
+  border: 1px solid var(--line);
+  font-size: 0.72rem;
+}
+
+.item-os.cumprido .marca-item {
+  background: var(--ok);
+  border-color: var(--ok);
+  color: #fff;
+}
+
+.item-os.pendente .marca-item {
+  background: var(--accent-soft);
+  border-color: color-mix(in srgb, var(--accent) 40%, transparent);
+  color: var(--accent);
+}
+
+.item-nome {
+  font-weight: 600;
+  font-size: 0.9rem;
+}
+
+.obrigatorio {
+  border-radius: 999px;
+  padding: 0.08rem 0.45rem;
+  font-weight: 600;
+}
+
+.secao-checklist + .secao-checklist {
+  margin-top: 1.1rem;
+}
+
+.secao-checklist h3 {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.secao-checklist h3::after {
+  content: "";
+  flex: 1;
+  height: 1px;
+  background: var(--line-soft);
+}
+
+.fotos-item img {
+  border-radius: 8px;
+  transition: transform 0.12s, box-shadow 0.12s;
+}
+
+.fotos-item a:hover img {
+  transform: scale(1.03);
+  box-shadow: var(--shadow-alta);
+}
+
+/* painéis que abrem e fecham (concluir, pausar, cancelar…) como sanfona */
+.dobra {
+  border: 1px solid var(--line-soft);
+  border-radius: var(--raio-p);
+  background: var(--surface);
+}
+
+.dobra > summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: auto;
+  padding: 0.6rem 0.8rem;
+  list-style: none;
+  color: var(--ink);
+}
+
+.dobra > summary::-webkit-details-marker {
+  display: none;
+}
+
+.dobra > summary::after {
+  content: "";
+  width: 7px;
+  height: 7px;
+  border-right: 2px solid var(--ink-3);
+  border-bottom: 2px solid var(--ink-3);
+  transform: rotate(45deg);
+  transition: transform 0.15s;
+}
+
+.dobra[open] > summary::after {
+  transform: rotate(225deg);
+}
+
+.dobra > summary:hover {
+  color: var(--accent);
+}
+
+.dobra[open] > summary {
+  border-bottom: 1px solid var(--line-soft);
+}
+
+.dobra > :not(summary) {
+  margin: 0.75rem 0.8rem;
+}
+
+/* histórico da OS como linha do tempo */
+.historico {
+  gap: 0;
+}
+
+.historico li {
+  position: relative;
+  grid-template-columns: 4.4rem 1fr;
+  padding: 0 0 0.75rem 0;
+  border-bottom: 0;
+}
+
+.historico li::before {
+  content: "";
+  position: absolute;
+  left: 4.8rem;
+  top: 0.4rem;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--accent);
+}
+
+.historico li:not(:last-child)::after {
+  content: "";
+  position: absolute;
+  left: calc(4.8rem + 3px);
+  top: 0.95rem;
+  bottom: 0;
+  width: 2px;
+  background: var(--line-soft);
+}
+
+.historico .o-que {
+  padding-left: 1.1rem;
+}
+
+.form-resposta select,
+.form-resposta input[type="text"],
+.form-resposta textarea,
+.form-foto select,
+.form-comentario textarea,
+.link-publico input {
+  background: var(--surface);
+  border-radius: 8px;
+}
+
+/* as listas de rótulo e valor antigas (.campos) com a cara do resumo novo */
+.campos {
+  gap: 0;
+}
+
+.campos > div {
+  display: grid;
+  grid-template-columns: 7.5rem minmax(0, 1fr);
+  gap: 0.75rem;
+  padding: 0.5rem 0;
+  border-bottom: 1px dashed var(--line-soft);
+}
+
+.campos > div:first-child {
+  padding-top: 0;
+}
+
+.campos > div:last-child {
+  border-bottom: 0;
+}
+
+.campos dt {
+  font-size: 0.86rem;
+  font-weight: 400;
+  letter-spacing: 0;
+  text-transform: none;
+  color: var(--ink-3);
+  padding-top: 0;
+}
+
+.campos dd {
+  font-size: 0.86rem;
+  font-weight: 500;
+}
+
+/* =========================================================================
+ * Listas: alertas, esteira
+ * ========================================================================= */
+
+.pagina-corpo {
+  padding: 1.25rem clamp(1rem, 3vw, 2rem) 3rem;
+}
+
+/* "como ler" — explicação recolhida no topo de uma tela */
+.como-ler {
+  margin: 1rem clamp(1rem, 3vw, 2rem) 0;
+  border: 1px solid var(--line-soft);
+  border-radius: var(--raio);
+  background: var(--surface);
+  box-shadow: var(--shadow);
+}
+
+.como-ler > summary {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  padding: 0.6rem 0.9rem;
+  cursor: pointer;
+  list-style: none;
+  font-size: 0.84rem;
+  font-weight: 600;
+  color: var(--ink-2);
+}
+
+.como-ler > summary::-webkit-details-marker {
+  display: none;
+}
+
+.como-ler > summary svg {
+  color: var(--accent);
+}
+
+.como-ler > summary:hover {
+  color: var(--accent);
+}
+
+.como-ler > div {
+  padding: 0 0.9rem 0.75rem;
+  font-size: 0.85rem;
+  color: var(--ink-2);
+  max-width: 90ch;
+}
+
+.como-ler p {
+  margin: 0 0 0.5rem;
+}
+
+/* alertas */
+.lista-alertas {
+  max-width: 1100px;
+}
+
+.grupo {
+  border-radius: var(--raio);
+  box-shadow: var(--shadow);
+  overflow: hidden;
+}
+
+.grupo-topo {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.grupo-quem {
+  flex: 1;
+  min-width: 0;
+}
+
+.grupo-quem .usina a {
+  color: inherit;
+}
+
+.grupo-quem .usina a:hover {
+  color: var(--accent);
+}
+
+.grupo-icone {
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
+  background: var(--warn-soft);
+  color: var(--warn);
+}
+
+.grupo-icone.s-critico {
+  background: var(--crit-soft);
+  color: var(--crit);
+}
+
+.oc-repete {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  margin-right: 0.45rem;
+  padding: 0.05rem 0.45rem;
+  border-radius: 999px;
+  background: var(--warn-soft);
+  color: var(--warn);
+  font-weight: 600;
+}
+
+.oc-acoes .botao {
+  font-size: 0.8rem;
+  padding: 0.38rem 0.75rem;
+  border-radius: var(--raio-p);
+}
+
+.oc-acoes .botao:not(.secundario) {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+}
+
+.oc-acoes .botao.secundario {
+  background: var(--surface);
+  border-color: var(--line);
+  color: var(--ink);
+}
+
+/* esteira: colunas e cartões */
+.coluna {
+  border-radius: var(--raio);
+  background: var(--surface-2);
+}
+
+.coluna-topo .qtd {
+  border-radius: 999px;
+}
+
+.esteira .cartao {
+  border-radius: 8px;
+  background: var(--surface);
+  transition: box-shadow 0.12s, transform 0.12s, border-color 0.12s;
+}
+
+.esteira .cartao:hover {
+  box-shadow: var(--shadow-alta);
+  transform: translateY(-1px);
+}
+
+.mover button {
+  border-radius: 6px;
+}
