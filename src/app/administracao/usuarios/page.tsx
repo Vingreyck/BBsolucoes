@@ -177,7 +177,8 @@ export default async function Usuarios() {
                 </td>
                 <td className="acoes-usuario">
                   <Reiniciar usuarioId={u.id} nome={u.nome} />
-                  {u.id !== usuario.id && u.aprovadoEm && (
+                  {/* Conta excluída pela própria pessoa (sem CPF nem e-mail) não tem quem reative. */}
+                  {u.id !== usuario.id && u.aprovadoEm && (u.cpf || u.email) && (
                     <form action={alternarAtivo.bind(null, u.id)}>
                       <button type="submit">
                         {u.ativo ? "desativar" : "reativar"}

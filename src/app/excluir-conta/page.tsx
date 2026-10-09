@@ -30,7 +30,13 @@ export default function ExcluirConta() {
           reinstalar o aplicativo.
         </p>
 
-        <h2>Como pedir</h2>
+        <h2>Pelo aplicativo (na hora)</h2>
+        <p>
+          No BBSolution, abra <strong>Perfil</strong> e toque em <strong>Excluir minha conta</strong>. O app pede a sua
+          senha para confirmar e a exclusão é feita na mesma hora.
+        </p>
+
+        <h2>Sem o aplicativo</h2>
         <ol>
           <li>
             Envie um e-mail
@@ -54,7 +60,7 @@ export default function ExcluirConta() {
         <h2>O que é apagado</h2>
         <ul>
           <li>O seu acesso (login e senha) ao aplicativo e ao sistema.</li>
-          <li>Os dados do seu cadastro: nome, CPF e e-mail.</li>
+          <li>Os dados do seu cadastro: nome, CPF, e-mail e telefone.</li>
           <li>O histórico de posições de GPS gravado nas suas ordens de serviço.</li>
         </ul>
 
