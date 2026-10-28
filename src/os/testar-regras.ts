@@ -11,6 +11,9 @@
  */
 
 import { cumprido, faltaNoItem, type ItemParaRegra, type SituacaoDoItem } from "./regras-item";
+import { avaliarRodada } from "../sistema/alertas";
+import { verificarBackupExterno, verificarBackupLocal, verificarColetor, verificarDisco } from "../sistema/saude";
+import { lerDsn, montarEnvelope } from "../sistema/sentry";
 import { tipoReal } from "./tipo-arquivo";
 
 let falhas = 0;
@@ -98,6 +101,52 @@ igual(tipoReal(caixa("mp42")), "video/mp4", "MP4 (mp42)");
 igual(tipoReal(caixa("qt  ")), "video/quicktime", "MOV (iPhone)");
 igual(tipoReal(bytes(0x4d, 0x5a, 0x90, 0x00)), null, "executável não é foto");
 igual(tipoReal(new Uint8Array([1, 2, 3])), null, "arquivo curto demais");
+
+
+// --- alertas do coletor e rota de saúde ---------------------------------------------
+
+const ok = (nome: string, critica = false) => ({ nome, estado: "ok" as const, critica });
+const falhou = (nome: string, critica = false) => ({ nome, estado: "falhou" as const, critica });
+{
+  let a = avaliarRodada([falhou("Coleta Growatt")], {}, 40);
+  confere(!a.alerta, "coleta de portal que falha uma vez não alerta");
+  a = avaliarRodada([falhou("Coleta Growatt")], { "Coleta Growatt": 2 }, 40);
+  confere(a.alerta && a.motivos[0].includes("3 rodadas"), "a terceira falha seguida alerta");
+  a = avaliarRodada([ok("Coleta Growatt")], { "Coleta Growatt": 2 }, 40);
+  confere(!a.alerta && a.falhasSeguidas["Coleta Growatt"] === 0, "dar certo zera a contagem");
+  confere(avaliarRodada([falhou("Cópia", true)], {}, 40).alerta, "etapa crítica alerta na primeira falha");
+  confere(avaliarRodada([ok("x")], {}, 90).alerta, "disco a 90% alerta");
+  const pulada = avaliarRodada([{ nome: "Coleta Growatt", estado: "pulada" }], { "Coleta Growatt": 2 }, 40);
+  confere(pulada.falhasSeguidas["Coleta Growatt"] === 2, "etapa pulada não zera a contagem");
+}
+{
+  const agora = Date.parse("2026-10-28T12:00:00Z");
+  const h = (n: number) => new Date(agora - n * 3_600_000).toISOString();
+  confere(verificarColetor({ fim: h(1), alerta: false, motivos: [] }, agora).ok, "coletor rodou há 1 h: ok");
+  confere(!verificarColetor({ fim: h(4), alerta: false, motivos: [] }, agora).ok, "coletor parado há 4 h: problema");
+  confere(!verificarColetor({ fim: h(1), alerta: true, motivos: ["x"] }, agora).ok, "rodada com alerta: problema");
+  confere(!verificarColetor(null, agora).ok, "sem rodada registrada: problema");
+  confere(verificarBackupLocal(agora - 10 * 3_600_000, agora).ok, "cópia local de 10 h: ok");
+  confere(!verificarBackupLocal(agora - 40 * 3_600_000, agora).ok, "cópia local de 40 h: problema");
+  confere(!verificarBackupLocal(null, agora).ok, "sem cópia local: problema");
+  confere(!verificarBackupExterno(false, null, agora).ok, "cópia externa não configurada: problema");
+  confere(verificarBackupExterno(true, { ok: true, quando: h(5) }, agora).ok, "envio ao Drive de 5 h: ok");
+  confere(!verificarBackupExterno(true, { ok: false, quando: h(1), erro: "x" }, agora).ok, "envio ao Drive que falhou: problema");
+  confere(!verificarBackupExterno(true, { ok: true, quando: h(50) }, agora).ok, "envio ao Drive de 50 h: problema");
+  confere(verificarDisco(70).ok && !verificarDisco(85).ok, "disco: 70% ok, 85% problema");
+}
+
+
+// --- Sentry sem SDK -----------------------------------------------------------------
+{
+  const dsn = lerDsn("https://abc123@o999.ingest.sentry.io/4567");
+  confere(dsn?.url === "https://o999.ingest.sentry.io/api/4567/envelope/" && dsn.chave === "abc123", "DSN vira o endereço do envelope");
+  confere(lerDsn("") === null && lerDsn("lixo") === null && lerDsn(undefined) === null, "DSN vazio ou inválido não envia");
+  const linhas = montarEnvelope(dsn!, { mensagem: "boom", plataforma: "android", tags: { versao: "0.1.0" } }).split(String.fromCharCode(10));
+  const evento = JSON.parse(linhas[2]);
+  confere(linhas.length === 3 && JSON.parse(linhas[1]).type === "event", "envelope tem três linhas");
+  confere(evento.exception.values[0].value === "boom" && evento.tags.versao === "0.1.0" && evento.tags.plataforma === "android", "evento leva mensagem e tags");
+}
 
 console.log(falhas === 0 ? `✓ ${total} conferências, nenhuma falha.` : `✗ ${falhas} de ${total} falharam.`);
 process.exit(falhas === 0 ? 0 : 1);

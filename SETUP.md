@@ -841,6 +841,15 @@ docker compose up -d --build
 docker compose logs -f coletor
 ```
 
+**Depois de TODO deploy, limpe o cache do build.** Cada `--build` deixa camadas
+velhas, e é isso que mais enche o disco da VM (19 GB; a limpeza de 28/10 liberou
+1,9 GB). As fotos e vídeos dos técnicos não pesam: vão direto para o Drive.
+
+```bash
+docker builder prune -af && docker image prune -f
+df -h /
+```
+
 Precisa de um `.env` ao lado do `docker-compose.yml`, com o de sempre mais três:
 
 ```

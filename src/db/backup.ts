@@ -42,8 +42,11 @@ const CONTAINER = process.env.PG_CONTAINER === undefined ? "bb-pg" : process.env
 const BANCO = process.env.PG_DATABASE ?? "bbsolucoes";
 const USUARIO = process.env.PG_USER ?? "postgres";
 
-/** Quantos dias de cópia ficam guardados. */
-const MANTER_PADRAO = 14;
+/**
+ * Quantos dias de cópia ficam guardados **na VM**. Sete bastam: a cópia que
+ * protege de verdade é a cifrada no Drive (30 dias), e o disco da VM é pequeno.
+ */
+const MANTER_PADRAO = 7;
 
 /**
  * Abaixo disto o arquivo não é backup, é erro que passou batido.
