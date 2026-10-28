@@ -841,7 +841,26 @@ docker compose up -d --build
 docker compose logs -f coletor
 ```
 
-**Depois de TODO deploy, limpe o cache do build.** Cada `--build` deixa camadas
+**O jeito certo de fazer deploy é o script**, que faz tudo na ordem (cópia de
+segurança, `git pull`, build, migrações, subir, limpeza do Docker e conferência
+de saúde) e para no primeiro erro:
+
+```bash
+./scripts/deploy.sh          # atualiza
+./scripts/deploy.sh --voltar # volta para a versão de antes (o banco não volta sozinho)
+```
+
+As migrações `drizzle/NNNN-*.sql` agora ficam registradas (`npm run migrar`,
+tabela `migracao_aplicada`). **Na primeira vez**, com o banco que já recebeu as
+migrações à mão: `docker compose exec site npm run migrar -- --marcar-aplicadas`
+(só anota, não executa nada). Depois disso, migração nova é só colocar o arquivo
+em `drizzle/` e rodar o deploy. `npm run migrar -- --listar` mostra o que falta.
+
+O GitHub confere sozinho, a cada push (`.github/workflows/ci.yml`): tipos, regras,
+falhas críticas nas dependências e o build. O Dependabot abre um pedido por semana
+com o que ficou desatualizado.
+
+Os comandos soltos, para quando precisar. **Depois de TODO deploy, limpe o cache do build.** Cada `--build` deixa camadas
 velhas, e é isso que mais enche o disco da VM (19 GB; a limpeza de 28/10 liberou
 1,9 GB). As fotos e vídeos dos técnicos não pesam: vão direto para o Drive.
 

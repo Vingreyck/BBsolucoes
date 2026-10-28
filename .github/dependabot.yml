@@ -1,0 +1,21 @@
+# Atualizações automáticas: o GitHub abre um pedido por semana com o que ficou
+# desatualizado, e avisa de falha de segurança. Foi a falta disto que deixou o
+# Next.js com falhas críticas por semanas sem ninguém saber.
+version: 2
+updates:
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+    groups:
+      menores:
+        update-types: [minor, patch]
+  - package-ecosystem: docker
+    directory: /
+    schedule:
+      interval: monthly
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: monthly

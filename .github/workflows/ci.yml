@@ -1,0 +1,34 @@
+# Confere o código a cada envio ao GitHub, antes de ele chegar à VM.
+#
+# O que isto teria pegado: o build que quebrou por importar `node:crypto` no
+# módulo errado só apareceu no `docker compose build` da VM.
+name: Conferência
+
+on:
+  push:
+    branches: [main, feat/base-do-sistema]
+  pull_request:
+
+jobs:
+  conferir:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Tipos
+        run: npm run typecheck
+      - name: Regras (sem banco)
+        run: npm run testar:regras
+      - name: Falhas críticas nas dependências de produção
+        run: npm audit --omit=dev --audit-level=critical
+      - name: Build de produção
+        run: npm run build
+        env:
+          # Valores de mentira: o build não fala com o banco, só precisa que existam.
+          DATABASE_URL: postgres://ci:ci@localhost:5432/ci
+          APP_ENCRYPTION_KEY: AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=

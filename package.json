@@ -38,6 +38,7 @@
     "backup": "tsx src/db/backup.ts",
     "backup:abrir": "tsx src/db/abrir-backup.ts",
     "backup:testar": "tsx src/db/testar-restauracao.ts",
+    "migrar": "tsx src/db/migrar.ts",
     "empresa:codigo": "tsx src/empresa/definir-codigo.ts",
     "usuario:aprovar": "tsx src/auth/aprovar-cli.ts",
     "testar:app": "tsx src/app-movel/testar-fluxo.ts",
