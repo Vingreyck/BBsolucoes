@@ -1,5 +1,3 @@
-import { randomUUID } from "node:crypto";
-
 /**
  * Manda erros para o Sentry sem instalar o SDK dele.
  *
@@ -42,7 +40,7 @@ export interface EventoErro {
 
 /** O corpo do envelope: três linhas JSON (cabeçalho, tipo do item, evento). */
 export function montarEnvelope(dsn: DsnSentry, e: EventoErro, ambiente = "producao"): string {
-  const id = randomUUID().replace(/-/g, "");
+  const id = globalThis.crypto.randomUUID().replace(/-/g, "");
   const agora = new Date().toISOString();
   const evento = {
     event_id: id,
