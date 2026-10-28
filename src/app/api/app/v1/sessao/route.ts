@@ -1,3 +1,4 @@
+import { exigirVersaoMinima } from "@/app-movel/versao";
 import { and, eq } from "drizzle-orm";
 
 import { cpfValido, normalizarCpf } from "@/auth/cpf";
@@ -34,6 +35,8 @@ const PAPEL_ROTULO: Record<string, string> = { vendedor: "vendas", estoque: "est
  * denunciar quem está cadastrado.
  */
 export async function POST(req: Request) {
+  const velho = exigirVersaoMinima(req);
+  if (velho) return velho;
   const ip = ipDe(req);
   const porIp = consumir(`login:${ip}`, 30, 15 * MINUTO);
   if (!porIp.ok) return muitasTentativas(porIp.tenteEmSegundos);

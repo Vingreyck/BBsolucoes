@@ -865,6 +865,21 @@ gunzip -c backups/selebi-AAAA-MM-DD-HHMM.sql.gz \
   | docker compose exec -T db psql -U postgres -d bbsolucoes
 ```
 
+### Travamentos do app Android legíveis (mapeamento do R8)
+
+O app de loja tem os nomes trocados por letras. Para o travamento chegar ao
+Sentry com os nomes de verdade, o servidor precisa do `mapping.txt` **da versão
+que foi para a loja**, com o nome do `versionCode`. A cada `.aab` novo:
+
+```bash
+scp app/build/outputs/mapping/release/mapping.txt bbnet@168.181.28.62:~/BBsolucoes/mapeamentos/6.txt
+```
+
+(troque `6` pelo `versionCode` do build). Se a pasta não existir na VM:
+`mkdir -p ~/BBsolucoes/mapeamentos`, e rode `docker compose up -d site` uma vez
+para o container enxergar a pasta. Sem o arquivo da versão, o travamento chega
+com nomes trocados, mas chega. Guarde os `mapping.txt` também fora da VM.
+
 ### Decisões que valem saber
 
 **O banco não publica porta.** Não há `ports:` no serviço `db`, e é a linha mais

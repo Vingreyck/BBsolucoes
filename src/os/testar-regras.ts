@@ -13,6 +13,8 @@
 import { cumprido, faltaNoItem, type ItemParaRegra, type SituacaoDoItem } from "./regras-item";
 import { avaliarRodada } from "../sistema/alertas";
 import { verificarBackupExterno, verificarBackupLocal, verificarColetor, verificarDisco } from "../sistema/saude";
+import { classesDaPilha, desembaralhar, lerClasses } from "../sistema/retrace";
+import { avaliarVersao, lerMinimos } from "../app-movel/versao";
 import { lerDsn, montarEnvelope } from "../sistema/sentry";
 import { tipoReal } from "./tipo-arquivo";
 
@@ -137,6 +139,55 @@ const falhou = (nome: string, critica = false) => ({ nome, estado: "falhou" as c
 }
 
 
+// --- desembaralhar a pilha do Android -----------------------------------------------
+async function testarRetrace() {
+  const { writeFileSync, mkdtempSync, rmSync } = await import("node:fs");
+  const { join } = await import("node:path");
+  const { tmpdir } = await import("node:os");
+  const pasta = mkdtempSync(join(tmpdir(), "retrace-"));
+  const mapeamento = join(pasta, "mapping.txt");
+  writeFileSync(
+    mapeamento,
+    [
+      "br.com.selebi.app.nucleo.dados.FilaEnvio -> H2.K0:",
+      '# {"id":"sourceFile","fileName":"FilaEnvio.kt"}',
+      "    36:77:void aceito(br.com.selebi.app.X,int):200:241 -> a",
+      "    78:90:void enviar():10:22 -> b",
+      "    78:90:void helper():5:17 -> b",
+      "    void semLinha() -> c",
+      "br.com.selebi.app.Outra -> a.b:",
+      "    1:3:void y():9:9 -> a",
+    ].join(String.fromCharCode(10)),
+  );
+  const pilha = ["H2.K0: falhou", "\tat H2.K0.a(SourceFile:40)", "\tat H2.K0.b(SourceFile:80)", "\tat H2.K0.c(SourceFile)", "\tat H2.K0.zz(SourceFile:1)", "\tat lib.Estranha.f(Estranha.java:7)"].join(String.fromCharCode(10));
+  const classes = await lerClasses(mapeamento, classesDaPilha(pilha));
+  const linhas = desembaralhar(pilha, classes).split(String.fromCharCode(10));
+  confere(linhas[0] === "br.com.selebi.app.nucleo.dados.FilaEnvio: falhou", "a classe da exceção volta ao nome de verdade");
+  confere(linhas[1].includes("FilaEnvio.aceito(FilaEnvio.kt:204)"), "linha ofuscada 40 vira a linha 204 do original (200 + 40 - 36)");
+  confere(linhas[2].includes("FilaEnvio.enviar(FilaEnvio.kt:12)") && linhas[3].includes("FilaEnvio.helper(FilaEnvio.kt:7)"), "método embutido vira dois quadros");
+  confere(linhas[4].includes("FilaEnvio.semLinha(FilaEnvio.kt)"), "método sem linha no mapeamento");
+  confere(linhas[5].includes("FilaEnvio.zz(FilaEnvio.kt:1)"), "método que não está no mapeamento mantém a classe e a linha");
+  confere(linhas[6] === "\tat lib.Estranha.f(Estranha.java:7)", "classe fora do mapeamento fica como veio");
+  confere(!classes.has("a.b"), "só as classes da pilha são lidas");
+  rmSync(pasta, { recursive: true });
+}
+
+// --- versão mínima do app -----------------------------------------------------------
+{
+  const min = { android: 6, ios: 4 };
+  const ped = (build: string | null, plataforma: string | null, agente: string | null = null) => ({ build, plataforma, agente });
+  confere(avaliarVersao(ped("6", "android"), min).ok, "build igual ao mínimo passa");
+  confere(avaliarVersao(ped("9", "android"), min).ok, "build maior passa");
+  confere(!avaliarVersao(ped("5", "android"), min).ok, "build menor que o mínimo é barrado");
+  confere(!avaliarVersao(ped(null, null, "okhttp/4.12"), min).ok, "app antigo, sem cabeçalho, é barrado como Android");
+  confere(!avaliarVersao(ped(null, null, "Selebi-iOS/0.1.0 (iOS 18)"), min).ok, "iPhone antigo, só pelo User-Agent, é barrado pelo mínimo do iOS");
+  confere(avaliarVersao(ped("4", "ios"), min).ok && !avaliarVersao(ped("3", "ios"), min).ok, "o mínimo do iPhone é o do iPhone");
+  confere(avaliarVersao(ped(null, null), { android: 0, ios: 0 }).ok, "sem mínimo definido, ninguém é barrado");
+  confere(avaliarVersao(ped("lixo", "android"), min).ok === false, "build ilegível conta como 0");
+  const lido = lerMinimos({ APP_BUILD_MINIMO_ANDROID: " 6 ", APP_BUILD_MINIMO_IOS: "abc" });
+  confere(lido.android === 6 && lido.ios === 0, "o .env é lido com espaço e ignora lixo");
+}
+
 // --- Sentry sem SDK -----------------------------------------------------------------
 {
   const dsn = lerDsn("https://abc123@o999.ingest.sentry.io/4567");
@@ -148,5 +199,7 @@ const falhou = (nome: string, critica = false) => ({ nome, estado: "falhou" as c
   confere(evento.exception.values[0].value === "boom" && evento.tags.versao === "0.1.0" && evento.tags.plataforma === "android", "evento leva mensagem e tags");
 }
 
-console.log(falhas === 0 ? `✓ ${total} conferências, nenhuma falha.` : `✗ ${falhas} de ${total} falharam.`);
-process.exit(falhas === 0 ? 0 : 1);
+testarRetrace().then(() => {
+  console.log(falhas === 0 ? `✓ ${total} conferências, nenhuma falha.` : `✗ ${falhas} de ${total} falharam.`);
+  process.exit(falhas === 0 ? 0 : 1);
+});

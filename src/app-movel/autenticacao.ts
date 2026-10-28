@@ -2,6 +2,7 @@ import { autenticarApp, type UsuarioApp } from "@/auth/sessao-app";
 import { formatarCpf } from "@/auth/cpf";
 
 import { falha } from "./http";
+import { exigirVersaoMinima } from "./versao";
 import { pode, permissoesDe, type Permissao } from "./permissoes";
 
 /**
@@ -19,6 +20,9 @@ export async function exigirApp(
   req: Request,
   opcoes: { permissao?: Permissao; permitirSenhaProvisoria?: boolean } = {},
 ): Promise<UsuarioApp | Response> {
+  // App velho demais: 426 antes de qualquer outra coisa (ver `versao.ts`).
+  const velho = exigirVersaoMinima(req);
+  if (velho) return velho;
   const usuario = await autenticarApp(req);
   if (!usuario) {
     return falha(401, "nao_autenticado", "Sua sessão terminou. Entre de novo.");

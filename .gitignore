@@ -39,3 +39,6 @@ keystore.properties
 
 # Resumo da última rodada do coletor (lido pela rota de saúde).
 estado/
+
+# Mapeamentos do R8 do app Android (57 MB cada): ficam só na VM.
+mapeamentos/
