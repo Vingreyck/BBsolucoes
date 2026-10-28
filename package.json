@@ -36,20 +36,23 @@
     "coletar:growatt": "tsx src/collectors/growatt/coletar.ts",
     "reconciliar": "tsx src/collectors/reconciliar-cli.ts",
     "backup": "tsx src/db/backup.ts",
+    "backup:abrir": "tsx src/db/abrir-backup.ts",
+    "backup:testar": "tsx src/db/testar-restauracao.ts",
     "empresa:codigo": "tsx src/empresa/definir-codigo.ts",
     "usuario:aprovar": "tsx src/auth/aprovar-cli.ts",
     "testar:app": "tsx src/app-movel/testar-fluxo.ts",
     "testar:os": "tsx src/os/testar-os.ts",
+    "testar:regras": "tsx src/os/testar-regras.ts",
     "testar:rastreamento": "tsx src/rastreamento/testar-rastreamento.ts"
   },
   "dependencies": {
     "@react-pdf/renderer": "^4.9.0",
     "dotenv": "^17.4.2",
-    "drizzle-orm": "^0.44.0",
+    "drizzle-orm": "^0.45.4",
     "exceljs": "^4.4.0",
     "leaflet": "^1.9.4",
     "lucide-react": "^1.49.0",
-    "next": "^15.3.0",
+    "next": "^15.5.28",
     "postgres": "^3.4.5",
     "react": "^19.1.0",
     "react-dom": "^19.1.0"
@@ -62,5 +65,9 @@
     "drizzle-kit": "^0.31.0",
     "tsx": "^4.23.12",
     "typescript": "^5.8.0"
+  },
+  "overrides": {
+    "sharp": "^0.35.5",
+    "postcss": "^8.5.23"
   }
 }

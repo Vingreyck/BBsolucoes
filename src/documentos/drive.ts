@@ -169,14 +169,26 @@ export async function garantirPasta(nome: string, paiId: string): Promise<string
   return dados.id;
 }
 
+/** Os campos que o Drive devolve de cada arquivo enviado. */
+const CAMPOS_ENVIO = "id,name,mimeType,size,webViewLink,modifiedTime";
+
+/**
+ * Acima disto o envio vai pelo upload "retomável" do Drive.
+ *
+ * O multipart numa requisição só é o caminho que o Google recomenda até 5 MB.
+ * Foto de celular fica bem abaixo; o vídeo da vistoria (até 50 MB) e a cópia
+ * de segurança do banco, não — para esses, o caminho documentado é o retomável.
+ */
+const LIMITE_MULTIPART = 5 * 1024 * 1024;
+
 /**
  * Sobe um arquivo.
  *
- * Upload multipart numa requisição só, que é o caminho recomendado para
- * arquivo de até 5 MB — e serve bem acima disso na prática. **Sem comprimir**:
- * foi decisão explícita do Vinícius, e é a decisão certa para papel que pode
- * virar prova. Comprimir PDF escaneado é perder informação de um documento que
- * a concessionária ou um juiz pode querer ler.
+ * Até 5 MB, multipart numa requisição só; acima, o upload retomável (ver
+ * [enviarRetomavel]). **Sem comprimir**: foi decisão explícita do Vinícius, e é
+ * a decisão certa para papel que pode virar prova. Comprimir PDF escaneado é
+ * perder informação de um documento que a concessionária ou um juiz pode
+ * querer ler.
  */
 export async function enviarArquivo(opcoes: {
   nome: string;
@@ -184,6 +196,12 @@ export async function enviarArquivo(opcoes: {
   pastaId: string;
   conteudo: ArrayBuffer | Uint8Array;
 }): Promise<ArquivoDrive> {
+  const miolo =
+    opcoes.conteudo instanceof Uint8Array
+      ? opcoes.conteudo
+      : new Uint8Array(opcoes.conteudo);
+  if (miolo.byteLength > LIMITE_MULTIPART) return enviarRetomavel({ ...opcoes, conteudo: miolo });
+
   const token = await accessToken();
   const limite = `selebi-${crypto.randomUUID()}`;
 
@@ -197,10 +215,6 @@ export async function enviarArquivo(opcoes: {
       `--${limite}\r\ncontent-type: ${opcoes.mimeType}\r\n\r\n`,
   );
   const fechamento = new TextEncoder().encode(`\r\n--${limite}--\r\n`);
-  const miolo =
-    opcoes.conteudo instanceof Uint8Array
-      ? opcoes.conteudo
-      : new Uint8Array(opcoes.conteudo);
 
   const corpo = new Uint8Array(abertura.length + miolo.length + fechamento.length);
   corpo.set(abertura, 0);
@@ -208,7 +222,7 @@ export async function enviarArquivo(opcoes: {
   corpo.set(fechamento, abertura.length + miolo.length);
 
   const resposta = await fetch(
-    `${UPLOAD}/files?uploadType=multipart&fields=id,name,mimeType,size,webViewLink,modifiedTime`,
+    `${UPLOAD}/files?uploadType=multipart&fields=${CAMPOS_ENVIO}`,
     {
       method: "POST",
       headers: {
@@ -223,6 +237,80 @@ export async function enviarArquivo(opcoes: {
     throw new Error(`Drive recusou o upload (${resposta.status}): ${await resposta.text()}`);
   }
   return (await resposta.json()) as ArquivoDrive;
+}
+
+/**
+ * Upload retomável, numa tacada só.
+ *
+ * Duas chamadas: a primeira diz ao Drive o nome, a pasta e o tamanho, e ele
+ * devolve no `Location` o endereço da sessão de envio; a segunda manda o
+ * arquivo inteiro para esse endereço. Não retoma de verdade no meio — para os
+ * tamanhos daqui (dezenas de MB), recomeçar do zero na próxima rodada é mais
+ * simples que guardar sessão, e o resultado é o mesmo.
+ */
+async function enviarRetomavel(opcoes: {
+  nome: string;
+  mimeType: string;
+  pastaId: string;
+  conteudo: Uint8Array;
+}): Promise<ArquivoDrive> {
+  const token = await accessToken();
+  const abertura = await fetch(`${UPLOAD}/files?uploadType=resumable&fields=${CAMPOS_ENVIO}`, {
+    method: "POST",
+    headers: {
+      authorization: `Bearer ${token}`,
+      "content-type": "application/json; charset=UTF-8",
+      "x-upload-content-type": opcoes.mimeType,
+      "x-upload-content-length": String(opcoes.conteudo.byteLength),
+    },
+    body: JSON.stringify({ name: opcoes.nome, parents: [opcoes.pastaId] }),
+  });
+  const sessao = abertura.headers.get("location");
+  if (!abertura.ok || !sessao) {
+    throw new Error(`Drive recusou abrir o envio (${abertura.status}): ${await abertura.text()}`);
+  }
+
+  const resposta = await fetch(sessao, {
+    method: "PUT",
+    headers: {
+      "content-type": opcoes.mimeType,
+      "content-length": String(opcoes.conteudo.byteLength),
+    },
+    // Os bytes vêm de um Buffer ou de um ArrayBuffer comum, nunca de memória
+    // compartilhada entre threads — a conversão de tipo só diz isso ao TypeScript.
+    body: opcoes.conteudo as Uint8Array<ArrayBuffer>,
+  });
+  if (!resposta.ok) {
+    throw new Error(`Drive recusou o upload (${resposta.status}): ${await resposta.text()}`);
+  }
+  return (await resposta.json()) as ArquivoDrive;
+}
+
+/** Os arquivos de uma pasta (sem as subpastas), do mais novo para o mais velho. */
+export async function listarArquivos(
+  pastaId: string,
+): Promise<Array<ArquivoDrive & { createdTime?: string }>> {
+  const q = [
+    `'${seguro(pastaId)}' in parents`,
+    "mimeType != 'application/vnd.google-apps.folder'",
+    "trashed = false",
+  ].join(" and ");
+  const arquivos: Array<ArquivoDrive & { createdTime?: string }> = [];
+  let pagina: string | undefined;
+  do {
+    const resposta = await chamar(
+      `/files?q=${encodeURIComponent(q)}&orderBy=${encodeURIComponent("createdTime desc")}&pageSize=200` +
+        `&fields=nextPageToken,files(id,name,mimeType,size,createdTime)` +
+        (pagina ? `&pageToken=${encodeURIComponent(pagina)}` : ""),
+    );
+    const dados = (await resposta.json()) as {
+      files: Array<ArquivoDrive & { createdTime?: string }>;
+      nextPageToken?: string;
+    };
+    arquivos.push(...dados.files);
+    pagina = dados.nextPageToken;
+  } while (pagina);
+  return arquivos;
 }
 
 /**

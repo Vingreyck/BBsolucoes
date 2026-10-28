@@ -5,10 +5,23 @@
 #
 # Precisa de um `.env` ao lado deste arquivo. Veja `.env.example`.
 
+# Log de cada container com teto: 3 arquivos de 10 MB, e o mais velho sai.
+#
+# O padrão do Docker é guardar o log para sempre, num disco de 18,5 GB que já
+# encheu uma vez. Um coletor que falha de hora em hora escreve a mesma pilha de
+# erro 24 vezes por dia — sem teto, isso só para quando o disco acaba e o banco
+# deixa de gravar.
+x-log: &log
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "3"
+
 services:
   db:
     image: postgres:16
     restart: unless-stopped
+    logging: *log
     environment:
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?defina POSTGRES_PASSWORD no .env}
       POSTGRES_DB: ${POSTGRES_DB:-bbsolucoes}
@@ -30,6 +43,7 @@ services:
   site:
     build: .
     restart: unless-stopped
+    logging: *log
     env_file: .env
     environment:
       # Dentro do compose o banco atende pelo nome do serviço, na 5432 — a porta
@@ -40,6 +54,11 @@ services:
     depends_on:
       db:
         condition: service_healthy
+    # Só leitura: a rota `/api/saude` confere a idade da última cópia de
+    # segurança e da última rodada do coletor — quem escreve é o coletor.
+    volumes:
+      - ./backups:/app/backups:ro
+      - ./estado:/app/estado:ro
     # SEM `ports` também: quem fala com a internet é o Caddy, e ele alcança o
     # site por dentro da rede. Sem isso, a 3000 ficaria aberta em HTTP puro ao
     # lado do HTTPS, e login por HTTP é senha trafegando aberta.
@@ -47,6 +66,7 @@ services:
   coletor:
     build: .
     restart: unless-stopped
+    logging: *log
     env_file: .env
     environment:
       DATABASE_URL: postgres://postgres:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB:-bbsolucoes}
@@ -59,6 +79,9 @@ services:
         condition: service_healthy
     volumes:
       - ./backups:/app/backups
+      # O resumo da última rodada (`estado/coletor.json`), que a rota de saúde do
+      # site lê para saber se o coletor está vivo.
+      - ./estado:/app/estado
     # Uma rodada por hora, e a primeira ao subir.
     #
     # Sem daemon de cron de propósito: um laço de shell aparece no
@@ -76,6 +99,7 @@ services:
   caddy:
     image: caddy:2-alpine
     restart: unless-stopped
+    logging: *log
     ports:
       - "80:80"
       - "443:443"

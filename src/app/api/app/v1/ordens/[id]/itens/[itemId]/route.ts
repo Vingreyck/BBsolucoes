@@ -11,12 +11,15 @@ export const dynamic = "force-dynamic";
 /**
  * A resposta de um item do checklist.
  *
- *   PUT { valor, observacao?, respondidoEm? }
+ *   PUT { valor, observacao?, respondidoEm?, agendar? }
  *
  * `valor` conforme o tipo do item: true/false, número, texto, a opção, a lista
  * de opções ou a lista de seriais; null apaga. `respondidoEm` é a hora do
  * celular — resposta mais velha que a gravada é descartada (`ignorado: true`),
  * para a fila offline não passar por cima de quem respondeu depois.
+ *
+ * `agendar: true` deixa o item para a visita de volta (só nos itens que
+ * permitem); `false` desfaz. Sem o campo, fica como está.
  *
  * O servidor decide se o item está cumprido; o app só mostra.
  */
@@ -39,6 +42,7 @@ export async function PUT(req: Request, { params }: { params: Promise<{ id: stri
       observacao:
         corpo.observacao === undefined ? undefined : typeof corpo.observacao === "string" ? corpo.observacao : null,
       respondidoEm: dataDoApp(corpo.respondidoEm),
+      agendar: typeof corpo.agendar === "boolean" ? corpo.agendar : undefined,
     });
     const ordem = await ordemDoUsuario(usuario, id);
     return json({ ordem, ignorado: r.ignorado, avisos: r.avisos });

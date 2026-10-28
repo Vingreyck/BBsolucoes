@@ -1,6 +1,6 @@
 import { randomBytes } from "node:crypto";
 
-import { and, eq, sql } from "drizzle-orm";
+import { and, eq, notInArray, sql } from "drizzle-orm";
 
 import { db, schema } from "@/db";
 import { moverNaEsteira } from "@/projeto/esteira";
@@ -55,6 +55,13 @@ export interface OpcoesAcao extends Local {
   ocorridoEm?: Date | null;
 }
 
+export interface AgendamentoDeVolta {
+  /** Quem volta. Precisa ser alguém ativo da empresa. */
+  responsavelId: string;
+  /** "2026-10-30" — o dia, no relógio de Sergipe. Sem dia, o escritório marca. */
+  dia?: string | null;
+}
+
 export type Acao =
   | { tipo: "atribuir"; responsavelId: string | null }
   | { tipo: "agendar"; agendadaPara: Date; motivo?: string | null }
@@ -67,6 +74,8 @@ export type Acao =
       resultado: "resolvido" | "nao_resolvido";
       laudo?: string | null;
       assinaturaNome?: string | null;
+      /** Visita de volta para os itens que o técnico deixou para depois ("agendar"). */
+      agendamento?: AgendamentoDeVolta | null;
     }
   | { tipo: "nao_atendida"; motivo: string }
   | { tipo: "cancelar"; motivo: string }
@@ -168,6 +177,12 @@ interface Contexto {
   quando: Date;
   opcoes: OpcoesAcao;
   avisos: string[];
+  /**
+   * O que só pode acontecer depois que a transação fechou — abrir outra OS,
+   * por exemplo. Se falhar, a ação já valeu: vira um aviso, e não um erro que
+   * faria o app achar que a conclusão foi recusada.
+   */
+  depois: Array<() => Promise<void>>;
 }
 
 /**
@@ -225,6 +240,73 @@ async function usuarioDaEmpresa(tx: Transacao, empresaId: string, id: string) {
   });
   if (!u) throw new ErroOs("validacao", "Responsável não encontrado ou desativado.");
   return u;
+}
+
+// ---------------------------------------------------------------------------
+// Visita de volta
+
+/** "2026-10-30" → 30/10 às 08:00 no relógio de Sergipe; nulo se vazio ou inválido. */
+export function diaDoRelogio(dia: string | null | undefined): Date | null {
+  const m = dia?.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (!m) return null;
+  const d = new Date(Date.UTC(+m[1], +m[2] - 1, +m[3], 8, 0));
+  return Number.isNaN(d.getTime()) || d.getUTCDate() !== +m[3] ? null : d;
+}
+
+/**
+ * Abre a OS dos itens que a vistoria deixou para depois (sombra, espaço útil,
+ * caminho do cabo): mesma casa, mesmo tipo, ligada à OS de origem, só com esses
+ * itens no checklist e atribuída a quem o técnico escolheu.
+ *
+ * Quem conclui a vistoria pode ser o técnico ou o vendedor, que não abrem OS
+ * pelo site; aqui a abertura é consequência da conclusão, então ela vale com a
+ * permissão da gestão — e só para estes itens, nesta OS.
+ */
+async function abrirVisitaDeVolta(
+  ator: Ator,
+  origem: typeof schema.ordemServico.$inferSelect,
+  responsavelId: string,
+  dia: Date | null,
+  deixados: Array<{ descricao: string; observacao: string | null }>,
+): Promise<void> {
+  const lista = deixados
+    .map((i) => `• ${i.descricao}${i.observacao?.trim() ? ` — ${i.observacao.trim()}` : ""}`)
+    .join("\n");
+  const nova = await criarOs(
+    { ...ator, gestao: true },
+    {
+      clienteId: origem.clienteId,
+      usinaId: origem.usinaId,
+      projetoId: origem.projetoId,
+      tipo: origem.tipo,
+      prioridade: origem.prioridade,
+      descricao: `Visita de volta da ${numeroOs(origem.numero)}. Ficou para medir:\n${lista}`,
+      responsavelId,
+      agendadaPara: dia,
+      origem: origem.origem,
+      osOrigemId: origem.id,
+    },
+  );
+
+  // O checklist da visita de volta são só os itens que ficaram.
+  await db.delete(schema.osChecklistItem).where(
+    and(
+      eq(schema.osChecklistItem.ordemServicoId, nova.id),
+      notInArray(
+        schema.osChecklistItem.descricao,
+        deixados.map((i) => i.descricao),
+      ),
+    ),
+  );
+
+  await db.insert(schema.osEvento).values({
+    empresaId: origem.empresaId,
+    ordemServicoId: origem.id,
+    tipo: "retorno",
+    usuarioId: ator.id,
+    origem: ator.origem,
+    dados: { osId: nova.id, numero: nova.numero, itens: deixados.length },
+  });
 }
 
 // ---------------------------------------------------------------------------
@@ -341,11 +423,14 @@ export async function criarOs(ator: Ator, dados: NovaOs): Promise<{ id: string; 
               apenasCamera: item.apenasCamera,
               tipoDocumento: item.tipoDocumento,
               chave: item.chave,
+              exigeObservacao: item.exigeObservacao,
+              permiteAgendar: item.permiteAgendar,
+              aceitaVideo: item.aceitaVideo,
             })),
           );
         }
 
-        const c: Contexto = { tx, ator, os, quando: new Date(), opcoes: {}, avisos: [] };
+        const c: Contexto = { tx, ator, os, quando: new Date(), opcoes: {}, avisos: [], depois: [] };
         await evento(c, "criada", {
           tipo: dados.tipo,
           prioridade: dados.prioridade,
@@ -469,14 +554,22 @@ export async function executarAcao(
         );
       }
 
-      const c: Contexto = { tx, ator, os, quando: momento(opcoes.ocorridoEm), opcoes, avisos: [] };
+      const c: Contexto = { tx, ator, os, quando: momento(opcoes.ocorridoEm), opcoes, avisos: [], depois: [] };
       await APLICAR[acao.tipo](c, acao as never);
-      return { repetida: false, avisos: c.avisos };
+      return { repetida: false, avisos: c.avisos, depois: c.depois };
     });
+    for (const fazer of resultado.depois) {
+      try {
+        await fazer();
+      } catch (e) {
+        console.error(`[os] ${acao.tipo} de ${osId}: passo posterior falhou`, e);
+        resultado.avisos.push("A OS foi concluída, mas a visita de volta não foi criada — avise o escritório.");
+      }
+    }
     // Quem está com o mapa do campo aberto recarrega a lista: o técnico chegou,
     // concluiu, saiu de campo.
     publicar(ator.empresaId, { tipo: "os", ordemId: osId });
-    return resultado;
+    return { repetida: resultado.repetida, avisos: resultado.avisos };
   } catch (e) {
     if (opcoes.idCliente && violouUnico(e, "os_evento_id_cliente_uq")) {
       return { repetida: true, avisos: [] };
@@ -550,7 +643,7 @@ const APLICAR: { [T in TipoAcao]: Aplicador<T> } = {
   async concluir(c, acao) {
     const itens = await c.tx.query.osChecklistItem.findMany({
       where: eq(schema.osChecklistItem.ordemServicoId, c.os.id),
-      columns: { descricao: true, obrigatorio: true, concluido: true },
+      columns: { descricao: true, obrigatorio: true, concluido: true, agendar: true, observacao: true },
     });
     const pendentes = itens.filter((i) => i.obrigatorio && !i.concluido);
     if (pendentes.length) {
@@ -579,6 +672,26 @@ const APLICAR: { [T in TipoAcao]: Aplicador<T> } = {
         columns: { id: true },
       });
       if (!assinatura) throw new ErroOs("falta_assinatura", "Falta a assinatura do cliente.", 409);
+    }
+
+    // Visita de volta: o responsável é conferido aqui, dentro da transação, para
+    // a conclusão ser recusada por inteiro se ele não existir — a OS nova só é
+    // aberta depois, quando a transação já fechou.
+    const deixados = itens.filter((i) => i.agendar);
+    if (acao.agendamento && deixados.length) {
+      const volta = acao.agendamento;
+      const responsavel = await usuarioDaEmpresa(c.tx, c.os.empresaId, volta.responsavelId);
+      const dia = diaDoRelogio(volta.dia);
+      if (volta.dia && !dia) throw new ErroOs("validacao", "O dia da visita de volta é inválido.");
+      const origem = c.os;
+      const ator = c.ator;
+      c.depois.push(async () => {
+        await abrirVisitaDeVolta(ator, origem, responsavel.id, dia, deixados);
+      });
+    } else if (deixados.length && !acao.agendamento) {
+      // Sem escolher quem volta, a conclusão passa — mas o escritório precisa
+      // saber que ficou item para trás.
+      c.avisos.push(`Ficaram ${deixados.length} itens para uma visita de volta; o escritório precisa agendar.`);
     }
 
     await atualizar(c, {

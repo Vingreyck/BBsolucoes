@@ -480,7 +480,57 @@ async function main() {
       let v = await carregarOs(gestao, vist.id);
       confere(v.checklist.length >= 15, "vistoria nasce com o roteiro completo", v.checklist.length);
       await executarAcao(tec, vist.id, { tipo: "iniciar" }, { latitude: -10.68, longitude: -37.42 });
+
+      // Observação obrigatória: aterramento pede sempre, com foto ou sem.
+      const aterra = v.checklist.find((i) => i.chave === "aterramento")!;
+      confere(aterra.exigeObservacao === "sempre", "aterramento nasce pedindo observação sempre");
+      confere(v.checklist.find((i) => i.chave === "ampliacao")?.tipoResposta === "sim_nao", "aumento de consumo é sim ou não");
+      confere(v.checklist.find((i) => i.chave === "inversor_local")?.aceitaVideo === true, "o local do inversor aceita vídeo");
+      await responderItem(tec, vist.id, aterra.id, { valor: "Não existe" });
+      await db.insert(schema.osAnexo).values({
+        empresaId: empresa.id,
+        ordemServicoId: vist.id,
+        categoria: "foto",
+        caminho: "teste://sem-arquivo",
+        checklistItemId: aterra.id,
+        mime: "image/jpeg",
+      });
+      await recalcularItem(db, aterra.id);
+      v = await carregarOs(gestao, vist.id);
+      confere(!v.checklist.find((i) => i.id === aterra.id)!.concluido, "aterramento com foto e sem observação não está cumprido");
+      await responderItem(tec, vist.id, aterra.id, { valor: "Não existe", observacao: "Sem haste no poste." });
+      v = await carregarOs(gestao, vist.id);
+      confere(v.checklist.find((i) => i.id === aterra.id)!.concluido, "aterramento com foto e observação está cumprido");
+
+      // Sem foto, a explicação vale: a UC sem a foto da conta, com o porquê.
+      const uc = v.checklist.find((i) => i.chave === "uc_numero")!;
+      await responderItem(tec, vist.id, uc.id, { valor: "123456" });
+      v = await carregarOs(gestao, vist.id);
+      confere(!v.checklist.find((i) => i.id === uc.id)!.concluido, "UC sem foto e sem observação não está cumprida");
+      await responderItem(tec, vist.id, uc.id, { valor: "123456", observacao: "Cliente sem a conta de luz em casa." });
+      v = await carregarOs(gestao, vist.id);
+      confere(v.checklist.find((i) => i.id === uc.id)!.concluido, "UC sem foto, com observação, está cumprida");
+
+      // "Agendar": item que não permite não aceita; os que permitem ficam para a visita de volta.
+      const fachada = v.checklist.find((i) => i.chave === "fachada")!;
+      await recusa(
+        responderItem(tec, vist.id, fachada.id, { valor: null, agendar: true }),
+        "validacao",
+        "item que não permite 'agendar' recusa",
+      );
+      const ficam = ["cabo_caminho", "sombra", "area_util"];
+      for (const chave of ficam) {
+        const alvo = v.checklist.find((i) => i.chave === chave)!;
+        await responderItem(tec, vist.id, alvo.id, { valor: null, agendar: true });
+      }
+      v = await carregarOs(gestao, vist.id);
+      confere(
+        ficam.every((chave) => v.checklist.find((i) => i.chave === chave)!.concluido),
+        "os itens deixados para a visita de volta contam como cumpridos",
+      );
+
       for (const i of v.checklist) {
+        if (ficam.includes(i.chave ?? "")) continue;
         const valor =
           i.tipoResposta === "sim_nao" ? false
           : i.tipoResposta === "numero" ? (i.chave === "disjuntor_amperagem" ? 40 : 3)
@@ -488,7 +538,14 @@ async function main() {
           : i.tipoResposta === "multipla" ? [i.opcoes?.[0]]
           : i.tipoResposta === "foto" ? null
           : "Resposta de teste";
-        if (i.tipoResposta !== "foto") await responderItem(tec, vist.id, i.id, { valor });
+        if (i.tipoResposta !== "foto") {
+          await responderItem(tec, vist.id, i.id, {
+            valor,
+            observacao: i.exigeObservacao === "nao" ? undefined : "Observação de teste.",
+          });
+        } else if (i.exigeObservacao !== "nao") {
+          await responderItem(tec, vist.id, i.id, { valor: null, observacao: "Observação de teste." });
+        }
         for (let n = 0; n < Math.max(i.fotosMinimas, i.tipoResposta === "foto" ? 1 : 0); n++) {
           await db.insert(schema.osAnexo).values({
             empresaId: empresa.id,
@@ -501,12 +558,30 @@ async function main() {
         }
         await recalcularItem(db, i.id);
       }
+      const diaDaVolta = new Date(Date.now() + 7 * 86_400_000).toISOString().slice(0, 10);
       const rv = await executarAcao(tec, vist.id, {
         tipo: "concluir",
         resultado: "resolvido",
         laudo: "Padrão com disjuntor de 40 A e cabo de 6 mm².",
+        agendamento: { responsavelId: outroTecnico.id, dia: diaDaVolta },
       });
       v = await carregarOs(gestao, vist.id);
+      const volta = await db.query.ordemServico.findFirst({
+        where: eq(schema.ordemServico.osOrigemId, vist.id),
+        with: { checklist: true },
+      });
+      confere(Boolean(volta), "a conclusão abriu a visita de volta", rv.avisos);
+      if (volta) {
+        criados.os.push(volta.id);
+        confere(volta.responsavelId === outroTecnico.id, "a visita de volta vai para o técnico escolhido");
+        confere(volta.status === "agendada" && volta.agendadaPara !== null, "a visita de volta nasce agendada no dia escolhido");
+        confere(
+          volta.checklist.length === ficam.length && volta.checklist.every((i) => ficam.includes(i.chave ?? "")),
+          "a visita de volta leva só os itens que ficaram",
+          volta.checklist.map((i) => i.chave),
+        );
+        confere(volta.descricao.includes("Visita de volta") && volta.descricao.includes("Sombra"), "a descrição lista o que medir");
+      }
       const projVist = await db.query.projeto.findFirst({
         where: eq(schema.projeto.id, projeto.id),
         with: { etapa: true },

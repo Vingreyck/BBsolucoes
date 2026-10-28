@@ -8,14 +8,16 @@ import { anexar, CATEGORIAS, type CategoriaAnexo } from "@/os/anexos";
 
 export const dynamic = "force-dynamic";
 
-/** 16 MB de corpo: a foto (até 15 MB) mais os campos do formulário. */
-const CORPO_MAXIMO = 16 * 1024 * 1024;
+/** 52 MB de corpo: o vídeo (até 50 MB; a foto, até 15) mais os campos do formulário. */
+const CORPO_MAXIMO = 52 * 1024 * 1024;
 
 /**
  * Uma foto (ou a assinatura) tirada no celular.
  *
- *   POST multipart: arquivo, idCliente, categoria (foto | assinatura),
+ *   POST multipart: arquivo, idCliente, categoria (foto | video | assinatura),
  *                   itemId?, capturadoEm?, latitude?, longitude?
+ *
+ * Vídeo (MP4 do Android, MOV do iPhone) só entra em item que aceita vídeo.
  *
  * Vai para o Drive, na pasta do cliente, e — se o item diz que a foto é um
  * documento do dossiê — entra também no dossiê da venda. O `idCliente` torna o
@@ -32,7 +34,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
   if (!ehUuid(id)) return falha(404, "nao_encontrado", "Ordem de serviço não encontrada.");
 
   if (Number(req.headers.get("content-length") ?? 0) > CORPO_MAXIMO) {
-    return falha(413, "validacao", "A foto passou de 15 MB.");
+    return falha(413, "validacao", "O arquivo passou do limite (50 MB o vídeo, 15 MB a foto).");
   }
 
   let form: FormData;
@@ -51,7 +53,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
 
   const categoria = String(form.get("categoria") ?? "foto");
   if (!(CATEGORIAS as readonly string[]).includes(categoria) || categoria === "documento") {
-    return falha(400, "validacao", "Categoria deve ser foto ou assinatura.");
+    return falha(400, "validacao", "Categoria deve ser foto, video ou assinatura.");
   }
   const itemId = String(form.get("itemId") ?? "") || null;
   if (itemId && !ehUuid(itemId)) return falha(400, "validacao", "Item inválido.");

@@ -6,6 +6,7 @@ import { redirect } from "next/navigation";
 
 import { exigirUsuario } from "@/auth/sessao";
 import { db, schema } from "@/db";
+import { ehExigeObservacao, type ExigeObservacao } from "@/os/regras-item";
 import { ehTipoResposta, type TipoOs } from "@/os/tipos";
 
 /**
@@ -109,6 +110,9 @@ export async function salvarItem(tipo: string, itemId: string | null, form: Form
     obrigatorio: form.get("obrigatorio") === "sim",
     fotosMinimas: tipoResposta === "foto" ? Math.max(1, fotosMinimas) : fotosMinimas,
     apenasCamera: form.get("apenasCamera") === "sim",
+    exigeObservacao: (ehExigeObservacao(texto(form, "exigeObservacao")) ? texto(form, "exigeObservacao") : "nao") as ExigeObservacao,
+    permiteAgendar: form.get("permiteAgendar") === "sim",
+    aceitaVideo: form.get("aceitaVideo") === "sim",
     tipoDocumento: (tipoDocumento || null) as (typeof schema.tipoDocumento.enumValues)[number] | null,
     chave: chave || null,
   };

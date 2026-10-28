@@ -5,6 +5,7 @@ import { db, schema } from "@/db";
 import type { ValorResposta } from "@/db/schema";
 
 import { ErroOs, podeExecutar, type Ator } from "./acesso";
+import { cumprido } from "./regras-item";
 import { encerrada, numeroOs, type TipoResposta } from "./tipos";
 
 type Executor = typeof db | Parameters<Parameters<typeof db.transaction>[0]>[0];
@@ -89,27 +90,9 @@ export function normalizarValor(
   }
 }
 
-/** O item está cumprido com esta resposta e esta quantidade de fotos? */
-export function cumprido(
-  item: { tipoResposta: string; fotosMinimas: number },
-  valor: ValorResposta,
-  fotos: number,
-): boolean {
-  const fotosOk = fotos >= item.fotosMinimas;
-  switch (item.tipoResposta) {
-    case "check":
-      return valor === true && fotosOk;
-    case "sim_nao":
-      return typeof valor === "boolean" && fotosOk;
-    case "foto":
-      return fotos >= Math.max(1, item.fotosMinimas);
-    case "multipla":
-    case "serial":
-      return Array.isArray(valor) && valor.length > 0 && fotosOk;
-    default:
-      return valor !== null && valor !== "" && fotosOk;
-  }
-}
+// A regra do "cumprido" mora em `regras-item.ts`, sem banco, para o teste e o
+// app a conferirem sem Postgres.
+export { cumprido, faltaNoItem } from "./regras-item";
 
 async function contarFotos(executor: Executor, itemId: string): Promise<number> {
   const [linha] = await executor
@@ -125,7 +108,12 @@ export async function recalcularItem(executor: Executor, itemId: string): Promis
     where: eq(schema.osChecklistItem.id, itemId),
   });
   if (!item) return;
-  const agora = cumprido(item, item.valor ?? null, await contarFotos(executor, itemId));
+  const agora = cumprido(item, {
+    valor: item.valor ?? null,
+    fotos: await contarFotos(executor, itemId),
+    observacao: item.observacao,
+    agendar: item.agendar,
+  });
   if (agora === item.concluido) return;
   await executor
     .update(schema.osChecklistItem)
@@ -139,6 +127,8 @@ export interface EntradaResposta {
   observacao?: string | null;
   /** Hora do celular. Resposta mais velha que a gravada é descartada. */
   respondidoEm?: Date | null;
+  /** Deixar o item para a visita de volta. `undefined` mantém como está. */
+  agendar?: boolean;
 }
 
 export async function responderItem(
@@ -173,8 +163,12 @@ export async function responderItem(
     entrada.observacao === undefined
       ? item.observacao
       : entrada.observacao?.trim().slice(0, 2000) || null;
+  if (entrada.agendar === true && !item.permiteAgendar) {
+    throw new ErroOs("validacao", `${item.descricao}: este item não pode ficar para outra visita.`);
+  }
+  const agendar = entrada.agendar ?? item.agendar;
   const fotos = await contarFotos(db, item.id);
-  const ok = cumprido(item, valor, fotos);
+  const ok = cumprido(item, { valor, fotos, observacao, agendar });
   const agora = new Date();
 
   await db.transaction(async (tx) => {
@@ -183,6 +177,7 @@ export async function responderItem(
       .set({
         valor,
         observacao,
+        agendar,
         concluido: ok,
         concluidoEm: ok ? (item.concluidoEm ?? agora) : null,
         respondidoPorId: ator.id,

@@ -3,6 +3,16 @@ import "dotenv/config";
 import { spawn } from "node:child_process";
 import { existsSync, readdirSync } from "node:fs";
 
+import { restauracaoTestadaEsteMes } from "./db/backup-remoto";
+import {
+  avaliarRodada,
+  avisarMonitor,
+  gravarEstadoColetor,
+  lerEstadoColetor,
+  usoDoDisco,
+  type ResultadoEtapa,
+} from "./sistema/alertas";
+
 /**
  * Roda a atualização diária inteira num comando só.
  *
@@ -14,6 +24,11 @@ import { existsSync, readdirSync } from "node:fs";
  * scripts, em ordem. Uma etapa que falha não derruba as seguintes — a FoxESS
  * fora do ar não pode impedir a detecção de rodar sobre o que já está no banco.
  *
+ * Ao fim de cada rodada, o resumo vai para `estado/coletor.json` (a rota de
+ * saúde do site lê) e para o monitor externo (`HEALTHCHECK_URL`), que avisa por
+ * e-mail quando a rodada tem problema ou quando o coletor some — ver
+ * `sistema/alertas.ts`.
+ *
  *   npm run atualizar
  */
 
@@ -23,6 +38,8 @@ interface Etapa {
   argumentos?: string[];
   /** Quando devolve false, a etapa é pulada com o motivo explicado. */
   quando?: () => { rodar: boolean; motivo?: string };
+  /** Falhou uma vez, alerta. Sem isto, só depois de algumas rodadas seguidas. */
+  critica?: boolean;
 }
 
 const PASTA_DADOS = "dados";
@@ -193,10 +210,29 @@ const ETAPAS: Etapa[] = [
     nome: "Cópia de segurança do banco",
     script: "src/db/backup.ts",
     argumentos: ["--se-preciso"],
+    critica: true,
+  },
+  {
+    /**
+     * Uma vez por mês, de madrugada: restaura a cópia mais nova num banco
+     * descartável e confere que ela volta inteira. Cópia nunca testada é
+     * esperança, não backup.
+     */
+    nome: "Teste de restauração da cópia (mensal)",
+    script: "src/db/testar-restauracao.ts",
+    critica: true,
+    quando: () => {
+      if (restauracaoTestadaEsteMes()) return { rodar: false, motivo: "já testada este mês" };
+      const hora = horaLocal();
+      return hora >= 1 && hora <= 4
+        ? { rodar: true }
+        : { rodar: false, motivo: "roda uma vez por mês, entre 1h e 4h" };
+    },
   },
   {
     nome: "Detecção de usina parada",
     script: "src/collectors/detectar.ts",
+    critica: true,
   },
 ];
 
@@ -214,8 +250,8 @@ function executar(etapa: Etapa): Promise<boolean> {
 
 async function main() {
   const inicio = Date.now();
-  const resultados: { nome: string; estado: "ok" | "falhou" | "pulada"; motivo?: string }[] =
-    [];
+  const resultados: ResultadoEtapa[] = [];
+  await avisarMonitor("/start");
 
   for (const etapa of ETAPAS) {
     const condicao = etapa.quando?.() ?? { rodar: true };
@@ -228,7 +264,7 @@ async function main() {
 
     console.log(`\n── ${etapa.nome} ──────────────────────────────`);
     const ok = await executar(etapa);
-    resultados.push({ nome: etapa.nome, estado: ok ? "ok" : "falhou" });
+    resultados.push({ nome: etapa.nome, estado: ok ? "ok" : "falhou", critica: etapa.critica });
   }
 
   const segundos = Math.round((Date.now() - inicio) / 1000);
@@ -237,6 +273,32 @@ async function main() {
     const marca = r.estado === "ok" ? "✓" : r.estado === "pulada" ? "–" : "✗";
     console.log(`  ${marca} ${r.nome}${r.motivo ? ` — ${r.motivo}` : ""}`);
   }
+
+  // O disco do servidor, visto daqui de dentro: o container enxerga o disco da VM.
+  const disco = usoDoDisco("/");
+  console.log(`  ${disco === null ? "?" : disco}% do disco em uso`);
+
+  const anterior = lerEstadoColetor();
+  const avaliacao = avaliarRodada(resultados, anterior?.falhasSeguidas ?? {}, disco);
+  gravarEstadoColetor({
+    inicio: new Date(inicio).toISOString(),
+    fim: new Date().toISOString(),
+    duracaoS: segundos,
+    resultados,
+    falhasSeguidas: avaliacao.falhasSeguidas,
+    disco,
+    alerta: avaliacao.alerta,
+    motivos: avaliacao.motivos,
+  });
+
+  // O texto do aviso: o motivo primeiro, depois o resumo inteiro da rodada.
+  const resumo = [
+    ...(avaliacao.alerta ? ["Precisa de atenção:", ...avaliacao.motivos.map((m) => `  • ${m}`), ""] : []),
+    ...resultados.map((r) => `${r.estado === "ok" ? "✓" : r.estado === "pulada" ? "–" : "✗"} ${r.nome}${r.motivo ? ` — ${r.motivo}` : ""}`),
+    `disco: ${disco === null ? "?" : `${disco}%`} · ${segundos}s`,
+  ].join("\n");
+  await avisarMonitor(avaliacao.alerta ? "/fail" : "", resumo);
+  if (avaliacao.alerta) console.log(`\nAlerta: ${avaliacao.motivos.join("; ")}.`);
 
   const falhas = resultados.filter((r) => r.estado === "falhou").length;
   if (falhas) {

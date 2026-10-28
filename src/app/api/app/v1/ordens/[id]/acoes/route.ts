@@ -13,7 +13,12 @@ export const dynamic = "force-dynamic";
  * não conseguiu atender.
  *
  *   POST { idCliente, acao, ocorridoEm?, latitude?, longitude?, precisao?,
- *          motivo?, resultado?, laudo?, assinaturaNome? }
+ *          motivo?, resultado?, laudo?, assinaturaNome?,
+ *          agendamento?: { responsavelId, dia? } }
+ *
+ * `agendamento` vale só no "concluir": se algum item ficou para a visita de
+ * volta, abre a OS desses itens para o responsável escolhido (`dia` é
+ * "AAAA-MM-DD", opcional).
  *
  * A mesma regra do site (`@/os/fluxo`). O `idCliente` é obrigatório: é ele que
  * deixa o app reenviar a fila depois de uma queda de sinal sem duplicar nada —
@@ -22,6 +27,13 @@ export const dynamic = "force-dynamic";
  * Agendar, atribuir, cancelar e reabrir são da gestão e ficam no site.
  */
 const DO_APP = new Set(["deslocamento", "iniciar", "pausar", "retomar", "concluir", "nao_atendida"]);
+
+function agendamentoDoApp(bruto: unknown): { responsavelId: string; dia: string | null } | null {
+  if (!bruto || typeof bruto !== "object") return null;
+  const { responsavelId, dia } = bruto as { responsavelId?: unknown; dia?: unknown };
+  if (typeof responsavelId !== "string" || !ehUuid(responsavelId)) return null;
+  return { responsavelId, dia: typeof dia === "string" && dia ? dia.slice(0, 10) : null };
+}
 
 export async function POST(req: Request, { params }: { params: Promise<{ id: string }> }) {
   const usuario = await exigirApp(req);
@@ -49,6 +61,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
       resultado: corpo.resultado === "nao_resolvido" ? "nao_resolvido" : "resolvido",
       laudo: texto(corpo.laudo, 8000) || null,
       assinaturaNome: texto(corpo.assinaturaNome, 200) || null,
+      agendamento: agendamentoDoApp(corpo.agendamento),
     };
   } else if (tipo === "pausar" || tipo === "nao_atendida") {
     acao = { tipo, motivo: texto(corpo.motivo, 500) };

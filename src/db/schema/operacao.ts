@@ -343,6 +343,20 @@ export const osChecklistItem = pgTable(
     tipoDocumento: tipoDocumento("tipo_documento"),
     /** Nome estável do item ("disjuntor_amperagem"), para cruzar com o projeto. */
     chave: varchar("chave", { length: 60 }),
+    /**
+     * Quando a observação é obrigatória: `nao`, `sem_foto` (a observação
+     * substitui a foto que não deu para tirar) ou `sempre` (vai junto com a foto).
+     */
+    exigeObservacao: varchar("exige_observacao", { length: 10 }).notNull().default("nao"),
+    /** O item pode ser deixado para uma visita de volta (medir sombra, espaço, cabo). */
+    permiteAgendar: boolean("permite_agendar").notNull().default(false),
+    /** A foto deste item pode ser um vídeo curto (onde vai ficar o inversor). */
+    aceitaVideo: boolean("aceita_video").notNull().default(false),
+    /**
+     * O técnico marcou "agendar": não deu para fazer agora e fica para a visita
+     * de volta. Conta como cumprido — a visita nasce na conclusão da OS.
+     */
+    agendar: boolean("agendar").notNull().default(false),
 
     valor: jsonb("valor").$type<ValorResposta>(),
     respondidoPorId: uuid("respondido_por_id").references(() => usuario.id, {
@@ -363,7 +377,7 @@ export const osAnexo = pgTable(
     ordemServicoId: uuid("ordem_servico_id")
       .notNull()
       .references(() => ordemServico.id, { onDelete: "cascade" }),
-    /** foto | assinatura | documento */
+    /** foto | video | assinatura | documento */
     categoria: text("categoria").notNull().default("foto"),
     caminho: text("caminho").notNull(),
     nomeOriginal: text("nome_original"),
@@ -499,6 +513,10 @@ export const modeloOsItem = pgTable(
     apenasCamera: boolean("apenas_camera").notNull().default(false),
     tipoDocumento: tipoDocumento("tipo_documento"),
     chave: varchar("chave", { length: 60 }),
+    /** `nao`, `sem_foto` ou `sempre` — ver `osChecklistItem.exigeObservacao`. */
+    exigeObservacao: varchar("exige_observacao", { length: 10 }).notNull().default("nao"),
+    permiteAgendar: boolean("permite_agendar").notNull().default(false),
+    aceitaVideo: boolean("aceita_video").notNull().default(false),
   },
   (t) => [index("modelo_os_item_modelo_idx").on(t.modeloId, t.ordem)],
 );

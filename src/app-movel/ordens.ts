@@ -187,6 +187,11 @@ export function serializarOrdem(o: OsCompleta, modelo?: RegraDoModelo, notas: No
       unidade: i.unidade,
       fotosMinimas: i.fotosMinimas,
       apenasCamera: i.apenasCamera,
+      /** `nao`, `sem_foto` ou `sempre` — ver `os/regras-item.ts`. */
+      exigeObservacao: i.exigeObservacao,
+      permiteAgendar: i.permiteAgendar,
+      aceitaVideo: i.aceitaVideo,
+      agendar: i.agendar,
       valor: i.valor ?? null,
       respondidoEm: instante(i.respondidoEm),
     })),

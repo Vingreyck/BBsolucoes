@@ -16,6 +16,7 @@ import { limparNome, pastaDoCliente } from "@/documentos/pastas";
 import { ErroOs, podeExecutar, podeVer, type Ator } from "./acesso";
 import { violouUnico } from "./fluxo";
 import { relogioDe } from "./relogio";
+import { EXTENSAO, tipoReal, TAMANHO_MAXIMO_VIDEO } from "./tipo-arquivo";
 import { recalcularItem } from "./respostas";
 import { encerrada, TIPO_ROTULO } from "./tipos";
 
@@ -33,29 +34,11 @@ import { encerrada, TIPO_ROTULO } from "./tipos";
  * exatamente o que travava 70 dossiês.
  */
 
-export const CATEGORIAS = ["foto", "assinatura", "documento"] as const;
+export const CATEGORIAS = ["foto", "video", "assinatura", "documento"] as const;
 export type CategoriaAnexo = (typeof CATEGORIAS)[number];
 
 /** 15 MB. Foto de celular comprimida pelo app fica bem abaixo disso. */
 const TAMANHO_MAXIMO = 15 * 1024 * 1024;
-
-/**
- * O tipo pelo conteúdo, não pelo que o celular declarou. JPEG e PNG são o que
- * o relatório em PDF sabe desenhar; PDF só como documento.
- */
-function tipoReal(conteudo: Uint8Array): "image/jpeg" | "image/png" | "application/pdf" | null {
-  const b = conteudo;
-  if (b[0] === 0xff && b[1] === 0xd8 && b[2] === 0xff) return "image/jpeg";
-  if (b[0] === 0x89 && b[1] === 0x50 && b[2] === 0x4e && b[3] === 0x47) return "image/png";
-  if (b[0] === 0x25 && b[1] === 0x50 && b[2] === 0x44 && b[3] === 0x46) return "application/pdf";
-  return null;
-}
-
-const EXTENSAO: Record<string, string> = {
-  "image/jpeg": ".jpg",
-  "image/png": ".png",
-  "application/pdf": ".pdf",
-};
 
 function carimbo(d: Date): string {
   const r = relogioDe(d);
@@ -119,17 +102,32 @@ export async function anexar(ator: Ator, osId: string, novo: NovoAnexo): Promise
   if (novo.itemId && !item) throw new ErroOs("nao_encontrado", "Item do checklist não encontrado.", 404);
 
   if (novo.conteudo.byteLength === 0) throw new ErroOs("validacao", "O arquivo veio vazio.");
-  if (novo.conteudo.byteLength > TAMANHO_MAXIMO) {
-    throw new ErroOs("validacao", "O arquivo passou de 15 MB.", 413);
-  }
   const mime = tipoReal(novo.conteudo);
-  const aceitos = novo.categoria === "documento" ? ["image/jpeg", "image/png", "application/pdf"] : ["image/jpeg", "image/png"];
+  const ehVideo = mime === "video/mp4" || mime === "video/quicktime";
+  if (novo.conteudo.byteLength > (ehVideo ? TAMANHO_MAXIMO_VIDEO : TAMANHO_MAXIMO)) {
+    throw new ErroOs("validacao", `O arquivo passou de ${ehVideo ? 50 : 15} MB.`, 413);
+  }
+  const aceitos =
+    novo.categoria === "documento"
+      ? ["image/jpeg", "image/png", "application/pdf"]
+      : novo.categoria === "assinatura"
+        ? ["image/jpeg", "image/png"]
+        : ["image/jpeg", "image/png", "video/mp4", "video/quicktime"];
   if (!mime || !aceitos.includes(mime)) {
     throw new ErroOs(
       "validacao",
-      novo.categoria === "documento" ? "Envie PDF, JPEG ou PNG." : "A foto precisa ser JPEG ou PNG.",
+      novo.categoria === "documento"
+        ? "Envie PDF, JPEG ou PNG."
+        : novo.categoria === "assinatura"
+          ? "A assinatura precisa ser JPEG ou PNG."
+          : "A foto precisa ser JPEG ou PNG (ou um vídeo MP4/MOV, onde o item aceita).",
       415,
     );
+  }
+  // O tipo vale pelo conteúdo: um vídeo mandado como "foto" é um vídeo.
+  const categoria: CategoriaAnexo = ehVideo ? "video" : novo.categoria === "video" ? "foto" : novo.categoria;
+  if (ehVideo && !item?.aceitaVideo) {
+    throw new ErroOs("validacao", "Este item não aceita vídeo — tire uma foto.", 415);
   }
 
   if (!driveConfigurado()) {
@@ -149,9 +147,9 @@ export async function anexar(ator: Ator, osId: string, novo: NovoAnexo): Promise
   const pastaCliente = await pastaDoCliente(os.empresaId, os.cliente);
   const pastaOs = await garantirPasta(`OS ${num} - ${TIPO_ROTULO[os.tipo] ?? os.tipo}`, pastaCliente);
   const rotulo =
-    novo.categoria === "assinatura"
+    categoria === "assinatura"
       ? "Assinatura do cliente"
-      : (item?.descricao.slice(0, 70) ?? (novo.categoria === "documento" ? "Documento" : "Foto"));
+      : (item?.descricao.slice(0, 70) ?? (categoria === "documento" ? "Documento" : ehVideo ? "Vídeo" : "Foto"));
   const nome =
     limparNome(`OS ${num} - ${rotulo} - ${carimbo(capturadoEm)}-${randomBytes(2).toString("hex")}`) +
     EXTENSAO[mime];
@@ -169,7 +167,7 @@ export async function anexar(ator: Ator, osId: string, novo: NovoAnexo): Promise
         .values({
           empresaId: os.empresaId,
           ordemServicoId: os.id,
-          categoria: novo.categoria,
+          categoria,
           caminho: link,
           nomeOriginal: novo.nomeOriginal?.slice(0, 200) ?? nome,
           tamanhoBytes: novo.conteudo.byteLength,
@@ -185,7 +183,7 @@ export async function anexar(ator: Ator, osId: string, novo: NovoAnexo): Promise
         .returning({ id: schema.osAnexo.id });
 
       let documentoId: string | null = null;
-      if (item?.tipoDocumento && os.projetoId) {
+      if (item?.tipoDocumento && os.projetoId && !ehVideo) {
         const [doc] = await tx
           .insert(schema.documento)
           .values({

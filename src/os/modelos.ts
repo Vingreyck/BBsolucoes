@@ -2,6 +2,7 @@ import { and, asc, eq } from "drizzle-orm";
 
 import { db, schema } from "@/db";
 
+import type { ExigeObservacao } from "./regras-item";
 import type { PrioridadeOs, TipoOs, TipoResposta } from "./tipos";
 
 type TipoDocumento = (typeof schema.tipoDocumento.enumValues)[number];
@@ -38,6 +39,15 @@ export interface ItemPadrao {
   apenasCamera?: boolean;
   tipoDocumento?: TipoDocumento;
   chave?: string;
+  /**
+   * Observação obrigatória: `sem_foto` (a explicação vale no lugar da foto que
+   * não deu para tirar) ou `sempre`. Sem isto, a observação é opcional.
+   */
+  exigeObservacao?: ExigeObservacao;
+  /** O técnico pode deixar o item para uma visita de volta (botão "agendar"). */
+  permiteAgendar?: boolean;
+  /** A foto pode ser um vídeo curto. */
+  aceitaVideo?: boolean;
 }
 
 interface ModeloPadrao {
@@ -94,6 +104,7 @@ export const MODELOS_PADRAO: Record<TipoOs, ModeloPadrao> = {
         obrigatorio: true,
         tipoDocumento: "uc_geradora",
         chave: "uc_numero",
+        exigeObservacao: "sem_foto",
       },
       {
         secao: "Cliente e unidade",
@@ -111,6 +122,7 @@ export const MODELOS_PADRAO: Record<TipoOs, ModeloPadrao> = {
         apenasCamera: true,
         obrigatorio: true,
         chave: "fachada",
+        exigeObservacao: "sem_foto",
       },
       {
         secao: "Padrão de entrada",
@@ -121,6 +133,7 @@ export const MODELOS_PADRAO: Record<TipoOs, ModeloPadrao> = {
         obrigatorio: true,
         tipoDocumento: "foto_padrao",
         chave: "medidor_numero",
+        exigeObservacao: "sem_foto",
       },
       {
         secao: "Padrão de entrada",
@@ -133,6 +146,7 @@ export const MODELOS_PADRAO: Record<TipoOs, ModeloPadrao> = {
         obrigatorio: true,
         tipoDocumento: "foto_padrao",
         chave: "disjuntor_amperagem",
+        exigeObservacao: "sem_foto",
       },
       {
         secao: "Padrão de entrada",
@@ -151,6 +165,7 @@ export const MODELOS_PADRAO: Record<TipoOs, ModeloPadrao> = {
         apenasCamera: true,
         obrigatorio: true,
         chave: "cabo_bitola",
+        exigeObservacao: "sem_foto",
       },
       {
         secao: "Padrão de entrada",
@@ -161,6 +176,7 @@ export const MODELOS_PADRAO: Record<TipoOs, ModeloPadrao> = {
         apenasCamera: true,
         obrigatorio: true,
         chave: "aterramento",
+        exigeObservacao: "sempre",
       },
       {
         secao: "Quadro e cabos",
@@ -172,6 +188,7 @@ export const MODELOS_PADRAO: Record<TipoOs, ModeloPadrao> = {
         apenasCamera: true,
         obrigatorio: true,
         chave: "qdg_vagas",
+        exigeObservacao: "sempre",
       },
       {
         secao: "Quadro e cabos",
@@ -182,6 +199,8 @@ export const MODELOS_PADRAO: Record<TipoOs, ModeloPadrao> = {
         apenasCamera: true,
         obrigatorio: true,
         chave: "cabo_caminho",
+        exigeObservacao: "sem_foto",
+        permiteAgendar: true,
       },
       {
         secao: "Quadro e cabos",
@@ -189,6 +208,7 @@ export const MODELOS_PADRAO: Record<TipoOs, ModeloPadrao> = {
         tipoResposta: "sim_nao",
         obrigatorio: true,
         chave: "rasgar_parede",
+        exigeObservacao: "sempre",
       },
       {
         secao: "Telhado",
@@ -199,6 +219,7 @@ export const MODELOS_PADRAO: Record<TipoOs, ModeloPadrao> = {
         apenasCamera: true,
         obrigatorio: true,
         chave: "telhado_tipo",
+        exigeObservacao: "sem_foto",
       },
       {
         secao: "Telhado",
@@ -218,6 +239,8 @@ export const MODELOS_PADRAO: Record<TipoOs, ModeloPadrao> = {
         apenasCamera: true,
         obrigatorio: true,
         chave: "sombra",
+        exigeObservacao: "sem_foto",
+        permiteAgendar: true,
       },
       {
         secao: "Telhado",
@@ -226,6 +249,7 @@ export const MODELOS_PADRAO: Record<TipoOs, ModeloPadrao> = {
         unidade: "m²",
         obrigatorio: true,
         chave: "area_util",
+        permiteAgendar: true,
       },
       {
         secao: "Inversor e futuro",
@@ -236,13 +260,18 @@ export const MODELOS_PADRAO: Record<TipoOs, ModeloPadrao> = {
         apenasCamera: true,
         obrigatorio: true,
         chave: "inversor_local",
+        exigeObservacao: "sempre",
+        aceitaVideo: true,
       },
       {
         secao: "Inversor e futuro",
-        descricao: "Aumento de consumo previsto",
-        ajuda: 'Ar-condicionado, piscina, carro elétrico… Ex.: "2 ar-condicionados até o verão".',
-        tipoResposta: "texto",
+        descricao: "Aumento de consumo previsto?",
+        ajuda:
+          'Ar-condicionado, piscina, carro elétrico… Responda e explique na observação: "2 ar-condicionados até o verão".',
+        tipoResposta: "sim_nao",
+        obrigatorio: true,
         chave: "ampliacao",
+        exigeObservacao: "sempre",
       },
     ],
   },
@@ -651,6 +680,9 @@ export async function garantirModelos(empresaId: string): Promise<void> {
           apenasCamera: item.apenasCamera ?? false,
           tipoDocumento: item.tipoDocumento ?? null,
           chave: item.chave ?? null,
+          exigeObservacao: item.exigeObservacao ?? "nao",
+          permiteAgendar: item.permiteAgendar ?? false,
+          aceitaVideo: item.aceitaVideo ?? false,
         })),
       );
     });

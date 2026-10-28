@@ -6,6 +6,8 @@ import { join } from "node:path";
 import { createGzip } from "node:zlib";
 import { promisify } from "node:util";
 
+import { enviarParaDrive, enviouHoje, motivoParaNaoEnviar } from "./backup-remoto";
+
 /**
  * Cópia de segurança do banco.
  *
@@ -17,6 +19,10 @@ import { promisify } from "node:util";
  * Roda pelo `docker exec` de propósito, e não com um `pg_dump` da máquina: é
  * assim que funciona igual aqui no Windows e lá na VM Ubuntu, sem depender de
  * ter o cliente do Postgres instalado nem de a porta estar publicada.
+ *
+ * Depois de gravar a cópia local, ela sobe **cifrada** para o Drive da empresa
+ * (`backup-remoto.ts`) — a cópia que sobrevive à perda da VM. Sem `BACKUP_SENHA`
+ * no `.env`, fica só a local, com aviso.
  *
  *   npm run backup
  *   npm run backup -- --manter 30
@@ -66,6 +72,17 @@ async function main() {
   const manter = i >= 0 ? Math.max(1, Number(process.argv[i + 1]) || MANTER_PADRAO) : MANTER_PADRAO;
 
   if (process.argv.includes("--se-preciso") && temBackupDeHoje()) {
+    // A cópia local de hoje existe; falta a externa se o Drive falhou mais cedo.
+    // Tentar de novo a cada rodada é o que faz um Drive fora do ar às 7h não
+    // deixar o dia inteiro sem cópia fora da VM.
+    const hoje = agora().slice(0, 10);
+    if (motivoParaNaoEnviar() === null && !enviouHoje(hoje)) {
+      const deHoje = readdirSync(PASTA)
+        .filter((n) => n.startsWith(`selebi-${hoje}`) && n.endsWith(".sql.gz"))
+        .sort()
+        .at(-1)!;
+      process.exit((await enviarCopiaExterna(join(PASTA, deHoje))) ? 0 : 1);
+    }
     console.log("Já existe cópia de hoje. Nada a fazer.");
     process.exit(0);
   }
@@ -211,6 +228,8 @@ async function main() {
     `Guardadas ${guardados} cópias${apagados ? `, ${apagados} apagadas por passar de ${manter} dias` : ""}.`,
   );
 
+  const externaOk = await enviarCopiaExterna(destino);
+
   // A instrução muda com o ambiente, como a própria cópia: em produção não há
   // Docker dentro do container, e imprimir `docker exec -i  psql` com o nome
   // vazio manda a pessoa colar um comando quebrado na pior hora possível.
@@ -220,7 +239,36 @@ async function main() {
         ? `  gunzip -c ${destino} | docker exec -i ${CONTAINER} psql -U ${USUARIO} -d ${BANCO}`
         : `  gunzip -c ${destino} | docker compose exec -T db psql -U ${USUARIO} -d ${BANCO}`),
   );
-  process.exit(0);
+  // A cópia local foi gravada; se a externa falhou, a etapa conta como falha —
+  // é o que faz o alerta do coletor disparar.
+  process.exit(externaOk ? 0 : 1);
+}
+
+/**
+ * Sobe a cópia cifrada para o Drive. Sem configuração, avisa e segue (a rota
+ * de saúde do site é quem cobra); com configuração e falha, devolve falso.
+ */
+async function enviarCopiaExterna(arquivo: string): Promise<boolean> {
+  const motivo = motivoParaNaoEnviar();
+  if (motivo) {
+    console.warn(`\nAtenção: ${motivo}. Se a VM se perder, esta cópia vai junto.`);
+    return true;
+  }
+  try {
+    const r = await enviarParaDrive(arquivo);
+    console.log(
+      `Cópia cifrada no Drive: ${r.nome} (${(r.tamanho / 1024 / 1024).toFixed(2)} MB)` +
+        (r.lixeira ? `, ${r.lixeira} mais velhas para a lixeira do Drive.` : "."),
+    );
+    return true;
+  } catch (erro) {
+    console.error(
+      "\nA cópia local foi gravada, mas a cópia cifrada NÃO subiu para o Drive:\n  " +
+        (erro instanceof Error ? erro.message : String(erro)) +
+        "\nA próxima rodada tenta de novo.",
+    );
+    return false;
+  }
 }
 
 main().catch((erro) => {

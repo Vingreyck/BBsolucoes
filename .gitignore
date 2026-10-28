@@ -36,3 +36,6 @@ backups/
 *.jks
 *.keystore
 keystore.properties
+
+# Resumo da última rodada do coletor (lido pela rota de saúde).
+estado/

@@ -1,5 +1,6 @@
 import type { OsCompleta } from "@/os/consultas";
 import { detalheDoEvento, textoDaResposta } from "@/os/formatar";
+import { faltaNoItem } from "@/os/regras-item";
 import { formatarInstante } from "@/os/relogio";
 import { EVENTO_ROTULO, ORIGEM_EVENTO_ROTULO } from "@/os/tipos";
 
@@ -145,6 +146,15 @@ export function ItemChecklist({
 }) {
   const fotos = item.anexos.length;
   const faltaFoto = item.fotosMinimas > 0 && fotos < item.fotosMinimas;
+  const falta = item.concluido
+    ? null
+    : faltaNoItem(item, { valor: item.valor, fotos, observacao: item.observacao, agendar: item.agendar });
+  const dicaObservacao =
+    item.exigeObservacao === "sempre"
+      ? "Observação (obrigatória)"
+      : item.exigeObservacao === "sem_foto"
+        ? "Observação (obrigatória se não houver foto)"
+        : "Observação (opcional)";
   const respondido = item.respondidoEm !== null;
   const estado = item.concluido ? "cumprido" : item.obrigatorio ? "pendente" : "";
 
@@ -156,6 +166,7 @@ export function ItemChecklist({
         </span>
         <span className="item-nome">{item.descricao}</span>
         {item.obrigatorio && !item.concluido && <span className="obrigatorio">obrigatório</span>}
+        {item.agendar && <span className="obrigatorio">fica para a visita de volta</span>}
         {(item.fotosMinimas > 0 || item.tipoResposta === "foto") && (
           <span className={`fotos-contador${faltaFoto ? " falta" : ""}`}>
             {fotos}/{Math.max(item.fotosMinimas, 1)} foto{Math.max(item.fotosMinimas, 1) > 1 ? "s" : ""}
@@ -163,6 +174,7 @@ export function ItemChecklist({
         )}
       </div>
       {item.ajuda && <p className="item-ajuda">{item.ajuda}</p>}
+      {falta && item.obrigatorio && <p className="item-ajuda">{falta}.</p>}
 
       {(respondido || item.tipoResposta === "foto") && (
         <p className="item-resposta">
@@ -181,10 +193,14 @@ export function ItemChecklist({
         <div className="fotos-item">
           {item.anexos.map((a) => (
             <figure key={a.id}>
-              <a href={`/os/anexo/${a.id}`} target="_blank" rel="noopener">
-                {/* eslint-disable-next-line @next/next/no-img-element -- vem do Drive pelo proxy autenticado */}
-                <img src={`/os/anexo/${a.id}`} alt={`Foto: ${item.descricao}`} loading="lazy" />
-              </a>
+              {a.mime?.startsWith("video/") ? (
+                <video src={`/os/anexo/${a.id}`} controls preload="metadata" />
+              ) : (
+                <a href={`/os/anexo/${a.id}`} target="_blank" rel="noopener">
+                  {/* eslint-disable-next-line @next/next/no-img-element -- vem do Drive pelo proxy autenticado */}
+                  <img src={`/os/anexo/${a.id}`} alt={`Foto: ${item.descricao}`} loading="lazy" />
+                </a>
+              )}
               <figcaption>
                 {a.capturadoEm ? formatarInstante(a.capturadoEm, false) : ""}
                 {a.latitude && a.longitude && (
@@ -210,7 +226,7 @@ export function ItemChecklist({
 
       {podeResponder && (
         <div className="item-forms">
-          {item.tipoResposta !== "foto" && (
+          {(item.tipoResposta !== "foto" || item.exigeObservacao !== "nao") && (
             <details open={!respondido && item.obrigatorio}>
               <summary>{respondido ? "Mudar resposta" : "Responder"}</summary>
               <form action={responderItemAction.bind(null, osId, item.id)} className="form-resposta">
@@ -220,7 +236,8 @@ export function ItemChecklist({
                   type="text"
                   name="observacao"
                   defaultValue={item.observacao ?? ""}
-                  placeholder="Observação (opcional)"
+                  placeholder={dicaObservacao}
+                  required={item.exigeObservacao === "sempre"}
                   maxLength={2000}
                 />
                 <button type="submit" className="botao secundario">
@@ -231,9 +248,16 @@ export function ItemChecklist({
           )}
           <form action={anexarAction.bind(null, osId)} className="form-foto">
             <input type="hidden" name="itemId" value={item.id} />
-            <input type="file" name="arquivo" accept="image/jpeg,image/png" capture="environment" multiple required />
+            <input
+              type="file"
+              name="arquivo"
+              accept={item.aceitaVideo ? "image/jpeg,image/png,video/mp4,video/quicktime" : "image/jpeg,image/png"}
+              capture="environment"
+              multiple
+              required
+            />
             <button type="submit" className="botao secundario">
-              Enviar foto
+              {item.aceitaVideo ? "Enviar foto ou vídeo" : "Enviar foto"}
             </button>
           </form>
           {item.apenasCamera && (

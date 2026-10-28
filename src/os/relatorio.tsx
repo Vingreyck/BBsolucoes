@@ -172,6 +172,8 @@ function montar(R: ReactPdf) {
     );
   }
 
+  const videosDo = (anexos: { mime: string | null }[]) => anexos.filter((a) => a.mime?.startsWith("video/")).length;
+
   function GradeDeFotos({ anexos, fotos }: { anexos: { id: string; capturadoEm: Date | null }[]; fotos: Fotos }) {
     const comImagem = anexos.filter((a) => fotos.has(a.id));
     if (!comImagem.length) return null;
@@ -294,6 +296,12 @@ function montar(R: ReactPdf) {
                     </Text>
                   </View>
                   {item.observacao ? <Text style={s.observacao}>{item.observacao}</Text> : null}
+                  {item.agendar ? <Text style={s.observacao}>Ficou para a visita de volta.</Text> : null}
+                  {videosDo(item.anexos) > 0 ? (
+                    <Text style={s.observacao}>
+                      {videosDo(item.anexos) === 1 ? "1 vídeo anexado" : `${videosDo(item.anexos)} vídeos anexados`} (no sistema).
+                    </Text>
+                  ) : null}
                   <GradeDeFotos anexos={item.anexos} fotos={fotos} />
                 </View>
               ))}

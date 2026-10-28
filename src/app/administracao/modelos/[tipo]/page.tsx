@@ -82,10 +82,26 @@ function CamposItem({ item }: { item?: ItemModelo }) {
           <input type="text" name="chave" defaultValue={item?.chave ?? ""} maxLength={60} placeholder="disjuntor_amperagem" />
         </label>
       </div>
+      <label>
+        Observação do técnico
+        <select name="exigeObservacao" defaultValue={item?.exigeObservacao ?? "nao"}>
+          <option value="nao">Opcional</option>
+          <option value="sem_foto">Obrigatória se ele não tirar a foto (a explicação vale no lugar)</option>
+          <option value="sempre">Sempre obrigatória (com foto ou sem)</option>
+        </select>
+      </label>
       <div className="linha-radios">
         <label>
           <input type="checkbox" name="obrigatorio" value="sim" defaultChecked={item?.obrigatorio ?? false} /> Obrigatório
           (trava a conclusão)
+        </label>
+        <label>
+          <input type="checkbox" name="permiteAgendar" value="sim" defaultChecked={item?.permiteAgendar ?? false} /> Pode
+          ficar para uma visita de volta (botão “agendar” no app)
+        </label>
+        <label>
+          <input type="checkbox" name="aceitaVideo" value="sim" defaultChecked={item?.aceitaVideo ?? false} /> A foto pode
+          ser um vídeo curto (no app)
         </label>
         <label>
           <input type="checkbox" name="apenasCamera" value="sim" defaultChecked={item?.apenasCamera ?? false} /> Só foto
