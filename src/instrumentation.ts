@@ -1,4 +1,18 @@
 /**
+ * Quando o site sobe: liga a ronda que leva ao Drive os anexos que ficaram no
+ * disco (ver `os/deposito-local.ts`).
+ *
+ * O `if` com `NEXT_RUNTIME` em volta do `import` é o jeito que o Next entende
+ * para não empacotar código de Node (disco, banco) na versão Edge do arquivo.
+ */
+export async function register() {
+  if (process.env.NEXT_RUNTIME === "nodejs") {
+    const { iniciarEnvioDeAnexos } = await import("./os/anexos");
+    iniciarEnvioDeAnexos();
+  }
+}
+
+/**
  * O gancho do Next para erros do servidor: toda exceção que escapa de uma
  * página, rota ou Server Action passa por aqui e vai para o Sentry.
  *

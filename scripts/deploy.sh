@@ -79,7 +79,7 @@ echo "== 5/8 Migrações"
 docker compose run --rm --no-deps -T site npm run migrar
 
 echo "== 6/8 Subindo"
-mkdir -p backups estado mapeamentos
+mkdir -p backups estado mapeamentos anexos-pendentes
 docker compose up -d
 
 echo "== 7/8 Limpando o cache do Docker"

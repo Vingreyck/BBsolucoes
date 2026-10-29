@@ -66,6 +66,18 @@ export function verificarBackupExterno(
     : { nome: "backup no Drive", ok: true, detalhe: `último envio há ${idade(velho)}` };
 }
 
+/** Anexo que espera o Drive há mais de 6 h: o Drive parou de aceitar, e o disco enche. */
+export function verificarAnexosPendentes(
+  pendentes: { quantidade: number; maisAntigo: Date | null },
+  agora = Date.now(),
+): Verificacao {
+  const nome = "anexos esperando o Drive";
+  if (!pendentes.quantidade || !pendentes.maisAntigo) return { nome, ok: true, detalhe: "nenhum" };
+  const espera = agora - pendentes.maisAntigo.getTime();
+  const texto = `${pendentes.quantidade}, o mais antigo há ${idade(espera)}`;
+  return { nome, ok: espera <= 6 * HORA, detalhe: texto };
+}
+
 export function verificarDisco(porcento: number | null): Verificacao {
   if (porcento === null) return { nome: "disco", ok: true, detalhe: "não foi possível medir" };
   return porcento >= LIMITES.discoPorcento

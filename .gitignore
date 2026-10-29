@@ -32,6 +32,9 @@ logs/
 # Cópias do banco: dado real de cliente, nunca vão para o repositório.
 backups/
 
+# Fotos do técnico esperando subir ao Drive: dado real de cliente.
+anexos-pendentes/
+
 # Chaves de assinatura do app: nunca no Git
 *.jks
 *.keystore

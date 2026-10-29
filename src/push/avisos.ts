@@ -1,20 +1,22 @@
 import { eq, inArray } from "drizzle-orm";
 
 import { db, schema } from "@/db";
+import { configApns, enviarApns } from "./apns";
 import { enviarPush, pushConfigurado, type Aviso } from "./fcm";
 import { quandoLegivel, textoDoAviso, type MotivoAviso } from "./texto";
 
 export type { MotivoAviso };
 
 /**
- * Avisa uma pessoa em todos os celulares dela. Nunca lança: o aviso é um
- * extra — se falhar, a OS já foi atribuída e o técnico vê ao abrir o app.
+ * Avisa uma pessoa em todos os celulares dela: Android pelo Firebase, iPhone
+ * direto pela Apple. Nunca lança: o aviso é um extra — se falhar, a OS já foi
+ * atribuída e o técnico vê ao abrir o app.
  */
 export async function avisarUsuario(usuarioId: string, aviso: Aviso): Promise<void> {
-  if (!pushConfigurado()) return;
+  if (!pushConfigurado() && !configApns()) return;
   try {
     const aparelhos = await db
-      .select({ id: schema.aparelhoPush.id, token: schema.aparelhoPush.token })
+      .select({ id: schema.aparelhoPush.id, token: schema.aparelhoPush.token, plataforma: schema.aparelhoPush.plataforma })
       .from(schema.aparelhoPush)
       .where(eq(schema.aparelhoPush.usuarioId, usuarioId));
     if (!aparelhos.length) return;
@@ -22,7 +24,8 @@ export async function avisarUsuario(usuarioId: string, aviso: Aviso): Promise<vo
     const mortos: string[] = [];
     await Promise.all(
       aparelhos.map(async (a) => {
-        if ((await enviarPush(a.token, aviso)) === "token_invalido") mortos.push(a.id);
+        const resultado = a.plataforma === "ios" ? await enviarApns(a.token, aviso) : await enviarPush(a.token, aviso);
+        if (resultado === "token_invalido") mortos.push(a.id);
       }),
     );
     if (mortos.length) await db.delete(schema.aparelhoPush).where(inArray(schema.aparelhoPush.id, mortos));

@@ -17,9 +17,12 @@ import { classesDaPilha, desembaralhar, lerClasses } from "../sistema/retrace";
 import { avaliarVersao, lerMinimos } from "../app-movel/versao";
 import { lerDsn, montarEnvelope } from "../sistema/sentry";
 import { tipoReal } from "./tipo-arquivo";
+import { arquivoPendente, cabeNoDeposito, caminhoPendente } from "./deposito-local";
+import { verificarAnexosPendentes } from "../sistema/saude";
 import { montarAssertiva, montarMensagem } from "../push/fcm";
+import { montarCorpoApns, montarJwtApns, tokenMorto } from "../push/apns";
 import { quandoLegivel, textoDoAviso } from "../push/texto";
-import { generateKeyPairSync } from "node:crypto";
+import { generateKeyPairSync, verify } from "node:crypto";
 
 let falhas = 0;
 let total = 0;
@@ -200,6 +203,40 @@ async function testarRetrace() {
   const evento = JSON.parse(linhas[2]);
   confere(linhas.length === 3 && JSON.parse(linhas[1]).type === "event", "envelope tem três linhas");
   confere(evento.exception.values[0].value === "boom" && evento.tags.versao === "0.1.0" && evento.tags.plataforma === "android", "evento leva mensagem e tags");
+}
+
+// --- Anexo no disco antes do Drive ----------------------------------------------
+{
+  const arq = "0b7f2c1e-1a2b-4c3d-8e9f-001122334455.jpg";
+  igual(arquivoPendente(caminhoPendente(arq)), arq, "o caminho pendente devolve o nome do arquivo");
+  igual(arquivoPendente("https://drive.google.com/file/d/abc/view"), null, "link do Drive não é pendente");
+  igual(arquivoPendente("pendente://../../etc/passwd"), null, "nome com caminho é recusado");
+  igual(arquivoPendente(null), null, "sem caminho, nada pendente");
+  confere(cabeNoDeposito(70) && !cabeNoDeposito(80) && !cabeNoDeposito(95), "acima de 80% de disco vai direto ao Drive");
+  confere(!cabeNoDeposito(null), "disco que não dá para medir conta como cheio");
+  const agora = Date.UTC(2026, 9, 30, 12);
+  confere(verificarAnexosPendentes({ quantidade: 0, maisAntigo: null }, agora).ok, "nenhum pendente está ok");
+  confere(verificarAnexosPendentes({ quantidade: 3, maisAntigo: new Date(agora - 600_000) }, agora).ok, "pendente de 10 min está ok");
+  confere(!verificarAnexosPendentes({ quantidade: 1, maisAntigo: new Date(agora - 7 * 3_600_000) }, agora).ok, "pendente de 7 h pede atenção");
+}
+
+// --- Push no iPhone (APNs sem SDK) ---------------------------------------------------
+{
+  const { privateKey, publicKey } = generateKeyPairSync("ec", { namedCurve: "prime256v1" });
+  const chave = privateKey.export({ type: "pkcs8", format: "pem" }).toString();
+  const jwt = montarJwtApns({ chave, keyId: "ABC123DEFG", teamId: "TEAM123456" }, 1_700_000_000_000);
+  const [cab, corpo, assinatura] = jwt.split(".");
+  const cabecalho = JSON.parse(Buffer.from(cab, "base64url").toString());
+  confere(cabecalho.alg === "ES256" && cabecalho.kid === "ABC123DEFG", "JWT da Apple: ES256 com o id da chave");
+  confere(JSON.parse(Buffer.from(corpo, "base64url").toString()).iss === "TEAM123456", "JWT da Apple leva o time");
+  igual(Buffer.from(assinatura, "base64url").length, 64, "assinatura crua de 64 bytes (r‖s), como a Apple pede");
+  confere(
+    verify("sha256", Buffer.from(`${cab}.${corpo}`), { key: publicKey, dsaEncoding: "ieee-p1363" }, Buffer.from(assinatura, "base64url")),
+    "a assinatura confere com a chave",
+  );
+  const apns = JSON.parse(montarCorpoApns({ titulo: "Nova ordem de serviço", corpo: "#0042", dados: { osId: "x", motivo: "atribuida" } }));
+  confere(apns.aps.alert.title === "Nova ordem de serviço" && apns.osId === "x" && apns.aps.sound === "default", "corpo do APNs: texto em aps, osId ao lado");
+  confere(tokenMorto(410, "Unregistered") && tokenMorto(400, "BadDeviceToken") && !tokenMorto(500, undefined), "410 e BadDeviceToken apagam o token");
 }
 
 // --- Push (FCM sem SDK) -------------------------------------------------------------

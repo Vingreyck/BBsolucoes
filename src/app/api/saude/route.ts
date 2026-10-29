@@ -1,14 +1,15 @@
 import { readdirSync, statSync } from "node:fs";
 import { join } from "node:path";
 
-import { sql } from "drizzle-orm";
+import { like, sql } from "drizzle-orm";
 
-import { db } from "@/db";
+import { db, schema } from "@/db";
 import { lerEstadoEnvio } from "@/db/backup-remoto";
 import { senhaDoBackup } from "@/db/cofre-backup";
 import { accessToken, driveConfigurado } from "@/documentos/drive";
 import { lerEstadoColetor, usoDoDisco } from "@/sistema/alertas";
 import {
+  verificarAnexosPendentes,
   verificarBackupExterno,
   verificarBackupLocal,
   verificarColetor,
@@ -65,6 +66,18 @@ async function verificarDrive(): Promise<Verificacao> {
   return resultado;
 }
 
+async function anexosPendentes(): Promise<Verificacao> {
+  try {
+    const [r] = await db
+      .select({ quantidade: sql<number>`count(*)::int`, maisAntigo: sql<string | null>`min(${schema.osAnexo.criadoEm})` })
+      .from(schema.osAnexo)
+      .where(like(schema.osAnexo.caminho, "pendente://%"));
+    return verificarAnexosPendentes({ quantidade: r.quantidade, maisAntigo: r.maisAntigo ? new Date(r.maisAntigo) : null });
+  } catch {
+    return { nome: "anexos esperando o Drive", ok: false, detalhe: "não deu para contar" };
+  }
+}
+
 function copiaLocalMaisNova(): number | null {
   try {
     const tempos = readdirSync("backups")
@@ -80,6 +93,7 @@ export async function GET() {
   const verificacoes = [
     await verificarBanco(),
     await verificarDrive(),
+    await anexosPendentes(),
     verificarColetor(lerEstadoColetor()),
     verificarBackupLocal(copiaLocalMaisNova()),
     verificarBackupExterno(Boolean(senhaDoBackup()), lerEstadoEnvio()),

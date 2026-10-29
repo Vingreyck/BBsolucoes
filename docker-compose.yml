@@ -62,6 +62,9 @@ services:
       # Os `mapping.txt` do R8, um por versão do app Android: desembaralham o
       # travamento que chega com nomes trocados (`mapeamentos/<versionCode>.txt`).
       - ./mapeamentos:/app/mapeamentos:ro
+      # Foto e vídeo do técnico esperando subir ao Drive (segundos, em geral).
+      # Fora do container para não se perder num deploy no meio do envio.
+      - ./anexos-pendentes:/app/anexos-pendentes
     # SEM `ports` também: quem fala com a internet é o Caddy, e ele alcança o
     # site por dentro da rede. Sem isso, a 3000 ficaria aberta em HTTP puro ao
     # lado do HTTPS, e login por HTTP é senha trafegando aberta.
