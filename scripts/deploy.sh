@@ -14,6 +14,12 @@
 #   7. limpa o cache do Docker (regra do projeto: o disco é pequeno)
 #   8. confere /api/saude e mostra o disco
 #
+# As imagens ":anterior" ocupam ~1,6 GB do disco de 19 GB. Por isso só ficam
+# enquanto o deploy não foi aprovado: se a saúde responde bem, elas saem.
+# Deu errado na hora? `--voltar` ainda funciona. Problema achado horas depois?
+# Desfaça o commit no PC (git revert), dê push e rode o deploy de novo.
+# Com disco sobrando, `MANTER_ANTERIOR=1 ./scripts/deploy.sh` as guarda.
+#
 # Rode na pasta do projeto (~/BBsolucoes), como o usuário que roda o Docker.
 
 set -euo pipefail
@@ -87,10 +93,14 @@ docker builder prune -af >/dev/null
 docker image prune -f >/dev/null
 
 echo "== 8/8 Saúde e disco"
-df -h / | tail -1
 if conferir_saude; then
+  if [[ "${MANTER_ANTERIOR:-}" != "1" ]]; then
+    for s in "${SERVICOS[@]}"; do docker image rm "bbsolucoes-${s}:anterior" >/dev/null 2>&1 || true; done
+  fi
+  df -h / | tail -1
   echo "Deploy concluído."
 else
+  df -h / | tail -1
   echo "O site NÃO respondeu como esperado. Para voltar: ./scripts/deploy.sh --voltar" >&2
   exit 1
 fi
