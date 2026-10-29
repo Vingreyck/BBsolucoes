@@ -138,6 +138,31 @@ export const sessao = pgTable(
   (t) => [index("sessao_usuario_idx").on(t.usuarioId)],
 );
 
+/**
+ * Celular que aceitou receber aviso (push). Um token por aparelho: se o mesmo
+ * token aparece com outro usuário (celular emprestado, troca de login), a linha
+ * muda de dono em vez de duplicar — o aviso nunca vai para a pessoa errada.
+ *
+ * Fica ligado à sessão: sair do app ou revogar a sessão apaga o token junto.
+ */
+export const aparelhoPush = pgTable(
+  "aparelho_push",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    usuarioId: uuid("usuario_id")
+      .notNull()
+      .references(() => usuario.id, { onDelete: "cascade" }),
+    sessaoId: varchar("sessao_id", { length: 64 })
+      .notNull()
+      .references(() => sessao.id, { onDelete: "cascade" }),
+    token: text("token").notNull(),
+    /** `android` ou `ios`. */
+    plataforma: varchar("plataforma", { length: 10 }).notNull(),
+    atualizadoEm: timestamp("atualizado_em", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [uniqueIndex("aparelho_push_token_uq").on(t.token), index("aparelho_push_usuario_idx").on(t.usuarioId)],
+);
+
 export const cliente = pgTable(
   "cliente",
   {

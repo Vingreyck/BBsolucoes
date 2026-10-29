@@ -4,6 +4,7 @@ import { and, eq, notInArray, sql } from "drizzle-orm";
 
 import { db, schema } from "@/db";
 import { moverNaEsteira } from "@/projeto/esteira";
+import { avisarOs, type MotivoAviso } from "@/push/avisos";
 import { publicar } from "@/rastreamento/hub";
 
 import { ErroOs, podeExecutar, type Ator } from "./acesso";
@@ -223,6 +224,21 @@ async function atualizar(
     .where(eq(schema.ordemServico.id, c.os.id));
 }
 
+/**
+ * Programa o push para o responsável, para depois que a transação fechar.
+ * Quem fez a mudança não é avisado do que ele mesmo fez.
+ */
+function avisarResponsavel(
+  c: Contexto,
+  destinoId: string | null,
+  motivo: MotivoAviso,
+  agendadaPara: Date | null = c.os.agendadaPara,
+): void {
+  if (!destinoId || destinoId === c.ator.id) return;
+  const os = { ...c.os, agendadaPara: campoRelogio(agendadaPara) };
+  c.depois.push(() => avisarOs(destinoId, motivo, os));
+}
+
 function exigirMotivo(motivo: string | null | undefined, frase: string): string {
   const m = motivo?.trim();
   if (!m) throw new ErroOs("validacao", frase);
@@ -374,7 +390,7 @@ export async function criarOs(ator: Ator, dados: NovaOs): Promise<{ id: string; 
 
   for (let tentativa = 0; ; tentativa++) {
     try {
-      return await db.transaction(async (tx) => {
+      const criada = await db.transaction(async (tx) => {
         let responsavelNome: string | null = null;
         if (dados.responsavelId) {
           responsavelNome = (await usuarioDaEmpresa(tx, empresaId, dados.responsavelId)).nome;
@@ -441,8 +457,15 @@ export async function criarOs(ator: Ator, dados: NovaOs): Promise<{ id: string; 
         if (dados.agendadaPara) {
           await evento(c, "agendada", { de: null, para: campoRelogio(dados.agendadaPara) });
         }
-        return { id: os.id, numero: os.numero };
+        return { id: os.id, numero: os.numero, os };
       });
+      if (dados.responsavelId && dados.responsavelId !== ator.id) {
+        void avisarOs(dados.responsavelId, "atribuida", {
+          ...criada.os,
+          agendadaPara: campoRelogio(criada.os.agendadaPara),
+        });
+      }
+      return { id: criada.id, numero: criada.numero };
     } catch (e) {
       if (tentativa < 3 && violouUnico(e, "os_numero_uq")) continue;
       throw e;
@@ -594,6 +617,7 @@ const APLICAR: { [T in TipoAcao]: Aplicador<T> } = {
       : null;
     await atualizar(c, { responsavelId: novo?.id ?? null });
     await evento(c, "atribuida", { de: anterior?.nome ?? null, para: novo?.nome ?? null });
+    avisarResponsavel(c, novo?.id ?? null, "atribuida");
   },
 
   async agendar(c, acao) {
@@ -610,6 +634,7 @@ const APLICAR: { [T in TipoAcao]: Aplicador<T> } = {
       para: campoRelogio(para),
       ...(motivo ? { motivo } : {}),
     });
+    avisarResponsavel(c, c.os.responsavelId, reagendando ? "reagendada" : "agendada", para);
   },
 
   async deslocamento(c) {
@@ -760,6 +785,7 @@ const APLICAR: { [T in TipoAcao]: Aplicador<T> } = {
     const motivo = exigirMotivo(acao.motivo, "Diga o motivo do cancelamento.");
     await atualizar(c, { status: "cancelada", canceladaEm: new Date() });
     await evento(c, "cancelada", { motivo });
+    avisarResponsavel(c, c.os.responsavelId, "cancelada");
     // O alerta volta a ficar em aberto, para alguém abrir outra OS se precisar.
     await c.tx
       .update(schema.alerta)

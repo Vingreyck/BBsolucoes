@@ -17,6 +17,9 @@ import { classesDaPilha, desembaralhar, lerClasses } from "../sistema/retrace";
 import { avaliarVersao, lerMinimos } from "../app-movel/versao";
 import { lerDsn, montarEnvelope } from "../sistema/sentry";
 import { tipoReal } from "./tipo-arquivo";
+import { montarAssertiva, montarMensagem } from "../push/fcm";
+import { quandoLegivel, textoDoAviso } from "../push/texto";
+import { generateKeyPairSync } from "node:crypto";
 
 let falhas = 0;
 let total = 0;
@@ -197,6 +200,25 @@ async function testarRetrace() {
   const evento = JSON.parse(linhas[2]);
   confere(linhas.length === 3 && JSON.parse(linhas[1]).type === "event", "envelope tem três linhas");
   confere(evento.exception.values[0].value === "boom" && evento.tags.versao === "0.1.0" && evento.tags.plataforma === "android", "evento leva mensagem e tags");
+}
+
+// --- Push (FCM sem SDK) -------------------------------------------------------------
+{
+  igual(quandoLegivel("2026-10-30T14:30"), "30/10 14:30", "data do aviso em dia/mês e hora");
+  confere(quandoLegivel(null) === null && quandoLegivel("lixo") === null, "data ausente ou inválida some do aviso");
+  const normal = textoDoAviso("atribuida", { numero: 42, urgente: false, cliente: "Maria", quando: "30/10 14:30" });
+  igual(normal.titulo, "Nova ordem de serviço", "título da OS atribuída");
+  igual(normal.corpo, "#0042 · Maria · 30/10 14:30", "corpo: número, cliente e quando");
+  igual(textoDoAviso("atribuida", { numero: 1, urgente: true }).titulo, "OS urgente para você", "urgente muda o título");
+  igual(textoDoAviso("cancelada", { numero: 1, urgente: true }).titulo, "Ordem de serviço cancelada", "cancelada não vira urgente");
+  igual(textoDoAviso("atribuida", { numero: 7, urgente: false }).corpo, "#0007", "sem cliente nem data, só o número");
+  const msg = montarMensagem("tok", { titulo: "t", corpo: "c", dados: { osId: "x" } }).message;
+  confere(msg.token === "tok" && msg.android.priority === "HIGH" && msg.data.osId === "x", "mensagem FCM: token, prioridade alta e dados");
+  const { privateKey } = generateKeyPairSync("rsa", { modulusLength: 2048 });
+  const jwt = montarAssertiva({ client_email: "a@b.iam", private_key: privateKey.export({ type: "pkcs8", format: "pem" }).toString() }, 1_700_000_000_000);
+  const [cab, corpo] = jwt.split(".");
+  confere(jwt.split(".").length === 3 && JSON.parse(Buffer.from(cab, "base64url").toString()).alg === "RS256", "JWT do Google é RS256 com três partes");
+  confere(JSON.parse(Buffer.from(corpo, "base64url").toString()).exp === 1_700_003_600, "JWT vale 1 hora");
 }
 
 testarRetrace().then(() => {
