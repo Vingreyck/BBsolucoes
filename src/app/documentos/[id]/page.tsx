@@ -13,9 +13,12 @@ import { notFound } from "next/navigation";
 
 import { exigirAcessoDocumentos } from "@/auth/permissao";
 import { db, schema } from "@/db";
+import { linkWhatsapp, mensagemDeCobranca } from "@/documentos/cobranca";
 import { driveConfigurado } from "@/documentos/drive";
+import { filaDeCobranca } from "@/documentos/fila-cobranca";
 
 import { Cabecalho, Caminho, Cartao, Vazio } from "../../_ui";
+import { BotaoCobrar } from "../cobranca/botao-cobrar";
 import { EnvioDocumento } from "./envio";
 
 export const dynamic = "force-dynamic";
@@ -180,6 +183,12 @@ export default async function Dossie({
 
   const semDrive = !driveConfigurado();
 
+  // O que falta e é do cliente mandar: vira o botão do WhatsApp no cabeçalho.
+  const [cobranca] = await filaDeCobranca(usuario.empresaId, { pode: acesso.pode, projetoId: projeto.id });
+  const empresa = cobranca?.whatsapp
+    ? await db.query.empresa.findFirst({ where: eq(schema.empresa.id, usuario.empresaId), columns: { nome: true } })
+    : null;
+
   // Quanto do que já devia existir está na pasta: a régua do dossiê.
   const devidos = ordenadas.filter((e) => e.obrigatorio && e.etapa.ordem <= atual);
   const entregues = devidos.filter((e) => presentes.has(e.tipo)).length;
@@ -207,9 +216,26 @@ export default async function Dossie({
           </>
         }
         acoes={
-          <Link href={`/projeto/${projeto.id}`} className="botao secundario">
-            <KanbanSquare size={15} aria-hidden /> Ver o projeto
-          </Link>
+          <>
+            {cobranca?.whatsapp && (
+              <BotaoCobrar
+                projetoId={projeto.id}
+                rotulo={cobranca.vezes > 0 ? "Lembrar no WhatsApp" : "Cobrar no WhatsApp"}
+                link={linkWhatsapp(
+                  cobranca.whatsapp,
+                  mensagemDeCobranca({
+                    cliente: projeto.cliente.nome,
+                    empresa: empresa?.nome ?? "nossa empresa",
+                    tipos: cobranca.tipos,
+                    jaCobrado: cobranca.vezes > 0,
+                  }),
+                )}
+              />
+            )}
+            <Link href={`/projeto/${projeto.id}`} className="botao secundario">
+              <KanbanSquare size={15} aria-hidden /> Ver o projeto
+            </Link>
+          </>
         }
       />
 

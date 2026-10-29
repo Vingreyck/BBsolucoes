@@ -10,6 +10,7 @@ import {
   ListChecks,
   LogOut,
   MapPinned,
+  MessageCircle,
   Menu,
   PanelLeftClose,
   PanelLeftOpen,
@@ -40,6 +41,7 @@ export type IconeMenu =
   | "inicio"
   | "esteira"
   | "documentos"
+  | "cobranca"
   | "os"
   | "agenda"
   | "campo"
@@ -55,6 +57,7 @@ const ICONES: Record<IconeMenu, LucideIcon> = {
   inicio: House,
   esteira: KanbanSquare,
   documentos: FolderOpen,
+  cobranca: MessageCircle,
   os: ClipboardList,
   agenda: CalendarDays,
   campo: MapPinned,

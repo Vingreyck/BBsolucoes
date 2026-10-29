@@ -187,3 +187,36 @@ export const exigenciaDocumento = pgTable(
   },
   (t) => [uniqueIndex("exigencia_documento_uq").on(t.empresaId, t.tipo)],
 );
+
+/**
+ * Cada vez que alguém do escritório cobrou documento de um cliente.
+ *
+ * É o que tira a cobrança da memória de quem mandou a mensagem: a tela mostra
+ * "cobrado há 5 dias por Ana, 2ª vez" e põe no fim da fila quem acabou de ser
+ * cobrado — ninguém manda a mesma mensagem duas vezes na mesma tarde.
+ *
+ * Os tipos ficam em texto (e não ligados ao `documento`) porque o que se cobra
+ * é justamente o que ainda não existe.
+ */
+export const cobrancaDocumento = pgTable(
+  "cobranca_documento",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    empresaId: uuid("empresa_id")
+      .notNull()
+      .references(() => empresa.id, { onDelete: "cascade" }),
+    projetoId: uuid("projeto_id")
+      .notNull()
+      .references(() => projeto.id, { onDelete: "cascade" }),
+    clienteId: uuid("cliente_id")
+      .notNull()
+      .references(() => cliente.id, { onDelete: "cascade" }),
+    /** Os tipos pedidos nesta mensagem: `{uc_geradora,foto_padrao}`. */
+    tipos: text("tipos").array().notNull(),
+    /** Por onde: `whatsapp` por enquanto. */
+    canal: varchar("canal", { length: 20 }).notNull().default("whatsapp"),
+    usuarioId: uuid("usuario_id").references(() => usuario.id, { onDelete: "set null" }),
+    criadoEm: timestamp("criado_em", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index("cobranca_documento_projeto_idx").on(t.projetoId, t.criadoEm)],
+);

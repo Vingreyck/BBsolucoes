@@ -19,6 +19,16 @@ import { lerDsn, montarEnvelope } from "../sistema/sentry";
 import { tipoReal } from "./tipo-arquivo";
 import { arquivoPendente, cabeNoDeposito, caminhoPendente } from "./deposito-local";
 import { verificarAnexosPendentes } from "../sistema/saude";
+import {
+  diasEntre,
+  faltaNoDossie,
+  linkWhatsapp,
+  mensagemDeCobranca,
+  numeroWhatsapp,
+  pedidosAoCliente,
+  primeiroNome,
+} from "../documentos/cobranca";
+import { ordenarFila, type LinhaCobranca } from "../documentos/fila-cobranca";
 import { montarAssertiva, montarMensagem } from "../push/fcm";
 import { montarCorpoApns, montarJwtApns, tokenMorto } from "../push/apns";
 import { quandoLegivel, textoDoAviso } from "../push/texto";
@@ -203,6 +213,57 @@ async function testarRetrace() {
   const evento = JSON.parse(linhas[2]);
   confere(linhas.length === 3 && JSON.parse(linhas[1]).type === "event", "envelope tem três linhas");
   confere(evento.exception.values[0].value === "boom" && evento.tags.versao === "0.1.0" && evento.tags.plataforma === "android", "evento leva mensagem e tags");
+}
+
+// --- Cobrança de documento ao cliente -------------------------------------------
+{
+  igual(numeroWhatsapp("(79) 99999-1234"), "5579999991234", "celular com DDD vira 55+DDD+número");
+  igual(numeroWhatsapp("79 3211-4567"), "557932114567", "fixo com DDD também");
+  igual(numeroWhatsapp("+55 79 99999-1234"), "5579999991234", "já com +55 fica igual");
+  igual(numeroWhatsapp("0 41 79 99999-1234"), "5579999991234", "com o código da operadora, ele sai");
+  igual(numeroWhatsapp("99999-1234"), null, "sem DDD não dá para saber o número");
+  igual(numeroWhatsapp(null), null, "sem telefone, sem WhatsApp");
+  igual(primeiroNome("  MARIA das dores silva"), "Maria", "primeiro nome com a primeira maiúscula");
+
+  igual(
+    pedidosAoCliente(["art", "foto_padrao", "uc_geradora", "memorial"]).join(","),
+    "uc_geradora,foto_padrao",
+    "só se cobra do cliente o que é dele, na ordem da mensagem",
+  );
+  const exig = [
+    { tipo: "uc_geradora", obrigatorio: true, etapa: { ordem: 1 } },
+    { tipo: "foto_padrao", obrigatorio: true, etapa: { ordem: 2 } },
+    { tipo: "procuracao", obrigatorio: false, etapa: { ordem: 2 } },
+    { tipo: "art", obrigatorio: true, etapa: { ordem: 4 } },
+  ];
+  igual(
+    faltaNoDossie(2, exig, new Set(["uc_geradora"])).map((e) => e.tipo).join(","),
+    "foto_padrao",
+    "falta só o obrigatório até a etapa atual e que não está na pasta",
+  );
+
+  const primeira = mensagemDeCobranca({ cliente: "JOÃO SANTOS", empresa: "BB Soluções", tipos: ["foto_padrao", "uc_geradora"], jaCobrado: false });
+  confere(primeira.startsWith("Olá, João! Aqui é da BB Soluções."), "mensagem abre com o nome e a empresa");
+  confere(primeira.indexOf("conta de luz") < primeira.indexOf("padrão de energia"), "a conta de luz vem antes da foto do padrão");
+  const lembrete = mensagemDeCobranca({ cliente: "João", empresa: "BB Soluções", tipos: ["foto_padrao"], jaCobrado: true });
+  confere(lembrete.includes("passando para lembrar") && lembrete.includes("ainda falta:"), "a segunda cobrança é um lembrete, no singular");
+  confere(linkWhatsapp("5579999991234", `a b${String.fromCharCode(10)}c`) === "https://wa.me/5579999991234?text=a%20b%0Ac", "o link leva o texto codificado");
+
+  const agora = new Date(2026, 9, 30, 15);
+  igual(diasEntre(new Date(2026, 9, 30, 8), agora), 0, "mesmo dia é hoje");
+  igual(diasEntre(new Date(2026, 9, 29, 23), agora), 1, "ontem à noite é ontem");
+
+  const linha = (id: string, cobradoHaDias: number | null, naEtapaHaDias: number): LinhaCobranca => ({
+    projetoId: id, titulo: id, clienteId: id, cliente: id, telefone: null, whatsapp: null, etapa: "x",
+    etapaDesde: new Date(agora.getTime() - naEtapaHaDias * 86_400_000), tipos: ["foto_padrao"],
+    ultimaCobranca: cobradoHaDias === null ? null : { quando: new Date(agora.getTime() - cobradoHaDias * 86_400_000), por: null },
+    vezes: cobradoHaDias === null ? 0 : 1,
+  });
+  const ordem = ordenarFila(
+    [linha("cobrado-ontem", 1, 30), linha("cobrado-ha-9", 9, 10), linha("nunca-novo", null, 2), linha("nunca-antigo", null, 40)],
+    agora.getTime(),
+  ).map((l) => l.projetoId);
+  igual(ordem.join(","), "nunca-antigo,nunca-novo,cobrado-ha-9,cobrado-ontem", "fila: nunca cobrado primeiro, cobrado há pouco no fim");
 }
 
 // --- Anexo no disco antes do Drive ----------------------------------------------

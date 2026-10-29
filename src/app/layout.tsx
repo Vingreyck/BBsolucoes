@@ -78,7 +78,12 @@ export default async function RootLayout({
       titulo: "Comercial",
       itens: [
         { href: "/esteira", rotulo: "Esteira de projetos", icone: "esteira" },
-        ...(temDocumentos ? [{ href: "/documentos", rotulo: "Documentos", icone: "documentos" as const }] : []),
+        ...(temDocumentos
+          ? [
+              { href: "/documentos", rotulo: "Documentos", icone: "documentos" as const },
+              { href: "/documentos/cobranca", rotulo: "Cobrar documentos", icone: "cobranca" as const },
+            ]
+          : []),
       ],
     },
     ...(temOs

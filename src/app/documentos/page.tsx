@@ -1,8 +1,10 @@
 import { asc, eq } from "drizzle-orm";
-import { FolderOpen, Info, Search, SearchX, TrendingUp } from "lucide-react";
+import { FolderOpen, Info, MessageCircle, Search, SearchX, TrendingUp } from "lucide-react";
+import Link from "next/link";
 
 import { exigirAcessoDocumentos } from "@/auth/permissao";
 import { db, schema } from "@/db";
+import { ehDoCliente } from "@/documentos/cobranca";
 
 import { Cabecalho, Cartao, Vazio } from "../_ui";
 
@@ -228,6 +230,11 @@ export default async function Documentos({
       <Cabecalho
         titulo="Dossiês"
         selos={pendentes > 0 ? <span className="pilula sev-atencao">{pendentes} esperando documento</span> : undefined}
+        acoes={
+          <Link href="/documentos/cobranca" className="botao">
+            <MessageCircle size={15} aria-hidden /> Cobrar clientes
+          </Link>
+        }
         meta={
           <span>
             {filtradas.length === base.length
@@ -242,12 +249,15 @@ export default async function Documentos({
           <Cartao
             titulo="O que está segurando mais gente"
             icone={<TrendingUp size={16} />}
-            ajuda="Resolver o papel de cima destrava mais do que ligar para cliente por cliente."
+            ajuda="Resolver o papel de cima destrava mais do que ligar para cliente por cliente. O que é do cliente mandar leva direto à fila de cobrança, com a mensagem pronta para o WhatsApp."
           >
             <ul className="funil funil-solto">
               {maioresGargalos.map(([tipo, n]) => (
                 <li key={tipo}>
-                  <a className="funil-rotulo" href={montar({ filtro: "pendentes", busca })}>
+                  <a
+                    className="funil-rotulo"
+                    href={ehDoCliente(tipo) ? `/documentos/cobranca?tipo=${tipo}` : montar({ filtro: "pendentes", busca })}
+                  >
                     {ROTULO[tipo] ?? tipo}
                   </a>
                   <span className="funil-barra">

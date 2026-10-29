@@ -7,6 +7,8 @@ import { exigirAcessoDocumentos } from "@/auth/permissao";
 import { db, schema } from "@/db";
 import { driveConfigurado, enviarArquivo } from "@/documentos/drive";
 import { limparNome, pastaDoCliente } from "@/documentos/pastas";
+import { numeroWhatsapp } from "@/documentos/cobranca";
+import { filaDeCobranca } from "@/documentos/fila-cobranca";
 
 /**
  * Sobe um documento pelo Selebi.
@@ -187,4 +189,39 @@ export async function enviarDocumento(
   } catch (e) {
     return { erro: e instanceof Error ? e.message : "Falhou ao enviar." };
   }
+}
+
+/**
+ * Anota que o cliente foi cobrado. O botão abre o WhatsApp no navegador e chama
+ * isto em seguida — o que vale é o que o servidor calcula agora, e não a lista
+ * de tipos que o navegador mandaria: cobrança registrada é cobrança do que de
+ * fato falta.
+ */
+export async function registrarCobranca(projetoId: string): Promise<{ ok: boolean }> {
+  const acesso = await exigirAcessoDocumentos();
+  const [linha] = await filaDeCobranca(acesso.usuario.empresaId, { pode: acesso.pode, projetoId });
+  if (!linha) return { ok: false };
+  await db.insert(schema.cobrancaDocumento).values({
+    empresaId: acesso.usuario.empresaId,
+    projetoId: linha.projetoId,
+    clienteId: linha.clienteId,
+    tipos: linha.tipos,
+    canal: "whatsapp",
+    usuarioId: acesso.usuario.id,
+  });
+  revalidatePath("/documentos/cobranca");
+  revalidatePath(`/documentos/${projetoId}`);
+  return { ok: true };
+}
+
+/** O telefone que faltava no cadastro, direto da fila de cobrança. */
+export async function salvarTelefone(clienteId: string, form: FormData): Promise<void> {
+  const acesso = await exigirAcessoDocumentos();
+  const telefone = String(form.get("telefone") ?? "").trim().slice(0, 20);
+  if (!numeroWhatsapp(telefone)) return;
+  await db
+    .update(schema.cliente)
+    .set({ telefone, atualizadoEm: new Date() })
+    .where(and(eq(schema.cliente.id, clienteId), eq(schema.cliente.empresaId, acesso.usuario.empresaId)));
+  revalidatePath("/documentos/cobranca");
 }
