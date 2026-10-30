@@ -28,9 +28,11 @@ import {
  * Para cada usina suspeita, testa nesta ordem e fica com a primeira que faz a
  * usina gerar como as vizinhas no mês (entre 60% e 140% da mediana do parque):
  *
- *   1. ×1000, quando a potência é menor que 0,1 kWp (ninguém tem usina de 100 W);
- *   2. a soma dos inversores cadastrados (o modelo diz "5 kW" sem ambiguidade);
- *   3. ×10 (vírgula no lugar errado: 0,7 em vez de 7).
+ *   1. a potência do projeto ligado à usina (o kWp que o engenheiro calculou;
+ *      com projeto de ampliação, a soma dos projetos);
+ *   2. ×1000, quando a potência é menor que 0,1 kWp (ninguém tem usina de 100 W);
+ *   3. a soma dos inversores cadastrados (o modelo diz "5 kW" sem ambiguidade);
+ *   4. ×10 (vírgula no lugar errado: 0,7 em vez de 7).
  *
  * O que nenhuma explica fica listado para conferir à mão, com a potência que a
  * geração sugere — palpite, nunca gravado sozinho.
@@ -81,6 +83,17 @@ async function main() {
       somaInversores.set(i.usinaId, (somaInversores.get(i.usinaId) ?? 0) + (w * (i.quantidade || 1)) / 1000);
     }
 
+    const projetos = await db
+      .select({ usinaId: schema.projeto.usinaId, potenciaKwp: schema.projeto.potenciaKwp })
+      .from(schema.projeto)
+      .where(eq(schema.projeto.empresaId, empresa.id));
+    const doProjeto = new Map<string, number>();
+    for (const p of projetos) {
+      const kwp = Number(p.potenciaKwp);
+      if (!p.usinaId || !Number.isFinite(kwp) || kwp <= 0) continue;
+      doProjeto.set(p.usinaId, (doProjeto.get(p.usinaId) ?? 0) + kwp);
+    }
+
     const propostas: Proposta[] = [];
     const aMao: { nome: string; atual: number | null; palpite: number }[] = [];
     for (const u of usinas) {
@@ -93,6 +106,7 @@ async function main() {
       const media = r.mediaDiaKwh;
       const plausivel = (kwp: number) => kwp > 0 && media / kwp / regua >= 0.6 && media / kwp / regua <= 1.4;
       const candidatos: [number | undefined, string][] = [
+        [doProjeto.get(u.id), "potência do projeto"],
         [atual !== null && atual < 0.1 ? atual * 1000 : undefined, "×1000 (estava em MW)"],
         [somaInversores.get(u.id), "soma dos inversores"],
         [atual !== null ? atual * 10 : undefined, "×10 (vírgula no lugar errado)"],
