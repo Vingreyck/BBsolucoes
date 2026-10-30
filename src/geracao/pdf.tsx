@@ -3,7 +3,7 @@
 import React from "react";
 
 import type { DadosRelatorio } from "./dados";
-import { FAIXA_SERGIPE, FRASE_DA_FAIXA, mesLegivel, numeroBr } from "./relatorio-mensal";
+import { FAIXA_SERGIPE, FRACAO_ABAIXO, FRASE_DA_FAIXA, mesLegivel, numeroBr } from "./relatorio-mensal";
 
 type ReactPdf = typeof import("@react-pdf/renderer");
 
@@ -107,7 +107,14 @@ function montar(R: ReactPdf) {
   /** As barras do mês, uma por dia. Faixa verde = o esperado para o tamanho da usina. */
   function Grafico({ d }: { d: DadosRelatorio }) {
     const serie = d.resumo.serie;
-    const faixa = d.potenciaKwp ? { min: FAIXA_SERGIPE.min * d.potenciaKwp, max: FAIXA_SERGIPE.max * d.potenciaKwp } : null;
+    // A faixa das usinas vizinhas no mês (de 75% a 125% da mediana), no tamanho desta.
+    const ref = d.resumo.referencia;
+    const faixa =
+      d.potenciaKwp && d.resumo.faixa !== "suspeita"
+        ? ref
+          ? { min: ref * FRACAO_ABAIXO * d.potenciaKwp, max: ref * (2 - FRACAO_ABAIXO) * d.potenciaKwp }
+          : { min: FAIXA_SERGIPE.min * d.potenciaKwp, max: FAIXA_SERGIPE.max * d.potenciaKwp }
+        : null;
     const topo = Math.max(1, ...serie.map((v) => v ?? 0), faixa ? faixa.max * 1.1 : 0);
     const passo = LARGURA / serie.length;
     const largura = Math.max(2, passo * 0.7);
@@ -161,7 +168,9 @@ function montar(R: ReactPdf) {
     const r = d.resumo;
     const variacao =
       d.totalMesAnterior && d.totalMesAnterior > 0 ? ((r.totalKwh - d.totalMesAnterior) / d.totalMesAnterior) * 100 : null;
-    const corFaixa = r.faixa === "abaixo" ? COR.ruim : r.faixa ? COR.ok : undefined;
+    // "suspeita" é potência errada no cadastro: assunto interno, não do cliente.
+    const avaliada = r.faixa === "abaixo" || r.faixa === "dentro" ? r.faixa : null;
+    const corFaixa = avaliada === "abaixo" ? COR.ruim : avaliada ? COR.ok : undefined;
     const economia = d.tarifaKwh ? r.totalKwh * d.tarifaKwh : null;
     const alertasResolvidos = d.alertas.filter((a) => a.resolvidoEm).length;
 
@@ -198,11 +207,13 @@ function montar(R: ReactPdf) {
               valor={r.mediaDiaKwh !== null ? `${numeroBr(r.mediaDiaKwh, 1)} kWh` : "-"}
               nota={r.melhorDia ? `Melhor dia: ${r.melhorDia.dia.slice(8, 10)}, com ${numeroBr(r.melhorDia.kwh, 1)} kWh` : undefined}
             />
-            {r.faixa ? (
+            {avaliada ? (
               <Numero
                 rotulo="Desempenho"
-                valor={r.faixa === "abaixo" ? "Abaixo" : r.faixa === "acima" ? "Acima" : "Normal"}
-                nota={`${numeroBr(r.kwhPorKwpDia ?? 0, 1)} kWh por kWp por dia — ${FRASE_DA_FAIXA[r.faixa]}`}
+                valor={avaliada === "abaixo" ? "Abaixo" : "Normal"}
+                nota={`${numeroBr(r.kwhPorKwpDia ?? 0, 1)} kWh por kWp por dia${
+                  r.referencia ? `; as usinas da região fizeram ${numeroBr(r.referencia, 1)}` : ` — ${FRASE_DA_FAIXA[avaliada]}`
+                }`}
                 cor={corFaixa}
               />
             ) : null}
@@ -220,11 +231,13 @@ function montar(R: ReactPdf) {
 
           <Text style={s.secao}>Como foi o mês</Text>
           <Text style={s.paragrafo}>
-            {r.faixa === "abaixo"
-              ? "A geração ficou abaixo do esperado para uma usina deste tamanho em Sergipe. A nossa equipe vai verificar a causa — sujeira nos painéis, sombra nova ou falha de equipamento."
-              : r.faixa
-                ? "A usina gerou o esperado para o tamanho dela em Sergipe."
-                : "Este mês ainda não tem dias suficientes para avaliar o desempenho da usina."}
+            {avaliada === "abaixo"
+              ? "A geração ficou abaixo do que as usinas da região fizeram no mesmo mês, para o tamanho desta. A nossa equipe vai verificar a causa — sujeira nos painéis, sombra nova ou falha de equipamento."
+              : avaliada
+                ? "A usina gerou o esperado para o tamanho dela, em linha com as usinas da região no mesmo mês."
+                : r.faixa === "suspeita"
+                  ? "Acompanhamos a geração da usina dia a dia; o gráfico acima mostra o mês."
+                  : "Este mês ainda não tem dias suficientes para avaliar o desempenho da usina."}
           </Text>
           {r.diasSemDado > 0 ? (
             <Text style={s.paragrafo}>

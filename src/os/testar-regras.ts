@@ -31,6 +31,7 @@ import {
 import { ordenarFila, type LinhaCobranca } from "../documentos/fila-cobranca";
 import {
   classificar,
+  referenciaDoParque,
   diasDoMes,
   mensagemDoRelatorio,
   mesAnterior,
@@ -234,9 +235,13 @@ async function testarRetrace() {
   igual(mesLegivel("2026-10"), "outubro de 2026", "mês por extenso");
   igual(numeroBrGeracao(1234.5, 1), "1.234,5", "número à brasileira");
 
-  igual(classificar(3.0), "abaixo", "3,0 kWh/kWp/dia está abaixo da faixa de Sergipe");
-  igual(classificar(4.2), "dentro", "4,2 está dentro");
-  igual(classificar(5.2), "acima", "5,2 está acima");
+  igual(classificar(3.0), "abaixo", "sem régua do parque, 3,0 kWh/kWp/dia está abaixo da faixa anual de Sergipe");
+  igual(classificar(5.6, 5.5), "dentro", "com a régua de outubro (5,5), 5,6 é normal — não 'acima'");
+  igual(classificar(4.0, 5.5), "abaixo", "4,0 com régua 5,5 fica abaixo de 75% dela");
+  igual(classificar(4.2, 5.5), "dentro", "4,2 com régua 5,5 ainda é normal (76%)");
+  igual(classificar(3617, 5.5), "suspeita", "potência em MW (7 kWp gravado como 0,007) é suspeita, não avaliação");
+  igual(referenciaDoParque([5, 5.5, 6, 3617, 0.1, null, 5.2, 4.8]), 5.2, "a régua é a mediana, sem as impossíveis e as quase paradas");
+  igual(referenciaDoParque([5, 5.5]), null, "com menos de 5 usinas, não há régua");
 
   const dias = Array.from({ length: 28 }, (_, i) => ({ dia: `2026-10-${String(i + 1).padStart(2, "0")}`, kwh: 20 }));
   const r = resumirMes("2026-10", [...dias, { dia: "2026-10-05", kwh: 2 }, { dia: "2026-09-30", kwh: 99 }], 5);
@@ -250,6 +255,12 @@ async function testarRetrace() {
   igual(resumirMes("2026-10", dias, null).faixa, null, "sem potência cadastrada, não avalia");
 
   const msg = mensagemDoRelatorio({ cliente: "ANA LIMA", empresa: "BB Soluções", mes: "2026-10", resumo: r, link: "https://x/r/g/abc" });
+  const suspeita = resumirMes("2026-10", dias, 0.005, 5.5);
+  confere(
+    suspeita.faixa === "suspeita" &&
+      !mensagemDoRelatorio({ cliente: "Ana", empresa: "BB", mes: "2026-10", resumo: suspeita, link: "l" }).includes("Desempenho"),
+    "potência suspeita: a mensagem ao cliente não fala de desempenho",
+  );
   confere(msg.startsWith("Olá, Ana! Aqui é da BB Soluções.") && msg.includes("outubro de 2026"), "mensagem com nome, empresa e mês");
   confere(msg.includes("Gerou 562 kWh") && msg.includes("https://x/r/g/abc"), "mensagem com o total e o link do PDF");
   const ruim = resumirMes("2026-10", dias.map((d) => ({ ...d, kwh: 8 })), 5);

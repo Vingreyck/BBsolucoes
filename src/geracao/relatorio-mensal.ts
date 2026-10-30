@@ -5,9 +5,18 @@
  * O que o relatório afirma ao cliente tem de ser defensável:
  *
  * - **Desempenho é kWh por kWp por dia**, a régua que não depende do tamanho da
- *   usina. Em Sergipe, uma usina saudável gera de 1.300 a 1.800 kWh por kWp por
- *   ano (a mesma faixa que desmascarou o `peak_power` da Growatt em MW): de
- *   3,6 a 4,9 kWh por kWp por dia. Abaixo disso é "abaixo do esperado".
+ *   usina, comparado com **as outras usinas da empresa no mesmo mês** (a
+ *   mediana do parque). A média anual de Sergipe (1.300 a 1.800 kWh/kWp/ano)
+ *   não serve mês a mês: em outubro quase todo o parque passou de 4,9 por dia
+ *   e sairia "acima"; em junho, o contrário. As usinas vizinhas tiveram o mesmo
+ *   sol, então a comparação com elas é justa. Abaixo de 75% da mediana é
+ *   "abaixo do esperado".
+ *
+ * - **Potência impossível não vira avaliação.** Acima de 8 kWh/kWp/dia não
+ *   existe em Sergipe — é potência cadastrada errada (a planilha da Growatt
+ *   trouxe kWp onde se esperava watts, e 7 kWp virou 0,007). A usina sai como
+ *   "suspeita": o relatório não fala de desempenho, e a tela pede para
+ *   conferir a potência.
  *
  * - **Dia sem dado não é dia sem geração.** O portal do fabricante às vezes não
  *   entrega o dia (internet do cliente caiu, o inversor ficou sem Wi-Fi). Por
@@ -16,13 +25,22 @@
  *   a usina de gerar pouco.
  */
 
-/** kWh por kWp por dia em Sergipe: 1.300 a 1.800 kWh/kWp/ano. */
+/** kWh por kWp por dia em Sergipe: 1.300 a 1.800 kWh/kWp/ano. Só a rede de segurança sem parque para comparar. */
 export const FAIXA_SERGIPE = { min: 1300 / 365, max: 1800 / 365 };
+
+/** kWh por kWp por dia acima do qual a conta não fecha: é a potência que está errada. */
+export const LIMITE_IMPOSSIVEL = 8;
+
+/** Abaixo desta fração da mediana do parque no mês, a usina gerou menos que as vizinhas. */
+export const FRACAO_ABAIXO = 0.75;
+
+/** Com menos usinas que isto, a mediana não vale como régua. */
+const USINAS_MINIMAS_NA_REGUA = 5;
 
 /** Com menos dias que isto, o mês não dá base para dizer se a usina vai bem. */
 export const DIAS_MINIMOS_PARA_AVALIAR = 7;
 
-export type Faixa = "abaixo" | "dentro" | "acima";
+export type Faixa = "abaixo" | "dentro" | "suspeita";
 
 export interface DiaGerado {
   /** "2026-10-05" */
@@ -40,6 +58,8 @@ export interface ResumoDoMes {
   mediaDiaKwh: number | null;
   kwhPorKwpDia: number | null;
   faixa: Faixa | null;
+  /** A mediana do parque no mês (kWh/kWp/dia), quando houve parque para comparar. */
+  referencia: number | null;
   melhorDia: DiaGerado | null;
   /** Um valor por dia do mês, nulo onde o portal não entregou. */
   serie: (number | null)[];
@@ -79,14 +99,36 @@ export function mesLegivel(mes: string): string {
   return `${MESES[m - 1]} de ${a}`;
 }
 
-export function classificar(kwhPorKwpDia: number | null): Faixa | null {
-  if (kwhPorKwpDia === null) return null;
-  if (kwhPorKwpDia < FAIXA_SERGIPE.min) return "abaixo";
-  if (kwhPorKwpDia > FAIXA_SERGIPE.max) return "acima";
-  return "dentro";
+/**
+ * A régua do mês: a mediana de kWh/kWp/dia das usinas do parque, deixando de
+ * fora as impossíveis (potência errada) e as quase paradas (que puxariam a
+ * régua para baixo e esconderiam justamente quem está mal).
+ */
+export function referenciaDoParque(valores: (number | null)[]): number | null {
+  const ok = valores.filter((v): v is number => v !== null && v >= 1 && v <= LIMITE_IMPOSSIVEL).sort((a, b) => a - b);
+  if (ok.length < USINAS_MINIMAS_NA_REGUA) return null;
+  const meio = Math.floor(ok.length / 2);
+  return ok.length % 2 ? ok[meio] : (ok[meio - 1] + ok[meio]) / 2;
 }
 
-export function resumirMes(mes: string, dias: DiaGerado[], potenciaKwp: number | null): ResumoDoMes {
+export function classificar(kwhPorKwpDia: number | null, referencia: number | null = null): Faixa | null {
+  if (kwhPorKwpDia === null) return null;
+  if (kwhPorKwpDia > LIMITE_IMPOSSIVEL) return "suspeita";
+  const piso = referencia !== null ? referencia * FRACAO_ABAIXO : FAIXA_SERGIPE.min;
+  return kwhPorKwpDia < piso ? "abaixo" : "dentro";
+}
+
+/** kWh/kWp/dia da usina no mês, sem avaliar — a matéria-prima da régua. */
+export function rendimento(mes: string, dias: DiaGerado[], potenciaKwp: number | null): number | null {
+  return resumirMes(mes, dias, potenciaKwp).kwhPorKwpDia;
+}
+
+export function resumirMes(
+  mes: string,
+  dias: DiaGerado[],
+  potenciaKwp: number | null,
+  referencia: number | null = null,
+): ResumoDoMes {
   const n = diasDoMes(mes);
   const serie: (number | null)[] = Array.from({ length: n }, () => null);
   for (const d of dias) {
@@ -113,7 +155,8 @@ export function resumirMes(mes: string, dias: DiaGerado[], potenciaKwp: number |
     diasSemDado: n - comDado.length,
     mediaDiaKwh,
     kwhPorKwpDia,
-    faixa: classificar(kwhPorKwpDia),
+    faixa: classificar(kwhPorKwpDia, referencia),
+    referencia,
     melhorDia,
     serie,
   };
@@ -126,10 +169,9 @@ export function numeroBr(valor: number, casas = 0): string {
   return `${valor < 0 ? "-" : ""}${milhar}${decimal ? `,${decimal}` : ""}`;
 }
 
-export const FRASE_DA_FAIXA: Record<Faixa, string> = {
-  abaixo: "abaixo do esperado para Sergipe",
-  dentro: "dentro do esperado para Sergipe",
-  acima: "acima da média de Sergipe",
+export const FRASE_DA_FAIXA: Record<"abaixo" | "dentro", string> = {
+  abaixo: "abaixo do esperado para o mês",
+  dentro: "dentro do esperado para o mês",
 };
 
 /**
@@ -152,7 +194,7 @@ export function mensagemDoRelatorio(d: {
     `☀️ Gerou ${numeroBr(r.totalKwh)} kWh${r.mediaDiaKwh !== null ? ` (média de ${numeroBr(r.mediaDiaKwh, 1)} kWh por dia)` : ""}.`,
   ];
   if (r.faixa === "abaixo") linhas.push("A geração ficou abaixo do esperado, e a nossa equipe vai verificar.");
-  else if (r.faixa) linhas.push(`Desempenho ${FRASE_DA_FAIXA[r.faixa]}.`);
+  else if (r.faixa === "dentro") linhas.push(`Desempenho ${FRASE_DA_FAIXA.dentro}.`);
   linhas.push("", `Relatório completo: ${d.link}`);
   return linhas.join("\n");
 }

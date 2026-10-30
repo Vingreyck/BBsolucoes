@@ -75,7 +75,10 @@ function potenciaKwp(v: unknown): number | undefined {
   if (n === undefined) return undefined;
   // Se o valor veio com unidade explícita de kWp, respeita.
   if (/kwp/i.test(String(v))) return n;
-  return n / 1000;
+  // Nem toda linha vem em watts: parte da exportação já traz kWp ("7", "60").
+  // Dividir essas por mil gravou 7 kWp como 0,007 em ~40 usinas (out/2026).
+  // Abaixo de mil não é watt de usina nenhuma — é kWp.
+  return n >= 1000 ? n / 1000 : n;
 }
 
 function data(v: unknown): Date | undefined {

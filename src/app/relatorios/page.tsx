@@ -51,12 +51,22 @@ export default async function Relatorios({
 
   const enviados = linhas.filter((l) => l.enviadoEm).length;
   const abaixo = linhas.filter((l) => l.resumo.faixa === "abaixo").length;
+  const suspeitas = linhas.filter((l) => l.resumo.faixa === "suspeita").length;
   const visiveis = linhas
-    .filter((l) => (filtro === "pendentes" ? !l.enviadoEm : filtro === "abaixo" ? l.resumo.faixa === "abaixo" : true))
+    .filter((l) =>
+      filtro === "pendentes"
+        ? !l.enviadoEm
+        : filtro === "abaixo"
+          ? l.resumo.faixa === "abaixo"
+          : filtro === "potencia"
+            ? l.resumo.faixa === "suspeita"
+            : true,
+    )
     // Abaixo do esperado primeiro (olhar antes de mandar), depois quem não recebeu.
     .sort(
       (a, b) =>
         Number(b.resumo.faixa === "abaixo") - Number(a.resumo.faixa === "abaixo") ||
+        Number(b.resumo.faixa === "suspeita") - Number(a.resumo.faixa === "suspeita") ||
         Number(Boolean(a.enviadoEm)) - Number(Boolean(b.enviadoEm)) ||
         a.cliente.localeCompare(b.cliente),
     );
@@ -79,6 +89,9 @@ export default async function Relatorios({
             <span>
               {linhas.length} usinas com dados · {enviados} enviados
               {abaixo ? ` · ${abaixo} abaixo do esperado` : ""}
+              {linhas[0]?.resumo.referencia
+                ? ` · régua do mês: ${numeroBr(linhas[0].resumo.referencia, 1)} kWh/kWp/dia`
+                : ""}
             </span>
           ) : undefined
         }
@@ -113,6 +126,14 @@ export default async function Relatorios({
                   Abaixo do esperado ({abaixo})
                 </Link>
               )}
+              {suspeitas > 0 && (
+                <Link
+                  href={montar({ mes, filtro: "potencia" })}
+                  className={`filtro perigo${filtro === "potencia" ? " ativo" : ""}`}
+                >
+                  Potência a conferir ({suspeitas})
+                </Link>
+              )}
             </nav>
           </div>
         )}
@@ -124,9 +145,15 @@ export default async function Relatorios({
         </summary>
         <div>
           <p>
-            <strong>Desempenho é kWh por kWp por dia.</strong> Em Sergipe, uma usina saudável gera de 1.300 a 1.800 kWh
-            por kWp por ano — de 3,6 a 4,9 por dia. Abaixo disso, o relatório diz &quot;abaixo do esperado&quot; e a
-            mensagem ao cliente avisa que a equipe vai verificar. Com menos de 7 dias de dado no mês, ele não avalia.
+            <strong>Desempenho é kWh por kWp por dia, comparado com as outras usinas no mesmo mês.</strong> A régua é a
+            mediana do parque: todas tiveram o mesmo sol. Abaixo de 75% dela, o relatório diz &quot;abaixo do
+            esperado&quot; e a mensagem ao cliente avisa que a equipe vai verificar. Com menos de 7 dias de dado no mês,
+            ele não avalia.
+          </p>
+          <p>
+            <strong>Potência a conferir</strong> é usina que, pela potência cadastrada, teria gerado mais de 8 kWh por
+            kWp por dia — impossível. É o cadastro que está errado (7 kWp gravado como 0,007). O relatório dela sai sem
+            avaliação de desempenho até a potência ser corrigida.
           </p>
           <p>
             <strong>Dia sem dado não é dia sem geração.</strong> Quando o portal do fabricante não entrega um dia
@@ -193,8 +220,10 @@ export default async function Relatorios({
                     <td>
                       {r.faixa === "abaixo" ? (
                         <span className="pilula sev-critico">abaixo do esperado</span>
+                      ) : r.faixa === "suspeita" ? (
+                        <span className="pilula sev-atencao">potência a conferir</span>
                       ) : r.faixa ? (
-                        <span className="pilula sev-info">{r.faixa === "acima" ? "acima da média" : "normal"}</span>
+                        <span className="pilula sev-info">normal</span>
                       ) : (
                         <span className="fraco">{l.potenciaKwp ? "poucos dias" : "sem potência"}</span>
                       )}

@@ -4,7 +4,15 @@ import { and, desc, eq, gte, inArray, isNotNull, isNull, lt, lte, or, sql } from
 
 import { db, schema } from "@/db";
 
-import { diasDoMes, mesAnterior, resumirMes, type DiaGerado, type ResumoDoMes } from "./relatorio-mensal";
+import {
+  diasDoMes,
+  mesAnterior,
+  referenciaDoParque,
+  rendimento,
+  resumirMes,
+  type DiaGerado,
+  type ResumoDoMes,
+} from "./relatorio-mensal";
 
 /**
  * O que o relatório mensal lê do banco.
@@ -56,6 +64,31 @@ export async function geracaoDoMes(
     porUsina.set(r.usinaId, lista);
   }
   return porUsina;
+}
+
+const reguas = new Map<string, { valor: number | null; quando: number }>();
+
+/**
+ * A mediana de kWh/kWp/dia do parque da empresa no mês — a régua do
+ * "esperado". Guardada por 10 minutos: o link público de cada cliente a
+ * consultaria de novo a cada PDF aberto.
+ */
+export async function referenciaDoMes(empresaId: string, mes: string): Promise<number | null> {
+  const chave = `${empresaId}:${mes}`;
+  const ja = reguas.get(chave);
+  if (ja && Date.now() - ja.quando < 600_000) return ja.valor;
+  const [usinas, geracao] = await Promise.all([
+    db.query.usina.findMany({
+      where: and(eq(schema.usina.empresaId, empresaId), isNotNull(schema.usina.potenciaKwp)),
+      columns: { id: true, potenciaKwp: true },
+    }),
+    geracaoDoMes(empresaId, mes),
+  ]);
+  const valor = referenciaDoParque(
+    usinas.map((u) => rendimento(mes, geracao.get(u.id) ?? [], Number(u.potenciaKwp))),
+  );
+  reguas.set(chave, { valor, quando: Date.now() });
+  return valor;
 }
 
 /** Alertas que estiveram abertos em algum momento do mês, por usina. */
@@ -117,10 +150,11 @@ export async function relatoriosDoMes(empresaId: string, mes: string): Promise<L
   });
   if (!usinas.length) return [];
   const ids = usinas.map((u) => u.id);
-  const [doMes, doAnterior, alertas] = await Promise.all([
+  const [doMes, doAnterior, alertas, referencia] = await Promise.all([
     geracaoDoMes(empresaId, mes, ids),
     geracaoDoMes(empresaId, mesAnterior(mes), ids),
     alertasDoMes(empresaId, mes, ids),
+    referenciaDoMes(empresaId, mes),
   ]);
   const comDado = usinas.filter((u) => doMes.get(u.id)?.length);
   if (!comDado.length) return [];
@@ -140,7 +174,7 @@ export async function relatoriosDoMes(empresaId: string, mes: string): Promise<L
       clienteId: u.cliente!.id,
       cliente: u.cliente!.nome,
       telefone: u.cliente!.telefone,
-      resumo: resumirMes(mes, doMes.get(u.id) ?? [], potencia),
+      resumo: resumirMes(mes, doMes.get(u.id) ?? [], potencia, referencia),
       totalMesAnterior: anterior?.length ? anterior.reduce((s, d) => s + d.kwh, 0) : null,
       alertas: alertasPorUsina.get(u.id) ?? 0,
       token: link.token,
@@ -197,11 +231,12 @@ export async function montarRelatorio(empresaId: string, usinaId: string, mes: s
   });
   if (!usina || !usina.cliente) return null;
   const potencia = usina.potenciaKwp ? Number(usina.potenciaKwp) : null;
-  const [doMes, doAnterior, alertas, tarifa] = await Promise.all([
+  const [doMes, doAnterior, alertas, tarifa, referencia] = await Promise.all([
     geracaoDoMes(empresaId, mes, [usinaId]),
     geracaoDoMes(empresaId, mesAnterior(mes), [usinaId]),
     alertasDoMes(empresaId, mes, [usinaId]),
     tarifaVigente(empresaId, mes),
+    referenciaDoMes(empresaId, mes),
   ]);
   const anterior = doAnterior.get(usinaId);
   return {
@@ -212,7 +247,7 @@ export async function montarRelatorio(empresaId: string, usinaId: string, mes: s
     cidade: [usina.cidade, usina.uf].filter(Boolean).join(" - ") || null,
     potenciaKwp: potencia,
     fabricantes: [...new Set(usina.vinculosPortal.map((v) => v.contaPortal.fabricante))],
-    resumo: resumirMes(mes, doMes.get(usinaId) ?? [], potencia),
+    resumo: resumirMes(mes, doMes.get(usinaId) ?? [], potencia, referencia),
     totalMesAnterior: anterior?.length ? anterior.reduce((s, d) => s + d.kwh, 0) : null,
     diasMesAnterior: diasDoMes(mesAnterior(mes)),
     alertas: alertas.map((a) => ({ mensagem: a.mensagem, abertoEm: a.abertoEm, resolvidoEm: a.resolvidoEm })),

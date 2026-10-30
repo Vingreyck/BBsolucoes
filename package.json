@@ -43,6 +43,7 @@
     "usuario:aprovar": "tsx src/auth/aprovar-cli.ts",
     "testar:app": "tsx src/app-movel/testar-fluxo.ts",
     "testar:os": "tsx src/os/testar-os.ts",
+    "potencia:corrigir": "tsx src/geracao/corrigir-potencia.ts",
     "relatorio:conferir": "tsx src/geracao/conferir.ts",
     "testar:regras": "tsx src/os/testar-regras.ts",
     "testar:rastreamento": "tsx src/rastreamento/testar-rastreamento.ts"
