@@ -29,6 +29,16 @@ import {
   primeiroNome,
 } from "../documentos/cobranca";
 import { ordenarFila, type LinhaCobranca } from "../documentos/fila-cobranca";
+import {
+  classificar,
+  diasDoMes,
+  mensagemDoRelatorio,
+  mesAnterior,
+  mesLegivel,
+  numeroBr as numeroBrGeracao,
+  resumirMes,
+  ultimoMesFechado,
+} from "../geracao/relatorio-mensal";
 import { montarAssertiva, montarMensagem } from "../push/fcm";
 import { montarCorpoApns, montarJwtApns, tokenMorto } from "../push/apns";
 import { quandoLegivel, textoDoAviso } from "../push/texto";
@@ -213,6 +223,40 @@ async function testarRetrace() {
   const evento = JSON.parse(linhas[2]);
   confere(linhas.length === 3 && JSON.parse(linhas[1]).type === "event", "envelope tem três linhas");
   confere(evento.exception.values[0].value === "boom" && evento.tags.versao === "0.1.0" && evento.tags.plataforma === "android", "evento leva mensagem e tags");
+}
+
+// --- Relatório mensal de geração ----------------------------------------------------
+{
+  igual(diasDoMes("2026-02"), 28, "fevereiro de 2026 tem 28 dias");
+  igual(diasDoMes("2028-02"), 29, "fevereiro bissexto tem 29");
+  igual(mesAnterior("2026-01"), "2025-12", "o mês antes de janeiro é dezembro do ano anterior");
+  igual(ultimoMesFechado(new Date(2026, 10, 5)), "2026-10", "em 5 de novembro, o mês fechado é outubro");
+  igual(mesLegivel("2026-10"), "outubro de 2026", "mês por extenso");
+  igual(numeroBrGeracao(1234.5, 1), "1.234,5", "número à brasileira");
+
+  igual(classificar(3.0), "abaixo", "3,0 kWh/kWp/dia está abaixo da faixa de Sergipe");
+  igual(classificar(4.2), "dentro", "4,2 está dentro");
+  igual(classificar(5.2), "acima", "5,2 está acima");
+
+  const dias = Array.from({ length: 28 }, (_, i) => ({ dia: `2026-10-${String(i + 1).padStart(2, "0")}`, kwh: 20 }));
+  const r = resumirMes("2026-10", [...dias, { dia: "2026-10-05", kwh: 2 }, { dia: "2026-09-30", kwh: 99 }], 5);
+  igual(r.diasComDado, 28, "dias com dado contados uma vez (dois inversores no mesmo dia somam)");
+  igual(r.diasSemDado, 3, "outubro com 28 dias de dado tem 3 sem dado");
+  igual(r.totalKwh, 562, "o total soma o mês e ignora dia de outro mês");
+  confere(Math.abs((r.kwhPorKwpDia ?? 0) - 562 / 28 / 5) < 1e-9, "o desempenho usa a média dos dias com dado, não o mês inteiro");
+  igual(r.faixa, "dentro", "20 kWh/dia numa usina de 5 kWp é normal");
+  igual(r.serie[30], null, "o dia sem dado fica nulo no gráfico");
+  igual(resumirMes("2026-10", dias.slice(0, 5), 5).faixa, null, "com menos de 7 dias, não avalia");
+  igual(resumirMes("2026-10", dias, null).faixa, null, "sem potência cadastrada, não avalia");
+
+  const msg = mensagemDoRelatorio({ cliente: "ANA LIMA", empresa: "BB Soluções", mes: "2026-10", resumo: r, link: "https://x/r/g/abc" });
+  confere(msg.startsWith("Olá, Ana! Aqui é da BB Soluções.") && msg.includes("outubro de 2026"), "mensagem com nome, empresa e mês");
+  confere(msg.includes("Gerou 562 kWh") && msg.includes("https://x/r/g/abc"), "mensagem com o total e o link do PDF");
+  const ruim = resumirMes("2026-10", dias.map((d) => ({ ...d, kwh: 8 })), 5);
+  confere(
+    mensagemDoRelatorio({ cliente: "Ana", empresa: "BB", mes: "2026-10", resumo: ruim, link: "l" }).includes("nossa equipe vai verificar"),
+    "usina abaixo do esperado: a mensagem diz que a equipe vai verificar",
+  );
 }
 
 // --- Cobrança de documento ao cliente -------------------------------------------

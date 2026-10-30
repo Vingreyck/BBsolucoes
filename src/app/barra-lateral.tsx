@@ -4,6 +4,7 @@ import {
   BellRing,
   CalendarDays,
   ClipboardList,
+  FileBarChart,
   FolderOpen,
   House,
   KanbanSquare,
@@ -42,6 +43,7 @@ export type IconeMenu =
   | "esteira"
   | "documentos"
   | "cobranca"
+  | "relatorios"
   | "os"
   | "agenda"
   | "campo"
@@ -58,6 +60,7 @@ const ICONES: Record<IconeMenu, LucideIcon> = {
   esteira: KanbanSquare,
   documentos: FolderOpen,
   cobranca: MessageCircle,
+  relatorios: FileBarChart,
   os: ClipboardList,
   agenda: CalendarDays,
   campo: MapPinned,

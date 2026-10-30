@@ -6254,3 +6254,15 @@ a.funil-rotulo:hover {
 .visita-de-volta .nota {
   margin: 0;
 }
+
+.botoes-linha {
+  display: flex;
+  gap: 0.4rem;
+  align-items: center;
+  flex-wrap: wrap;
+}
+.botoes-linha .botao {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+}

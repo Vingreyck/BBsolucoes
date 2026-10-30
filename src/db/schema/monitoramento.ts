@@ -208,3 +208,36 @@ export const notificacao = pgTable(
   },
   (t) => [index("notificacao_pendente_idx").on(t.status, t.criadoEm)],
 );
+
+/**
+ * O relatório mensal de geração de uma usina: o link público que vai para o
+ * cliente e quando foi enviado.
+ *
+ * O PDF não fica guardado — é gerado na hora a partir das leituras, então uma
+ * leitura que o portal entregou atrasada já aparece. O que fica é a chave do
+ * link (192 bits aleatórios, como a do relatório da OS) e o registro do envio,
+ * para ninguém mandar o mesmo relatório duas vezes.
+ */
+export const relatorioGeracao = pgTable(
+  "relatorio_geracao",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    empresaId: uuid("empresa_id")
+      .notNull()
+      .references(() => empresa.id, { onDelete: "cascade" }),
+    usinaId: uuid("usina_id")
+      .notNull()
+      .references(() => usina.id, { onDelete: "cascade" }),
+    /** "2026-10" */
+    mes: varchar("mes", { length: 7 }).notNull(),
+    token: varchar("token", { length: 64 }).notNull(),
+    enviadoEm: timestamp("enviado_em", { withTimezone: true }),
+    enviadoPorId: uuid("enviado_por_id").references(() => usuario.id, { onDelete: "set null" }),
+    envios: integer("envios").notNull().default(0),
+    criadoEm: timestamp("criado_em", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    uniqueIndex("relatorio_geracao_usina_mes_uq").on(t.usinaId, t.mes),
+    uniqueIndex("relatorio_geracao_token_uq").on(t.token),
+  ],
+);

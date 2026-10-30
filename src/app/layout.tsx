@@ -105,6 +105,7 @@ export default async function RootLayout({
         { href: "/alertas", rotulo: "Alertas", icone: "alertas", contador: alertas },
         { href: "/usinas/sem-dono", rotulo: "Sem dono", icone: "semDono" },
         { href: "/coleta", rotulo: "Coleta", icone: "coleta" },
+        ...(gestao ? [{ href: "/relatorios", rotulo: "Relatórios do mês", icone: "relatorios" as const }] : []),
         { href: "/cadastro", rotulo: "Nova usina", icone: "novaUsina" },
       ],
     },
