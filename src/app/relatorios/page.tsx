@@ -17,6 +17,7 @@ import {
 import { exigirGestaoWeb } from "@/os/acesso";
 
 import { Cabecalho, Vazio } from "../_ui";
+import { salvarPotencia } from "./actions";
 import { BotaoEnviar } from "./botao-enviar";
 
 export const dynamic = "force-dynamic";
@@ -229,6 +230,23 @@ export default async function Relatorios({
                       )}
                       {r.kwhPorKwpDia !== null && <div className="fraco">{numeroBr(r.kwhPorKwpDia, 1)} kWh/kWp/dia</div>}
                       {l.alertas > 0 && <div className="fraco">{l.alertas} ocorrência{l.alertas > 1 ? "s" : ""}</div>}
+                      {(r.faixa === "suspeita" || !l.potenciaKwp) && (
+                        <form action={salvarPotencia.bind(null, l.usinaId)} className="form-telefone">
+                          <input
+                            name="potenciaKwp"
+                            inputMode="decimal"
+                            required
+                            aria-label={`Potência de ${l.usina} em kWp`}
+                            placeholder={
+                              r.mediaDiaKwh && r.referencia ? `kWp (~${numeroBr(r.mediaDiaKwh / r.referencia, 1)})` : "kWp"
+                            }
+                            title="Confira no projeto ou na ART. O número entre parênteses é só um palpite pela geração do mês."
+                          />
+                          <button type="submit" className="botao secundario">
+                            Salvar
+                          </button>
+                        </form>
+                      )}
                     </td>
                     <td className="fraco">
                       {l.enviadoEm ? (

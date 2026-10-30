@@ -21,3 +21,20 @@ export async function registrarEnvioRelatorio(usinaId: string, mes: string): Pro
     );
   revalidatePath("/relatorios");
 }
+
+/**
+ * A potência que faltava (ou estava errada) no cadastro, direto da linha do
+ * relatório. Quem preenche confere no projeto ou na ART — o palpite que a tela
+ * mostra, tirado da geração, é só dica e nunca é gravado sozinho.
+ */
+export async function salvarPotencia(usinaId: string, form: FormData): Promise<void> {
+  const ator = await exigirGestaoWeb();
+  const kwp = Number(String(form.get("potenciaKwp") ?? "").replace(",", "."));
+  // De 300 W (micro) a 5 MW: fora disso é digitação errada.
+  if (!Number.isFinite(kwp) || kwp < 0.3 || kwp > 5000) return;
+  await db
+    .update(schema.usina)
+    .set({ potenciaKwp: String(Math.round(kwp * 1000) / 1000) })
+    .where(and(eq(schema.usina.id, usinaId), eq(schema.usina.empresaId, ator.empresaId)));
+  revalidatePath("/relatorios");
+}
