@@ -11,14 +11,14 @@
 #   4. constrói as imagens novas
 #   5. aplica as migrações que faltam (cada uma numa transação)
 #   6. sobe os containers
-#   7. limpa o cache do Docker (regra do projeto: o disco é pequeno)
+#   7. limpa o cache do Docker (o que sobra de cada build)
 #   8. confere /api/saude e mostra o disco
 #
-# As imagens ":anterior" ocupam ~1,6 GB do disco de 19 GB. Por isso só ficam
-# enquanto o deploy não foi aprovado: se a saúde responde bem, elas saem.
-# Deu errado na hora? `--voltar` ainda funciona. Problema achado horas depois?
-# Desfaça o commit no PC (git revert), dê push e rode o deploy de novo.
-# Com disco sobrando, `MANTER_ANTERIOR=1 ./scripts/deploy.sh` as guarda.
+# As imagens ":anterior" ficam até o próximo deploy (~1,6 GB; o disco tem 77 GB
+# desde 30/10/2026): um problema achado horas depois ainda se desfaz com
+# `--voltar`. O banco não volta junto — se a migração mexeu nele, restaure a
+# cópia do passo 1. Com o disco apertado de novo, `LIMPAR_ANTERIOR=1` apaga
+# as ":anterior" no fim do deploy que deu certo.
 #
 # Rode na pasta do projeto (~/BBsolucoes), como o usuário que roda o Docker.
 
@@ -94,7 +94,7 @@ docker image prune -f >/dev/null
 
 echo "== 8/8 Saúde e disco"
 if conferir_saude; then
-  if [[ "${MANTER_ANTERIOR:-}" != "1" ]]; then
+  if [[ "${LIMPAR_ANTERIOR:-}" == "1" ]]; then
     for s in "${SERVICOS[@]}"; do docker image rm "bbsolucoes-${s}:anterior" >/dev/null 2>&1 || true; done
   fi
   df -h / | tail -1

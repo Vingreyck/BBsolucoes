@@ -234,6 +234,16 @@ const ETAPAS: Etapa[] = [
     script: "src/collectors/detectar.ts",
     critica: true,
   },
+  {
+    /**
+     * Usina parada há 2 dias vira OS corretiva "A agendar", no mesmo dia —
+     * em vez de alguém descobrir no relatório do fim do mês. Depois da
+     * detecção, porque é dela que vêm os alertas. Regra em `os/usina-parada.ts`.
+     */
+    nome: "OS automática para usina parada",
+    script: "src/os/abrir-os-automaticas.ts",
+    critica: false,
+  },
 ];
 
 function executar(etapa: Etapa): Promise<boolean> {

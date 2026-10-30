@@ -29,6 +29,7 @@ import {
   primeiroNome,
 } from "../documentos/cobranca";
 import { ordenarFila, type LinhaCobranca } from "../documentos/fila-cobranca";
+import { descricaoDaOs, usinasParadas } from "./usina-parada";
 import {
   classificar,
   referenciaDoParque,
@@ -224,6 +225,34 @@ async function testarRetrace() {
   const evento = JSON.parse(linhas[2]);
   confere(linhas.length === 3 && JSON.parse(linhas[1]).type === "event", "envelope tem três linhas");
   confere(evento.exception.values[0].value === "boom" && evento.tags.versao === "0.1.0" && evento.tags.plataforma === "android", "evento leva mensagem e tags");
+}
+
+// --- OS automática para usina parada ---------------------------------------------------
+{
+  const agora = new Date("2026-10-30T15:00:00Z");
+  const alerta = (id: string, usinaId: string, dia: string, mensagem = "Não gerou nada") => ({
+    id, usinaId, abertoEm: new Date(`${dia}T12:00:00Z`), mensagem,
+  });
+  const paradas = usinasParadas(
+    [
+      alerta("a1", "u-dois-dias", "2026-10-28"),
+      alerta("a2", "u-dois-dias", "2026-10-29"),
+      alerta("b1", "u-um-dia", "2026-10-29"),
+      alerta("c1", "u-antiga", "2026-10-10"),
+      alerta("c2", "u-antiga", "2026-10-11"),
+      alerta("d1", "u-morta", "2026-10-29", "Praticamente sem geração: não gerou em nenhum dos 30 dias"),
+      alerta("e1", "u-repetida", "2026-10-29"),
+      alerta("e2", "u-repetida", "2026-10-29"),
+    ],
+    agora,
+  );
+  const ids = paradas.map((p) => p.usinaId).sort().join(",");
+  igual(ids, "u-dois-dias,u-morta", "OS só para 2 dias parados recentes ou usina sem geração no período");
+  confere(!ids.includes("u-um-dia"), "um dia parado ainda não abre OS (pode ser o disjuntor religado)");
+  confere(!ids.includes("u-antiga"), "alerta antigo não vira OS no dia em que a regra liga");
+  confere(!ids.includes("u-repetida"), "dois alertas no mesmo dia contam como um dia");
+  const desc = descricaoDaOs(paradas.find((p) => p.usinaId === "u-dois-dias")!);
+  confere(desc.includes("28/10, 29/10") && desc.includes("Aberta automaticamente"), "a descrição diz os dias parados e que foi automática");
 }
 
 // --- Relatório mensal de geração ----------------------------------------------------

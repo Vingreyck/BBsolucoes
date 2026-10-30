@@ -200,7 +200,7 @@ async function evento(
     empresaId: c.os.empresaId,
     ordemServicoId: c.os.id,
     tipo,
-    usuarioId: secundario ? null : c.ator.id,
+    usuarioId: secundario || c.ator.origem === "sistema" ? null : c.ator.id,
     origem: secundario ? "sistema" : c.ator.origem,
     ocorridoEm: c.quando,
     latitude: secundario ? null : coordenada(c.opcoes.latitude, 90),
