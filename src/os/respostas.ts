@@ -244,3 +244,44 @@ async function anotarSeriais(
   if (novos) await reconciliarSeriais(ator.empresaId);
   return avisos;
 }
+
+/**
+ * Deixa o item para a visita de volta (ou traz de volta para esta), sem mexer
+ * na resposta: é o mesmo botão do app, agora também no site, para o escritório
+ * acertar o que o técnico marcou ou esqueceu de marcar.
+ *
+ * Não muda quem respondeu nem quando — só a marca e se o item conta como cumprido.
+ */
+export async function marcarVisitaDeVolta(
+  ator: Ator,
+  osId: string,
+  itemId: string,
+  agendar: boolean,
+): Promise<void> {
+  const os = await db.query.ordemServico.findFirst({
+    where: and(eq(schema.ordemServico.id, osId), eq(schema.ordemServico.empresaId, ator.empresaId)),
+  });
+  if (!os) throw new ErroOs("nao_encontrada", "Ordem de serviço não encontrada.", 404);
+  if (!podeExecutar(ator, os)) throw new ErroOs("sem_permissao", "Esta OS não é sua.", 403);
+  if (encerrada(os.status)) {
+    throw new ErroOs("os_encerrada", "A OS já foi encerrada; o checklist não muda mais.", 409);
+  }
+  const item = await db.query.osChecklistItem.findFirst({
+    where: and(eq(schema.osChecklistItem.id, itemId), eq(schema.osChecklistItem.ordemServicoId, os.id)),
+  });
+  if (!item) throw new ErroOs("nao_encontrado", "Item do checklist não encontrado.", 404);
+  if (agendar && !item.permiteAgendar) {
+    throw new ErroOs("validacao", `${item.descricao}: este item não pode ficar para outra visita.`);
+  }
+
+  const fotos = await contarFotos(db, item.id);
+  const ok = cumprido(item, { valor: item.valor, fotos, observacao: item.observacao, agendar });
+  const agora = new Date();
+  await db.transaction(async (tx) => {
+    await tx
+      .update(schema.osChecklistItem)
+      .set({ agendar, concluido: ok, concluidoEm: ok ? (item.concluidoEm ?? agora) : null })
+      .where(eq(schema.osChecklistItem.id, item.id));
+    await tx.update(schema.ordemServico).set({ atualizadoEm: agora }).where(eq(schema.ordemServico.id, os.id));
+  });
+}

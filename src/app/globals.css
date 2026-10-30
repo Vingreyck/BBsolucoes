@@ -6235,3 +6235,22 @@ a.funil-rotulo:hover {
   background: var(--surface-2);
   color: var(--ink);
 }
+
+/* Visita de volta: quem volta e quando (conclusão da OS). */
+.visita-de-volta {
+  display: grid;
+  gap: 0.5rem;
+  margin: 0.25rem 0;
+  padding: 0.75rem 0.9rem;
+  border: 1px solid var(--line);
+  border-radius: var(--raio-p);
+  background: color-mix(in srgb, var(--accent) 5%, transparent);
+}
+.visita-de-volta legend {
+  padding: 0 0.3rem;
+  font-weight: 600;
+  font-size: 0.84rem;
+}
+.visita-de-volta .nota {
+  margin: 0;
+}

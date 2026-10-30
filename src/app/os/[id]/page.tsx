@@ -43,6 +43,7 @@ import {
 import {
   abrirRetornoAction,
   acaoOsAction,
+  agendarVisitaDeVoltaAction,
   anexarAction,
   comentarOsAction,
   removerAnexoAction,
@@ -89,7 +90,8 @@ export default async function DetalheOs({
 
   const [comentarios, pessoas] = await Promise.all([
     comentariosDaOs(ator.empresaId, os.id),
-    ator.gestao ? responsaveisPossiveis(ator.empresaId) : Promise.resolve([]),
+    // Quem pode voltar na visita de volta também precisa da lista, mesmo sem ser gestão.
+    ator.gestao || os.checklist.some((i) => i.agendar) ? responsaveisPossiveis(ator.empresaId) : Promise.resolve([]),
   ]);
 
   const fechada = encerrada(os.status);
@@ -108,6 +110,9 @@ export default async function DetalheOs({
   const avulsas = os.anexos.filter((a) => a.categoria !== "assinatura" && !a.checklistItemId);
   const obrigatorios = os.checklist.filter((i) => i.obrigatorio);
   const pendentes = obrigatorios.filter((i) => !i.concluido);
+  // Itens deixados para a visita de volta, e se ela já foi aberta.
+  const deixados = os.checklist.filter((i) => i.agendar);
+  const visitaAberta = os.retornos.some((r) => r.descricao.startsWith("Visita de volta"));
   const feitos = obrigatorios.length
     ? obrigatorios.length - pendentes.length
     : os.checklist.filter((i) => i.concluido).length;
@@ -335,6 +340,14 @@ export default async function DetalheOs({
                       Quem recebeu / assinou pelo cliente
                       <input type="text" name="assinaturaNome" defaultValue={os.assinaturaNome ?? ""} maxLength={200} />
                     </label>
+                    {deixados.length > 0 && (
+                      <CamposVisitaDeVolta
+                        deixados={deixados.map((i) => i.descricao)}
+                        pessoas={pessoas}
+                        padrao={os.responsavelId}
+                        obrigatorio={false}
+                      />
+                    )}
                     <div className="ficha-acoes">
                       <button type="submit">Concluir OS</button>
                     </div>
@@ -400,6 +413,19 @@ export default async function DetalheOs({
                     </Link>
                   ))}
                 </p>
+              )}
+              {gestao && os.status === "concluida" && deixados.length > 0 && !visitaAberta && (
+                <form action={agendarVisitaDeVoltaAction.bind(null, os.id)} className="form-ficha compacto">
+                  <CamposVisitaDeVolta
+                    deixados={deixados.map((i) => i.descricao)}
+                    pessoas={pessoas}
+                    padrao={os.responsavelId}
+                    obrigatorio
+                  />
+                  <div className="ficha-acoes">
+                    <button type="submit">Abrir a visita de volta</button>
+                  </div>
+                </form>
               )}
               {gestao && (
                 <div className="botoes">
@@ -734,5 +760,46 @@ export default async function DetalheOs({
         </aside>
       </div>
     </main>
+  );
+}
+
+/**
+ * Quem volta e quando, para os itens deixados para a visita de volta. Na
+ * conclusão é opcional (sem escolher, a OS conclui e o escritório agenda
+ * depois); depois de concluída, é o que abre a OS nova.
+ */
+function CamposVisitaDeVolta({
+  deixados,
+  pessoas,
+  padrao,
+  obrigatorio,
+}: {
+  deixados: string[];
+  pessoas: { id: string; nome: string }[];
+  padrao: string | null;
+  obrigatorio: boolean;
+}) {
+  return (
+    <fieldset className="visita-de-volta">
+      <legend>
+        Visita de volta · {deixados.length} {deixados.length === 1 ? "item ficou" : "itens ficaram"} para depois
+      </legend>
+      <p className="nota">{deixados.join(" · ")}</p>
+      <label>
+        Quem volta
+        <select name="voltaResponsavelId" defaultValue={obrigatorio ? (padrao ?? "") : ""} required={obrigatorio}>
+          <option value="">{obrigatorio ? "Escolha…" : "Decidir depois (o escritório agenda)"}</option>
+          {pessoas.map((p) => (
+            <option key={p.id} value={p.id}>
+              {p.nome}
+            </option>
+          ))}
+        </select>
+      </label>
+      <label>
+        Dia (opcional)
+        <input type="date" name="voltaDia" />
+      </label>
+    </fieldset>
   );
 }

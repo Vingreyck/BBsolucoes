@@ -179,7 +179,7 @@ function buscarCompleta(filtro: SQL | undefined) {
       responsavel: { columns: { id: true, nome: true } },
       abertaPor: { columns: { id: true, nome: true } },
       osOrigem: { columns: { id: true, numero: true } },
-      retornos: { columns: { id: true, numero: true, status: true } },
+      retornos: { columns: { id: true, numero: true, status: true, descricao: true } },
       checklist: {
         orderBy: asc(schema.osChecklistItem.ordem),
         with: {

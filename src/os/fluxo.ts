@@ -1,6 +1,6 @@
 import { randomBytes } from "node:crypto";
 
-import { and, eq, notInArray, sql } from "drizzle-orm";
+import { and, eq, like, notInArray, sql } from "drizzle-orm";
 
 import { db, schema } from "@/db";
 import { moverNaEsteira } from "@/projeto/esteira";
@@ -245,7 +245,7 @@ function exigirMotivo(motivo: string | null | undefined, frase: string): string 
   return m.slice(0, 500);
 }
 
-async function usuarioDaEmpresa(tx: Transacao, empresaId: string, id: string) {
+async function usuarioDaEmpresa(tx: Transacao | typeof db, empresaId: string, id: string) {
   const u = await tx.query.usuario.findFirst({
     where: and(
       eq(schema.usuario.id, id),
@@ -284,7 +284,7 @@ async function abrirVisitaDeVolta(
   responsavelId: string,
   dia: Date | null,
   deixados: Array<{ descricao: string; observacao: string | null }>,
-): Promise<void> {
+): Promise<{ id: string; numero: number }> {
   const lista = deixados
     .map((i) => `• ${i.descricao}${i.observacao?.trim() ? ` — ${i.observacao.trim()}` : ""}`)
     .join("\n");
@@ -323,6 +323,50 @@ async function abrirVisitaDeVolta(
     origem: ator.origem,
     dados: { osId: nova.id, numero: nova.numero, itens: deixados.length },
   });
+  return nova;
+}
+
+/**
+ * A visita de volta de uma OS já concluída, quando ninguém escolheu na hora
+ * quem volta — o técnico concluiu sem marcar, e a conclusão deixou o aviso
+ * "o escritório precisa agendar". É a gestão quem marca, uma vez só.
+ */
+export async function agendarVisitaDeVolta(
+  ator: Ator,
+  osId: string,
+  volta: AgendamentoDeVolta,
+): Promise<{ id: string; numero: number }> {
+  if (!ator.gestao) throw new ErroOs("sem_permissao", "Só a gestão agenda a visita de volta.", 403);
+  const origem = await db.query.ordemServico.findFirst({
+    where: and(eq(schema.ordemServico.id, osId), eq(schema.ordemServico.empresaId, ator.empresaId)),
+  });
+  if (!origem) throw new ErroOs("nao_encontrada", "Ordem de serviço não encontrada.", 404);
+  if (origem.status !== "concluida") {
+    throw new ErroOs("transicao_invalida", "A visita de volta é marcada na conclusão; esta OS ainda está aberta.", 409);
+  }
+  const deixados = await db.query.osChecklistItem.findMany({
+    where: and(eq(schema.osChecklistItem.ordemServicoId, origem.id), eq(schema.osChecklistItem.agendar, true)),
+    columns: { descricao: true, observacao: true },
+  });
+  if (!deixados.length) throw new ErroOs("validacao", "Nenhum item ficou para a visita de volta.");
+  if (await visitaDeVoltaDe(origem.id)) {
+    throw new ErroOs("validacao", "A visita de volta desta OS já foi aberta.", 409);
+  }
+  const responsavel = await usuarioDaEmpresa(db, origem.empresaId, volta.responsavelId);
+  const dia = diaDoRelogio(volta.dia);
+  if (volta.dia && !dia) throw new ErroOs("validacao", "O dia da visita de volta é inválido.");
+  const nova = await abrirVisitaDeVolta(ator, origem, responsavel.id, dia, deixados);
+  publicar(ator.empresaId, { tipo: "os", ordemId: nova.id });
+  return nova;
+}
+
+/** A visita de volta já aberta desta OS, se houver. */
+export async function visitaDeVoltaDe(osId: string): Promise<{ id: string; numero: number } | null> {
+  const ja = await db.query.ordemServico.findFirst({
+    where: and(eq(schema.ordemServico.osOrigemId, osId), like(schema.ordemServico.descricao, "Visita de volta%")),
+    columns: { id: true, numero: true },
+  });
+  return ja ?? null;
 }
 
 // ---------------------------------------------------------------------------

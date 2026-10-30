@@ -9,6 +9,7 @@ import { ErroOs, exigirAtorWeb, exigirGestaoWeb } from "@/os/acesso";
 import { anexar, removerAnexo, type CategoriaAnexo } from "@/os/anexos";
 import {
   abrirRetorno,
+  agendarVisitaDeVolta,
   criarOs,
   executarAcao,
   renovarLinkRelatorio,
@@ -16,7 +17,7 @@ import {
 } from "@/os/fluxo";
 import { anotar } from "@/os/notas";
 import { relogioDoCampo } from "@/os/relogio";
-import { responderItem } from "@/os/respostas";
+import { marcarVisitaDeVolta, responderItem } from "@/os/respostas";
 import type { PrioridadeOs, TipoOs } from "@/os/tipos";
 
 /**
@@ -155,6 +156,10 @@ export async function acaoOsAction(osId: string, form: FormData): Promise<void> 
           resultado: texto(form, "resultado") === "nao_resolvido" ? "nao_resolvido" : "resolvido",
           laudo: nuloSeVazio(form, "laudo"),
           assinaturaNome: nuloSeVazio(form, "assinaturaNome"),
+          // Só vem quando há item deixado para a visita de volta (ver a tela).
+          agendamento: nuloSeVazio(form, "voltaResponsavelId")
+            ? { responsavelId: texto(form, "voltaResponsavelId"), dia: nuloSeVazio(form, "voltaDia") }
+            : null,
         };
         break;
       case "editar": {
@@ -316,4 +321,32 @@ export async function abrirOsDoAlerta(alertaId: string): Promise<void> {
   revalidatePath("/alertas");
   revalidatePath("/os");
   redirect(`/os/${os.id}`);
+}
+
+/** O botão do item: deixar para a visita de volta, ou trazer de volta para esta. */
+export async function marcarVisitaDeVoltaAction(osId: string, itemId: string, form: FormData): Promise<void> {
+  const ator = await exigirAtorWeb();
+  const agendar = texto(form, "agendar") === "sim";
+  const m = await tentar(async () => {
+    await marcarVisitaDeVolta(ator, osId, itemId, agendar);
+    return agendar ? "Item deixado para a visita de volta." : "Item voltou para esta visita.";
+  });
+  revalidatePath(`/os/${osId}`);
+  redirect(destino(`/os/${osId}`, m) + `#item-${itemId}`);
+}
+
+/** A visita de volta de uma OS já concluída sem ninguém escolhido para voltar. */
+export async function agendarVisitaDeVoltaAction(osId: string, form: FormData): Promise<void> {
+  const ator = await exigirAtorWeb();
+  let novaId: string | null = null;
+  const m = await tentar(async () => {
+    const responsavelId = texto(form, "voltaResponsavelId");
+    if (!responsavelId) throw new ErroOs("validacao", "Escolha quem volta.");
+    const nova = await agendarVisitaDeVolta(ator, osId, { responsavelId, dia: nuloSeVazio(form, "voltaDia") });
+    novaId = nova.id;
+    return `Visita de volta aberta: OS #${String(nova.numero).padStart(4, "0")}.`;
+  });
+  revalidatePath(`/os/${osId}`);
+  revalidatePath("/os");
+  redirect(destino(novaId ? `/os/${novaId}` : `/os/${osId}`, m));
 }

@@ -4,7 +4,13 @@ import { faltaNoItem } from "@/os/regras-item";
 import { formatarInstante } from "@/os/relogio";
 import { EVENTO_ROTULO, ORIGEM_EVENTO_ROTULO } from "@/os/tipos";
 
-import { acaoOsAction, anexarAction, removerAnexoAction, responderItemAction } from "../actions";
+import {
+  acaoOsAction,
+  anexarAction,
+  marcarVisitaDeVoltaAction,
+  removerAnexoAction,
+  responderItemAction,
+} from "../actions";
 
 /*
  * Peças da tela de detalhe da OS. Tudo componente de servidor e formulário
@@ -260,6 +266,22 @@ export function ItemChecklist({
               {item.aceitaVideo ? "Enviar foto ou vídeo" : "Enviar foto"}
             </button>
           </form>
+          {item.permiteAgendar && (
+            <form action={marcarVisitaDeVoltaAction.bind(null, osId, item.id)} className="form-mini">
+              <input type="hidden" name="agendar" value={item.agendar ? "nao" : "sim"} />
+              <button
+                type="submit"
+                className="botao secundario"
+                title={
+                  item.agendar
+                    ? "O item volta a ser cobrado nesta visita."
+                    : "Conta como feito agora; a conclusão abre uma OS só com os itens deixados."
+                }
+              >
+                {item.agendar ? "Fazer nesta visita" : "Deixar para a visita de volta"}
+              </button>
+            </form>
+          )}
           {item.apenasCamera && (
             <p className="nota">No app, este item só aceita foto tirada na hora, pela câmera.</p>
           )}

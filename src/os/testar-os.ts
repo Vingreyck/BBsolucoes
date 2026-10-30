@@ -11,11 +11,11 @@ import { db, schema } from "@/db";
 
 import { ErroOs, type Ator } from "./acesso";
 import { carregarOs, contarPorStatus, listarOs, tempoEmCampo, vistoriaDoProjeto } from "./consultas";
-import { abrirRetorno, criarOs, executarAcao } from "./fluxo";
+import { abrirRetorno, agendarVisitaDeVolta, criarOs, executarAcao } from "./fluxo";
 import { garantirModelos } from "./modelos";
 import { anotar } from "./notas";
 import { renderizarRelatorio } from "./relatorio";
-import { recalcularItem, responderItem } from "./respostas";
+import { marcarVisitaDeVolta, recalcularItem, responderItem } from "./respostas";
 
 /**
  * Confere as regras da OS contra o banco de verdade, sem site nem app.
@@ -529,6 +529,21 @@ async function main() {
         "os itens deixados para a visita de volta contam como cumpridos",
       );
 
+      // O mesmo botão pelo site: desfazer volta a cobrar o item; refazer, a contar como feito.
+      const area = v.checklist.find((i) => i.chave === "area_util")!;
+      await marcarVisitaDeVolta(gestao, vist.id, area.id, false);
+      v = await carregarOs(gestao, vist.id);
+      const areaDepois = v.checklist.find((i) => i.id === area.id)!;
+      confere(!areaDepois.agendar && !areaDepois.concluido, "pelo site, desfazer o 'deixar para depois' volta a cobrar o item");
+      await marcarVisitaDeVolta(gestao, vist.id, area.id, true);
+      v = await carregarOs(gestao, vist.id);
+      confere(v.checklist.find((i) => i.id === area.id)!.concluido, "pelo site, deixar para depois conta como cumprido");
+      await recusa(
+        marcarVisitaDeVolta(gestao, vist.id, fachada.id, true),
+        "validacao",
+        "pelo site, item que não permite também recusa",
+      );
+
       for (const i of v.checklist) {
         if (ficam.includes(i.chave ?? "")) continue;
         const valor =
@@ -582,6 +597,16 @@ async function main() {
         );
         confere(volta.descricao.includes("Visita de volta") && volta.descricao.includes("Sombra"), "a descrição lista o que medir");
       }
+      await recusa(
+        agendarVisitaDeVolta(tec, vist.id, { responsavelId: outroTecnico.id }),
+        "sem_permissao",
+        "depois de concluída, só a gestão agenda a visita de volta",
+      );
+      await recusa(
+        agendarVisitaDeVolta(gestao, vist.id, { responsavelId: outroTecnico.id }),
+        "validacao",
+        "a visita de volta não abre duas vezes",
+      );
       const projVist = await db.query.projeto.findFirst({
         where: eq(schema.projeto.id, projeto.id),
         with: { etapa: true },
