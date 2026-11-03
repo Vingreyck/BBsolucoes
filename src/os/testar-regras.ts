@@ -31,6 +31,16 @@ import {
 import { ordenarFila, type LinhaCobranca } from "../documentos/fila-cobranca";
 import { descricaoDaOs, usinasParadas } from "./usina-parada";
 import {
+  acaoNaEsteira,
+  faseDe,
+  liberaOsDeInstalacao,
+  nomeNoEmpreendimento,
+  normalizarItem,
+  sugerirProjetos,
+  vigente,
+  vinculoAutomatico,
+} from "../energisa/situacoes";
+import {
   classificar,
   referenciaDoParque,
   diasDoMes,
@@ -225,6 +235,60 @@ async function testarRetrace() {
   const evento = JSON.parse(linhas[2]);
   confere(linhas.length === 3 && JSON.parse(linhas[1]).type === "event", "envelope tem três linhas");
   confere(evento.exception.values[0].value === "boom" && evento.tags.versao === "0.1.0" && evento.tags.plataforma === "android", "evento leva mensagem e tags");
+}
+
+// --- Robô da Energisa -------------------------------------------------------------------
+{
+  igual(faseDe("P"), "aprovado", "P é Projeto Aprovado");
+  igual(faseDe("I"), "indeferido", "I é Projeto Indeferido");
+  igual(faseDe("M"), "conectada", "M é UC GD Conectada");
+  igual(faseDe("J"), "vistoria_reprovada", "J é Vistoria Reprovada");
+  igual(faseDe("H"), "vistoria_pendente", "H é Vistoria Pendente");
+  igual(faseDe(null, "Etapa de Obra"), "obra", "\"Etapa de Obra\", que não está na tabela deles, vira obra pela descrição");
+  igual(faseDe("?", "Projeto em Análise"), "analise", "código desconhecido cai na descrição");
+  confere(liberaOsDeInstalacao("aprovado") && liberaOsDeInstalacao("obra") && !liberaOsDeInstalacao("analise"), "só aprovado (ou em obra) libera a OS de instalação");
+
+  igual(acaoNaEsteira("conectada", "pedido_vistoria"), "avancar", "UC GD conectada no pedido de vistoria avança para monitoramento");
+  igual(acaoNaEsteira("vistoria_reprovada", "pedido_vistoria"), "voltar", "vistoria reprovada volta para execução");
+  igual(acaoNaEsteira("conectada", "execucao"), null, "fora do pedido de vistoria, a esteira não se mexe sozinha");
+  igual(acaoNaEsteira("aprovado", "aprovacao_concessionaria"), null, "aprovação não move: libera o botão da OS");
+
+  const d = (iso: string) => new Date(`${iso}T12:00:00Z`);
+  const v = vigente([
+    { id: "v1", fase: "indeferido" as const, dataAbertura: d("2026-10-22") },
+    { id: "v2", fase: "aprovado" as const, dataAbertura: d("2026-10-19") },
+    { id: "v0", fase: "indeferido" as const, dataAbertura: d("2026-10-08") },
+  ]);
+  igual(v?.id, "v2", "vale a entrada viva, mesmo mais antiga que a indeferida (Rosangela V3 x V2)");
+  igual(vigente([{ id: "a", fase: "indeferido" as const, dataAbertura: d("2026-10-01") }, { id: "b", fase: "cancelado" as const, dataAbertura: d("2026-10-05") }])?.id, "b", "todas mortas: a mais recente");
+
+  igual(nomeNoEmpreendimento("PE Solar Sr Jose Edenilson - BB Solucoes - 28 10 2026").join(" "), "jose edenilson", "nome tirado do empreendimento");
+  igual(nomeNoEmpreendimento("PE SOLAR USINA ITALO V4 75KW - BB SOLUCOES - 05 10 2026").join(" "), "italo", "sem usina, versão e potência");
+  igual(nomeNoEmpreendimento("PE AUMENTO GD - ELIAS MADERE V2 - BB SOLUCOES - 19 09 2026").join(" "), "elias madere", "no aumento, o nome vem depois do traço");
+  const candidatos = [
+    { projetoId: "p1", cliente: "José Edenilson Santos" },
+    { projetoId: "p2", cliente: "José Carlos Peixoto" },
+    { projetoId: "p3", cliente: "Antônio Anderson Almeida" },
+  ];
+  igual(vinculoAutomatico("PE Solar Sr Jose Edenilson - BB Solucoes - 28 10 2026", candidatos), "p1", "nome completo e único vincula sozinho");
+  igual(vinculoAutomatico("ANTÔNIO ANDERSON ALMEIDA", candidatos), "p3", "empreendimento com o nome do cliente vincula");
+  igual(vinculoAutomatico("PE Solar Sr Jose Soares - BB Solucoes", candidatos), null, "só o \"José\" não basta");
+  confere(sugerirProjetos("PE Solar Sr Jose Carlos Cond Peixoto - BB Solucoes", candidatos)[0]?.projetoId === "p2", "sugestão pelo nome ignora \"Cond\"");
+
+  const item = normalizarItem({
+    numeroProjetoEletrico: 1236226,
+    nomeEmpreendimento: "PE Solar Sr Jose Edenilson - BB Solucoes - 28 10 2026",
+    descricaoLogradouro: "RUA JOSE HENIO ARAUJO",
+    numeroEndereco: "379",
+    nomeBairro: "OVIEDO TEIXEIRA",
+    codigoUF: "SE",
+    dataAberturaISO: "2026-10-28T10:00:00",
+    codigoSituacaoProjetoEletrico: "a",
+    descricaoSituacaoProjetoEletrico: "Projeto em Análise",
+  });
+  confere(item?.numero === "1236226" && item.fase === "analise" && item.codigo === "A", "a linha da página vira número, código e fase");
+  igual(item?.endereco, "RUA JOSE HENIO ARAUJO, 379, OVIEDO TEIXEIRA, SE", "endereço montado como na tela deles");
+  igual(normalizarItem({ nomeEmpreendimento: "sem número" }), null, "linha sem ID Geração é ignorada");
 }
 
 // --- OS automática para usina parada ---------------------------------------------------

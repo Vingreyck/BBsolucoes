@@ -6255,6 +6255,17 @@ a.funil-rotulo:hover {
   margin: 0;
 }
 
+.cartao .botao-cartao {
+  margin-top: 0.35rem;
+  width: 100%;
+  font-size: 0.78rem;
+  padding: 0.35rem 0.5rem;
+}
+.cartao .pilula {
+  align-self: flex-start;
+  margin-top: 0.25rem;
+}
+
 .botoes-linha {
   display: flex;
   gap: 0.4rem;

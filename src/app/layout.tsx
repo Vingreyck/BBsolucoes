@@ -82,6 +82,7 @@ export default async function RootLayout({
           ? [
               { href: "/documentos", rotulo: "Documentos", icone: "documentos" as const },
               { href: "/documentos/cobranca", rotulo: "Cobrar documentos", icone: "cobranca" as const },
+              ...(gestao ? [{ href: "/energisa", rotulo: "Robô da Energisa", icone: "energisa" as const }] : []),
             ]
           : []),
       ],

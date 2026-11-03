@@ -1,15 +1,19 @@
 import { Fragment } from "react";
 
-import { asc } from "drizzle-orm";
+import { and, asc, inArray, isNotNull } from "drizzle-orm";
 
 import { exigirUsuario } from "@/auth/sessao";
-import { db } from "@/db";
+import { db, schema } from "@/db";
 import { etapa as etapaTable } from "@/db/schema";
+import { liberaOsDeInstalacao, tomDaFase, vigente, type FaseEnergisa } from "@/energisa/situacoes";
+import { ehGestaoWeb } from "@/os/acesso";
+import { numeroOs } from "@/os/tipos";
 
 import { Info, Plus } from "lucide-react";
 
 import { Cabecalho } from "../_ui";
 import { moverProjeto } from "../actions";
+import { gerarOsInstalacao } from "./actions";
 import { kWp } from "../formatar";
 
 /** Lê do banco a cada request — nada aqui é estático. */
@@ -30,8 +34,11 @@ function diasDesde(data: Date): number {
   return Math.floor((Date.now() - data.getTime()) / 86_400_000);
 }
 
+const TOM_ENERGISA: Record<string, string> = { ok: "sev-info", ruim: "sev-critico", espera: "sev-atencao", neutro: "" };
+
 export default async function Esteira() {
-  await exigirUsuario();
+  const usuario = await exigirUsuario();
+  const gestao = ehGestaoWeb(usuario.papel);
 
   const etapas = await db.query.etapa.findMany({
     orderBy: asc(etapaTable.ordem),
@@ -40,6 +47,36 @@ export default async function Esteira() {
   const projetos = await db.query.projeto.findMany({
     with: { cliente: true, responsavel: true },
   });
+
+  /**
+   * A situação de cada projeto no portal da Energisa, lida pelo robô
+   * (`/energisa`). Na etapa 9, a aprovação libera o botão da OS de instalação;
+   * a OS de instalação que já existe aparece no lugar do botão.
+   */
+  const daEnergisa = await db.query.energisaProjeto.findMany({ where: isNotNull(schema.energisaProjeto.projetoId) });
+  const entradasPorProjeto = new Map<string, typeof daEnergisa>();
+  for (const en of daEnergisa) {
+    const lista = entradasPorProjeto.get(en.projetoId!) ?? [];
+    lista.push(en);
+    entradasPorProjeto.set(en.projetoId!, lista);
+  }
+  const energisa = new Map(
+    [...entradasPorProjeto].map(([id, lista]) => [id, vigente(lista.map((en) => ({ ...en, fase: en.fase as FaseEnergisa })))]),
+  );
+  const osInstalacao = new Map<string, { id: string; numero: number }>();
+  if (energisa.size) {
+    const ordens = await db
+      .select({ id: schema.ordemServico.id, numero: schema.ordemServico.numero, projetoId: schema.ordemServico.projetoId })
+      .from(schema.ordemServico)
+      .where(
+        and(
+          inArray(schema.ordemServico.projetoId, [...energisa.keys()]),
+          inArray(schema.ordemServico.tipo, ["instalacao"]),
+          inArray(schema.ordemServico.status, ["aberta", "agendada", "em_deslocamento", "em_andamento", "aguardando_peca"]),
+        ),
+      );
+    for (const o of ordens) if (o.projetoId) osInstalacao.set(o.projetoId, { id: o.id, numero: o.numero });
+  }
 
   if (etapas.length === 0) {
     return (
@@ -171,6 +208,35 @@ export default async function Esteira() {
                           {p.responsavel && (
                             <span className="dono">{p.responsavel.nome}</span>
                           )}
+                          {(() => {
+                            const v = energisa.get(p.id);
+                            if (!v) return null;
+                            const fase = v.fase as FaseEnergisa;
+                            const os = osInstalacao.get(p.id);
+                            return (
+                              <>
+                                <span
+                                  className={`pilula ${TOM_ENERGISA[tomDaFase(fase)]}`}
+                                  title={`Projeto ${v.numero} no portal da Energisa, desde ${v.situacaoDesde.toLocaleDateString("pt-BR")}`}
+                                >
+                                  Energisa: {v.descricaoSituacao ?? fase}
+                                </span>
+                                {e.slug === "aprovacao_concessionaria" &&
+                                  liberaOsDeInstalacao(fase) &&
+                                  (os ? (
+                                    <a className="link-acao" href={`/os/${os.id}`}>
+                                      {numeroOs(os.numero)} de instalação
+                                    </a>
+                                  ) : gestao ? (
+                                    <form action={gerarOsInstalacao.bind(null, p.id)}>
+                                      <button type="submit" className="botao botao-cartao">
+                                        Gerar OS de instalação
+                                      </button>
+                                    </form>
+                                  ) : null)}
+                              </>
+                            );
+                          })()}
                           <div className="mover">
                             <form action={moverProjeto.bind(null, p.id, "voltar")}>
                               <button

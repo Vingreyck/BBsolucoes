@@ -69,6 +69,30 @@ services:
     # site por dentro da rede. Sem isso, a 3000 ficaria aberta em HTTP puro ao
     # lado do HTTPS, e login por HTTP é senha trafegando aberta.
 
+  # O robô do portal de projetos da Energisa: lê "Meus projetos" a cada 30 min
+  # e atualiza a esteira (ver src/energisa/robo.ts). Navegador de verdade, por
+  # isso imagem própria. Sem CPF no .env, ele sobe e fica esperando.
+  energisa:
+    build:
+      context: .
+      dockerfile: Dockerfile.energisa
+    restart: unless-stopped
+    # O Chromium trava com os 64 MB de memória compartilhada que o Docker dá por
+    # padrão; e o `init` recolhe os processos que o navegador deixa para trás.
+    shm_size: "1gb"
+    init: true
+    logging: *log
+    env_file: .env
+    environment:
+      DATABASE_URL: postgres://postgres:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB:-bbsolucoes}
+    depends_on:
+      db:
+        condition: service_healthy
+    volumes:
+      # O perfil do navegador (a sessão da Energisa sobrevive a reinício) e a
+      # última tela que o robô viu, que o site mostra em /energisa.
+      - ./estado:/app/estado
+
   coletor:
     build: .
     restart: unless-stopped

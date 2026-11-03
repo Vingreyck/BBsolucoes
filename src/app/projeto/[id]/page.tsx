@@ -530,11 +530,11 @@ export default async function DetalheProjeto({
                 {comentarios.map((c) => (
                   <li key={c.id}>
                     <span className="avatar-mini" aria-hidden>
-                      {iniciais(c.autor?.nome ?? "?")}
+                      {iniciais(c.autor?.nome ?? "Sistema")}
                     </span>
                     <div>
                       <span className="conversa-autor">
-                        {c.autor?.nome ?? "alguém"}
+                        {c.autor?.nome ?? "Sistema"}
                         <span className="fraco"> · {c.criadoEm.toLocaleDateString("pt-BR")}</span>
                       </span>
                       <p>{c.texto}</p>

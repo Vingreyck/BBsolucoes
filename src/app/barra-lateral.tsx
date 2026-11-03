@@ -2,6 +2,7 @@
 
 import {
   BellRing,
+  Bot,
   CalendarDays,
   ClipboardList,
   FileBarChart,
@@ -44,6 +45,7 @@ export type IconeMenu =
   | "documentos"
   | "cobranca"
   | "relatorios"
+  | "energisa"
   | "os"
   | "agenda"
   | "campo"
@@ -61,6 +63,7 @@ const ICONES: Record<IconeMenu, LucideIcon> = {
   documentos: FolderOpen,
   cobranca: MessageCircle,
   relatorios: FileBarChart,
+  energisa: Bot,
   os: ClipboardList,
   agenda: CalendarDays,
   campo: MapPinned,
