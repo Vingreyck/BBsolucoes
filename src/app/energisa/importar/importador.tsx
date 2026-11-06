@@ -4,8 +4,9 @@ import { CheckCircle2, CircleAlert, LoaderCircle } from "lucide-react";
 import { useEffect, useState } from "react";
 
 import { ORIGEM_ENERGISA } from "@/energisa/favorito";
+import type { ResultadoImportacao } from "@/energisa/importar";
 
-import { importarDoPortal, type ResultadoImportacao } from "../actions";
+import { importarDoPortal } from "../actions";
 
 type Estado =
   | { tipo: "esperando" }

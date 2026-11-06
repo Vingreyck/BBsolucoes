@@ -17,7 +17,7 @@ import {
 export type { ItemEnergisa };
 
 /**
- * A lista que chegou do portal da Energisa (pelo favorito "Enviar ao Selebi")
+ * A lista que chegou do portal da Energisa (pela extensão ou pelo favorito)
  * vira dado no Selebi: grava, liga cada linha ao projeto certo e faz a esteira
  * reagir à situação nova.
  */
@@ -38,7 +38,11 @@ export async function sincronizar(empresaId: string, crus: Record<string, unknow
   const existentes = await db.query.energisaProjeto.findMany({ where: eq(schema.energisaProjeto.empresaId, empresaId) });
   const porNumero = new Map(existentes.map((e) => [e.numero, e]));
   const agora = new Date();
+  const novos: (typeof schema.energisaProjeto.$inferInsert)[] = [];
+  const iguais: string[] = [];
 
+  // Com a extensão lendo a cada 30 min, quase tudo chega igual: só o que mudou
+  // é regravado; o resto ganha o `vistoEm` numa instrução só.
   for (const item of itens) {
     const ja = porNumero.get(item.numero);
     const campos = {
@@ -52,16 +56,34 @@ export async function sincronizar(empresaId: string, crus: Record<string, unknow
       vistoEm: agora,
     };
     if (!ja) {
-      await db.insert(schema.energisaProjeto).values({ empresaId, numero: item.numero, ...campos, situacaoDesde: agora });
-      resumo.novos++;
-    } else {
-      const mudou = ja.codigoSituacao !== item.codigo || (ja.descricaoSituacao ?? "") !== (item.descricao ?? "");
-      if (mudou) resumo.mudaram++;
-      await db
-        .update(schema.energisaProjeto)
-        .set({ ...campos, ...(mudou ? { situacaoDesde: agora } : {}) })
-        .where(eq(schema.energisaProjeto.id, ja.id));
+      if (!novos.some((n) => n.numero === item.numero)) {
+        novos.push({ empresaId, numero: item.numero, ...campos, situacaoDesde: agora });
+      }
+      continue;
     }
+    const mudouSituacao = ja.codigoSituacao !== item.codigo || (ja.descricaoSituacao ?? "") !== (item.descricao ?? "");
+    const mudouResto =
+      ja.empreendimento !== item.empreendimento ||
+      ja.endereco !== item.endereco ||
+      ja.tipo !== item.tipo ||
+      ja.fase !== item.fase ||
+      (ja.dataAbertura?.getTime() ?? null) !== (item.dataAbertura?.getTime() ?? null);
+    if (!mudouSituacao && !mudouResto) {
+      iguais.push(ja.id);
+      continue;
+    }
+    if (mudouSituacao) resumo.mudaram++;
+    await db
+      .update(schema.energisaProjeto)
+      .set({ ...campos, ...(mudouSituacao ? { situacaoDesde: agora } : {}) })
+      .where(eq(schema.energisaProjeto.id, ja.id));
+  }
+  if (novos.length) {
+    await db.insert(schema.energisaProjeto).values(novos).onConflictDoNothing();
+    resumo.novos = novos.length;
+  }
+  if (iguais.length) {
+    await db.update(schema.energisaProjeto).set({ vistoEm: agora }).where(inArray(schema.energisaProjeto.id, iguais));
   }
 
   resumo.vinculados = await vincularPendentes(empresaId);

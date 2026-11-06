@@ -40,7 +40,8 @@ import {
   vigente,
   vinculoAutomatico,
 } from "../energisa/situacoes";
-import { codigoDoFavorito } from "../energisa/favorito";
+import { CAMPOS, codigoDoFavorito, ORIGEM_ENERGISA } from "../energisa/favorito";
+import { montarZip } from "../energisa/extensao";
 import {
   classificar,
   referenciaDoParque,
@@ -56,6 +57,7 @@ import { montarAssertiva, montarMensagem } from "../push/fcm";
 import { montarCorpoApns, montarJwtApns, tokenMorto } from "../push/apns";
 import { quandoLegivel, textoDoAviso } from "../push/texto";
 import { generateKeyPairSync, verify } from "node:crypto";
+import { readFileSync } from "node:fs";
 
 let falhas = 0;
 let total = 0;
@@ -303,6 +305,32 @@ async function testarRetrace() {
   confere(compila, "o código do favorito é JavaScript válido");
   confere(corpo.includes('"https://app.selebi.com.br"') && !corpo.includes("selebi.com.br//"), "o favorito manda só para a origem do Selebi, sem barra a mais");
   confere(corpo.includes("servicos.energisa.com.br") && corpo.includes("dadosServerSide"), "o favorito só roda no portal e lê a lista da página");
+
+  const manifesto = JSON.parse(readFileSync("extensao/manifest.json", "utf8")) as { host_permissions: string[]; manifest_version: number };
+  const fundo = readFileSync("extensao/background.js", "utf8");
+  igual(manifesto.manifest_version, 3, "a extensão é Manifest V3");
+  confere(manifesto.host_permissions.includes(`${ORIGEM_ENERGISA}/*`), "a extensão tem permissão no portal da Energisa");
+  const selebiDaExtensao = /const SELEBI = "([^"]+)"/.exec(fundo)?.[1] ?? "";
+  confere(manifesto.host_permissions.includes(`${selebiDaExtensao}/*`), "a extensão tem permissão no Selebi para onde envia");
+  const camposDaExtensao = /const CAMPOS = (\[[^\]]*\])/.exec(fundo)?.[1] ?? "[]";
+  igual(JSON.stringify(JSON.parse(camposDaExtensao.replace(/,\s*\]/, "]"))), JSON.stringify(CAMPOS), "extensão e favorito levam os mesmos campos");
+  let extensaoCompila = true;
+  try {
+    new Function(fundo);
+  } catch {
+    extensaoCompila = false;
+  }
+  confere(extensaoCompila, "o código da extensão é JavaScript válido");
+
+  const zip = montarZip([
+    { nome: "selebi-energisa/manifest.json", dados: Buffer.from("{}") },
+    { nome: "selebi-energisa/ícone.txt", dados: Buffer.from("ok") },
+  ]);
+  igual(zip.readUInt32LE(0), 0x04034b50, "o zip começa pelo cabeçalho do primeiro arquivo");
+  const fimZip = zip.length - 22;
+  igual(zip.readUInt32LE(fimZip), 0x06054b50, "o zip termina no registro de fim");
+  igual(zip.readUInt16LE(fimZip + 10), 2, "o zip lista os dois arquivos");
+  igual(zip.readUInt32LE(zip.readUInt32LE(fimZip + 16)), 0x02014b50, "o fim aponta para o diretório central");
 }
 
 // --- OS automática para usina parada ---------------------------------------------------

@@ -23,9 +23,9 @@ const TOM: Record<string, string> = {
 };
 
 /**
- * Os projetos da empresa no portal da Energisa (AWGPE): a lista que chega pelo
- * favorito "Enviar ao Selebi", o vínculo de cada linha ao projeto do Selebi e
- * como instalar o favorito.
+ * Os projetos da empresa no portal da Energisa (AWGPE): a lista que chega pela
+ * extensão do Chrome (ou pelo favorito "Enviar ao Selebi"), o vínculo de cada
+ * linha ao projeto do Selebi e como instalar as duas.
  */
 export default async function Energisa({ searchParams }: { searchParams: Promise<{ ver?: string }> }) {
   const ator = await exigirGestaoWeb();
@@ -79,6 +79,7 @@ export default async function Energisa({ searchParams }: { searchParams: Promise
           : linhas.slice(0, 300);
 
   const atualizadoHoje = ultima?.ultimaLeituraEm && haQuantoTempo(ultima.ultimaLeituraEm, agora) === "hoje";
+  const deslogado = ultima?.estado === "desconectado";
 
   return (
     <main>
@@ -86,9 +87,13 @@ export default async function Energisa({ searchParams }: { searchParams: Promise
         trilha={[{ href: "/esteira", rotulo: "Esteira" }]}
         titulo="Projetos na Energisa"
         selos={
-          <span className={`pilula ${atualizadoHoje ? "sev-info" : "sev-atencao"}`}>
-            {atualizadoHoje ? "atualizado hoje" : "atualizar hoje"}
-          </span>
+          deslogado ? (
+            <span className="pilula sev-critico">portal saiu da conta</span>
+          ) : (
+            <span className={`pilula ${atualizadoHoje ? "sev-info" : "sev-atencao"}`}>
+              {atualizadoHoje ? "atualizado hoje" : "atualizar hoje"}
+            </span>
+          )
         }
         meta={
           <span>
@@ -101,23 +106,44 @@ export default async function Energisa({ searchParams }: { searchParams: Promise
       />
 
       <div className="pagina-corpo pilha">
-        <Cartao titulo="Atualizar pela Energisa" icone={<RefreshCw size={16} />} destaque={!atualizadoHoje}>
-          {ultima?.mensagem && <p className="fraco">{ultima.mensagem}</p>}
+        <Cartao titulo="Atualizar pela Energisa" icone={<RefreshCw size={16} />} destaque={!atualizadoHoje || deslogado}>
+          {ultima?.mensagem && <p className={deslogado ? undefined : "fraco"}>{ultima.mensagem}</p>}
+          <p>
+            <strong>Automático:</strong> a extensão Selebi no Chrome do computador que fica com o portal aberto lê a
+            lista a cada 30 minutos, sem clique. Instale uma vez:
+          </p>
           <ol className="passos-simples">
             <li>
-              Abra o{" "}
-              <a href="https://servicos.energisa.com.br/AWGPE/dashboard?CodigoEmpresaWeb=3" target="_blank" rel="noreferrer">
-                portal da Energisa — Meus projetos
+              <a href="/energisa/extensao" download>
+                Baixe a extensão
               </a>{" "}
-              e entre como sempre (CPF e código do SMS).
+              e descompacte numa pasta fixa (ex.: Documentos). Se a pasta for apagada, a extensão some.
             </li>
             <li>
-              Com a lista de projetos na tela, clique no favorito <strong>Enviar ao Selebi</strong>.
+              No Chrome, abra <code>chrome://extensions</code> e ligue o <strong>Modo do desenvolvedor</strong> (no
+              alto, à direita).
             </li>
-            <li>Uma janela do Selebi abre, recebe a lista e atualiza a esteira. Pronto.</li>
+            <li>
+              Clique em <strong>Carregar sem compactação</strong> e escolha a pasta <code>selebi-energisa</code>.
+            </li>
+            <li>
+              Nesse Chrome, fique logado no Selebi, entre no{" "}
+              <a href="https://servicos.energisa.com.br/AWGPE/dashboard?CodigoEmpresaWeb=3" target="_blank" rel="noreferrer">
+                portal da Energisa
+              </a>{" "}
+              (CPF e código do SMS) e deixe a aba aberta — pode fixar a aba.
+            </li>
           </ol>
-          <p className="fraco">Primeira vez neste computador? Arraste o botão abaixo para a barra de favoritos do navegador:</p>
-          <Favorito codigo={codigoDoFavorito(`${protocolo}://${host}`)} />
+          <details className="como-ler">
+            <summary>Sem a extensão: o favorito &quot;Enviar ao Selebi&quot;</summary>
+            <div>
+              <p>
+                Com o portal aberto em &quot;Meus projetos&quot;, clique no favorito: uma janela do Selebi recebe a lista e
+                atualiza a esteira. Para instalar, arraste o botão para a barra de favoritos:
+              </p>
+              <Favorito codigo={codigoDoFavorito(`${protocolo}://${host}`)} />
+            </div>
+          </details>
         </Cartao>
 
         <details className="como-ler">
@@ -126,10 +152,11 @@ export default async function Energisa({ searchParams }: { searchParams: Promise
           </summary>
           <div>
             <p>
-              <strong>Por que um clique, e não um robô:</strong> o portal da Energisa recusa acesso automatizado. Com o
-              favorito, quem abre o portal é a pessoa, no navegador dela; o clique só entrega ao Selebi a lista que a
-              página já mostra — a lista inteira, porque aprovação e vistoria acontecem em projetos que entraram há
-              semanas. Uma vez por dia basta; se ninguém enviar, chega um e-mail.
+              <strong>Por que no Chrome, e não num robô no servidor:</strong> o portal da Energisa recusa acesso de
+              servidor. A extensão roda no Chrome de quem já entrou no portal e pede a mesma lista que a página mostra —
+              a lista inteira, porque aprovação e vistoria acontecem em projetos que entraram há semanas. Ela não entra
+              no portal sozinha: quando ele sai da conta, o Chrome avisa, esta página mostra, e basta entrar de novo. Se
+              ninguém atualizar no dia, chega um e-mail.
             </p>
             <p>
               <strong>Na esteira:</strong> o cartão mostra a situação na Energisa. Na etapa 9, o projeto aprovado ganha o

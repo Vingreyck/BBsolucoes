@@ -62,16 +62,27 @@ if [[ "${1:-}" == "--voltar" ]]; then
   exit 0
 fi
 
-echo "== 1/8 Cópia de segurança"
-docker compose exec -T coletor npm run backup
+# `--continuar`: a volta do próprio script depois de o `git pull` trazer uma
+# versão nova dele (ver abaixo) — a cópia e o pull já foram feitos.
+if [[ "${1:-}" != "--continuar" ]]; then
+  echo "== 1/8 Cópia de segurança"
+  docker compose exec -T coletor npm run backup
 
-echo "== 2/8 Código novo"
-if [[ -n "$(git status --porcelain --untracked-files=no)" ]]; then
-  echo "A VM tem alteração solta no código. Resolva antes (git status) — o deploy parou." >&2
-  exit 1
+  echo "== 2/8 Código novo"
+  if [[ -n "$(git status --porcelain --untracked-files=no)" ]]; then
+    echo "A VM tem alteração solta no código. Resolva antes (git status) — o deploy parou." >&2
+    exit 1
+  fi
+  antes=$(git hash-object scripts/deploy.sh)
+  git pull --ff-only
+  git log --oneline -1
+  # O bash já leu a versão velha deste arquivo: se o pull trouxe outra,
+  # recomeça com ela, senão os passos seguintes seguem as regras antigas.
+  if [[ "$(git hash-object scripts/deploy.sh)" != "$antes" ]]; then
+    echo "O deploy.sh mudou neste pull — continuando com a versão nova."
+    exec ./scripts/deploy.sh --continuar
+  fi
 fi
-git pull --ff-only
-git log --oneline -1
 
 echo "== 3/8 Guardando as imagens atuais como :anterior"
 for s in "${SERVICOS[@]}"; do

@@ -7,10 +7,10 @@ import { projeto } from "./operacao";
  * Cada projeto que a empresa tem no portal de projetos da Energisa (AWGPE), do
  * jeito que chegou na última atualização.
  *
- * Não há API, e o portal recusa acesso automatizado: a lista chega pelo
- * favorito "Enviar ao Selebi" (`energisa/favorito.ts`), clicado por alguém com
- * o portal aberto. Esta tabela é o retrato dessa lista, mais o vínculo com o
- * projeto do Selebi.
+ * Não há API, e o portal recusa acesso de servidor: a lista chega pela
+ * extensão do Chrome (`extensao/`, a cada 30 min, na aba de quem entrou no
+ * portal) ou pelo favorito "Enviar ao Selebi" (`energisa/favorito.ts`). Esta
+ * tabela é o retrato dessa lista, mais o vínculo com o projeto do Selebi.
  *
  * Um projeto do Selebi pode ter várias linhas: o indeferido e reenviado vira
  * outra entrada no portal ("V2", "V3"). Qual vale agora sai de `vigente()`.

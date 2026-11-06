@@ -38,9 +38,13 @@ export const config = {
    * `api/saude` é a rota de saúde, chamada por um monitor externo que não tem
    * sessão e não pode ser mandado para o login.
    *
+   * `api/energisa/` recebe a extensão do Chrome: sem sessão, a rota responde
+   * 401 em JSON (a extensão avisa "entre no Selebi"), em vez de receber a
+   * página de login.
+   *
    * `r/` é o relatório da OS que vai para o cliente pelo WhatsApp. Ele não tem
    * login no Selebi: quem abre é quem recebeu o link, e a rota confere a chave
    * longa e aleatória do link no banco.
    */
-  matcher: ["/((?!_next/static|_next/image|favicon.ico|api/app/|api/saude|r/|privacidade|excluir-conta).*)"],
+  matcher: ["/((?!_next/static|_next/image|favicon.ico|api/app/|api/saude|api/energisa/|r/|privacidade|excluir-conta).*)"],
 };
