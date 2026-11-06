@@ -2,7 +2,6 @@
 
 import {
   BellRing,
-  Bot,
   CalendarDays,
   ClipboardList,
   FileBarChart,
@@ -22,6 +21,7 @@ import {
   SunMedium,
   Unlink,
   Users,
+  Zap,
   X,
   type LucideIcon,
 } from "lucide-react";
@@ -63,7 +63,7 @@ const ICONES: Record<IconeMenu, LucideIcon> = {
   documentos: FolderOpen,
   cobranca: MessageCircle,
   relatorios: FileBarChart,
-  energisa: Bot,
+  energisa: Zap,
   os: ClipboardList,
   agenda: CalendarDays,
   campo: MapPinned,

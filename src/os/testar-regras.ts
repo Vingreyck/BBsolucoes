@@ -40,6 +40,7 @@ import {
   vigente,
   vinculoAutomatico,
 } from "../energisa/situacoes";
+import { codigoDoFavorito } from "../energisa/favorito";
 import {
   classificar,
   referenciaDoParque,
@@ -289,6 +290,19 @@ async function testarRetrace() {
   confere(item?.numero === "1236226" && item.fase === "analise" && item.codigo === "A", "a linha da página vira número, código e fase");
   igual(item?.endereco, "RUA JOSE HENIO ARAUJO, 379, OVIEDO TEIXEIRA, SE", "endereço montado como na tela deles");
   igual(normalizarItem({ nomeEmpreendimento: "sem número" }), null, "linha sem ID Geração é ignorada");
+
+  const fav = codigoDoFavorito("https://app.selebi.com.br/");
+  confere(fav.startsWith("javascript:") && !fav.includes("\n"), "o favorito é uma linha só, começando por javascript:");
+  const corpo = decodeURIComponent(fav.slice("javascript:".length));
+  let compila = true;
+  try {
+    new Function(corpo);
+  } catch {
+    compila = false;
+  }
+  confere(compila, "o código do favorito é JavaScript válido");
+  confere(corpo.includes('"https://app.selebi.com.br"') && !corpo.includes("selebi.com.br//"), "o favorito manda só para a origem do Selebi, sem barra a mais");
+  confere(corpo.includes("servicos.energisa.com.br") && corpo.includes("dadosServerSide"), "o favorito só roda no portal e lê a lista da página");
 }
 
 // --- OS automática para usina parada ---------------------------------------------------

@@ -17,8 +17,9 @@ import {
 export type { ItemEnergisa };
 
 /**
- * O que o robô leu da Energisa vira dado no Selebi: grava a lista, liga cada
- * linha ao projeto certo e faz a esteira reagir à situação nova.
+ * A lista que chegou do portal da Energisa (pelo favorito "Enviar ao Selebi")
+ * vira dado no Selebi: grava, liga cada linha ao projeto certo e faz a esteira
+ * reagir à situação nova.
  */
 
 export interface ResumoSincronizacao {

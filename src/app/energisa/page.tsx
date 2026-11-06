@@ -1,27 +1,19 @@
 import { and, desc, eq } from "drizzle-orm";
-import { Info, KeyRound, LogIn, RefreshCw } from "lucide-react";
+import { Info, RefreshCw } from "lucide-react";
+import { headers } from "next/headers";
 import Link from "next/link";
 
 import { db, schema } from "@/db";
 import { haQuantoTempo } from "@/documentos/cobranca";
+import { codigoDoFavorito } from "@/energisa/favorito";
 import { ROTULO_FASE, sugerirProjetos, tomDaFase, type FaseEnergisa } from "@/energisa/situacoes";
 import { exigirGestaoWeb } from "@/os/acesso";
 
 import { Cabecalho, Cartao, Vazio } from "../_ui";
-import { desvincular, enviarCodigo, pedirEntrada, pedirLeitura, vincular } from "./actions";
-import { AtualizarSozinho } from "./atualizar";
+import { desvincular, vincular } from "./actions";
+import { Favorito } from "./favorito";
 
 export const dynamic = "force-dynamic";
-
-const ROTULO_ESTADO: Record<string, string> = {
-  conectado: "conectado",
-  desconectado: "precisa entrar",
-  entrando: "entrando…",
-  aguardando_codigo: "esperando o código",
-  erro: "com erro",
-  bloqueado: "recusado pela Energisa",
-  parado: "ainda não rodou",
-};
 
 const TOM: Record<string, string> = {
   ok: "sev-info",
@@ -31,15 +23,18 @@ const TOM: Record<string, string> = {
 };
 
 /**
- * O robô do portal de projetos da Energisa: se está conectado, o botão para
- * entrar de novo (com o código que chega por SMS), e a lista do portal com o
- * vínculo de cada linha ao projeto do Selebi.
+ * Os projetos da empresa no portal da Energisa (AWGPE): a lista que chega pelo
+ * favorito "Enviar ao Selebi", o vínculo de cada linha ao projeto do Selebi e
+ * como instalar o favorito.
  */
 export default async function Energisa({ searchParams }: { searchParams: Promise<{ ver?: string }> }) {
   const ator = await exigirGestaoWeb();
   const { ver = "" } = await searchParams;
+  const h = await headers();
+  const host = h.get("x-forwarded-host") ?? h.get("host") ?? "";
+  const protocolo = h.get("x-forwarded-proto") ?? (host.startsWith("localhost") ? "http" : "https");
 
-  const [robo] = await db.select().from(schema.roboEnergisa).where(eq(schema.roboEnergisa.empresaId, ator.empresaId));
+  const [ultima] = await db.select().from(schema.roboEnergisa).where(eq(schema.roboEnergisa.empresaId, ator.empresaId));
   const linhas = await db
     .select({
       id: schema.energisaProjeto.id,
@@ -83,81 +78,58 @@ export default async function Energisa({ searchParams }: { searchParams: Promise
           ? esperando
           : linhas.slice(0, 300);
 
-  const estado = robo?.estado ?? "parado";
-  const emAndamento = estado === "entrando" || estado === "aguardando_codigo" || Boolean(robo?.pedido);
-  const tomEstado = estado === "conectado" ? "sev-info" : estado === "aguardando_codigo" || estado === "entrando" ? "sev-atencao" : "sev-critico";
+  const atualizadoHoje = ultima?.ultimaLeituraEm && haQuantoTempo(ultima.ultimaLeituraEm, agora) === "hoje";
 
   return (
     <main>
-      {emAndamento && <AtualizarSozinho segundos={4} />}
       <Cabecalho
         trilha={[{ href: "/esteira", rotulo: "Esteira" }]}
-        titulo="Robô da Energisa"
-        selos={<span className={`pilula ${tomEstado}`}>{ROTULO_ESTADO[estado] ?? estado}</span>}
+        titulo="Projetos na Energisa"
+        selos={
+          <span className={`pilula ${atualizadoHoje ? "sev-info" : "sev-atencao"}`}>
+            {atualizadoHoje ? "atualizado hoje" : "atualizar hoje"}
+          </span>
+        }
         meta={
           <span>
-            {robo?.ultimaLeituraEm ? `Última leitura ${haQuantoTempo(robo.ultimaLeituraEm, agora)} às ${robo.ultimaLeituraEm.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}` : "Nenhuma leitura ainda"}
-            {robo?.totalProjetos ? ` · ${robo.totalProjetos} projetos no portal` : ""}
+            {ultima?.ultimaLeituraEm
+              ? `Última atualização ${haQuantoTempo(ultima.ultimaLeituraEm, agora)} às ${ultima.ultimaLeituraEm.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}`
+              : "Nenhuma atualização ainda"}
+            {ultima?.totalProjetos ? ` · ${ultima.totalProjetos} projetos no portal` : ""}
           </span>
         }
       />
 
       <div className="pagina-corpo pilha">
-        <Cartao titulo="Situação do robô" icone={<KeyRound size={16} />} destaque={estado !== "conectado"}>
-          <p>{robo?.mensagem ?? "O robô ainda não subiu no servidor (container energisa)."}</p>
-
-          {estado === "aguardando_codigo" ? (
-            <form action={enviarCodigo} className="form-telefone">
-              <input
-                name="codigo"
-                inputMode="numeric"
-                autoComplete="one-time-code"
-                placeholder="código do SMS"
-                aria-label="Código que chegou por SMS"
-                required
-                minLength={4}
-                maxLength={8}
-                autoFocus
-              />
-              <button type="submit" className="botao">
-                Enviar código
-              </button>
-            </form>
-          ) : (
-            <div className="botoes-linha">
-              {estado !== "conectado" && !emAndamento && (
-                <form action={pedirEntrada}>
-                  <button type="submit" className="botao">
-                    <LogIn size={15} aria-hidden /> Entrar na Energisa
-                  </button>
-                </form>
-              )}
-              {estado === "conectado" && !emAndamento && (
-                <form action={pedirLeitura}>
-                  <button type="submit" className="botao secundario">
-                    <RefreshCw size={15} aria-hidden /> Ler agora
-                  </button>
-                </form>
-              )}
-              {(estado === "erro" || estado === "bloqueado" || estado === "aguardando_codigo") && (
-                <a href="/energisa/tela" target="_blank" rel="noreferrer" className="botao secundario">
-                  Ver a última tela do robô
-                </a>
-              )}
-            </div>
-          )}
+        <Cartao titulo="Atualizar pela Energisa" icone={<RefreshCw size={16} />} destaque={!atualizadoHoje}>
+          {ultima?.mensagem && <p className="fraco">{ultima.mensagem}</p>}
+          <ol className="passos-simples">
+            <li>
+              Abra o{" "}
+              <a href="https://servicos.energisa.com.br/AWGPE/dashboard?CodigoEmpresaWeb=3" target="_blank" rel="noreferrer">
+                portal da Energisa — Meus projetos
+              </a>{" "}
+              e entre como sempre (CPF e código do SMS).
+            </li>
+            <li>
+              Com a lista de projetos na tela, clique no favorito <strong>Enviar ao Selebi</strong>.
+            </li>
+            <li>Uma janela do Selebi abre, recebe a lista e atualiza a esteira. Pronto.</li>
+          </ol>
+          <p className="fraco">Primeira vez neste computador? Arraste o botão abaixo para a barra de favoritos do navegador:</p>
+          <Favorito codigo={codigoDoFavorito(`${protocolo}://${host}`)} />
         </Cartao>
 
         <details className="como-ler">
           <summary>
-            <Info size={15} aria-hidden /> Como o robô funciona
+            <Info size={15} aria-hidden /> Como funciona
           </summary>
           <div>
             <p>
-              <strong>Uma leitura a cada 30 minutos.</strong> O robô abre &quot;Meus projetos&quot; no portal da Energisa e
-              lê a lista inteira de uma vez — a página já entrega todos os projetos juntos, então ler os últimos 5 dias ou
-              os 628 custa o mesmo para a Energisa. E precisa ser a lista inteira: a aprovação e a vistoria acontecem em
-              projetos que entraram há semanas.
+              <strong>Por que um clique, e não um robô:</strong> o portal da Energisa recusa acesso automatizado. Com o
+              favorito, quem abre o portal é a pessoa, no navegador dela; o clique só entrega ao Selebi a lista que a
+              página já mostra — a lista inteira, porque aprovação e vistoria acontecem em projetos que entraram há
+              semanas. Uma vez por dia basta; se ninguém enviar, chega um e-mail.
             </p>
             <p>
               <strong>Na esteira:</strong> o cartão mostra a situação na Energisa. Na etapa 9, o projeto aprovado ganha o
@@ -165,9 +137,9 @@ export default async function Energisa({ searchParams }: { searchParams: Promise
               Monitoramento sozinho, e &quot;Vistoria Reprovada&quot; o devolve para Execução.
             </p>
             <p>
-              <strong>Quando a sessão cai:</strong> o robô manda e-mail (pelo Healthchecks) e espera alguém clicar em
-              &quot;Entrar na Energisa&quot; aqui. A Energisa manda um SMS para o celular final 0544; digite o código nesta
-              tela em poucos minutos.
+              <strong>Vínculo:</strong> cada linha do portal é ligada ao projeto do Selebi pelo ID anotado no campo
+              &quot;Protocolo&quot; do projeto, ou pelo nome do cliente quando não há dúvida. As outras ficam em
+              &quot;Sem vínculo&quot;, para escolher abaixo.
             </p>
           </div>
         </details>
@@ -177,7 +149,10 @@ export default async function Energisa({ searchParams }: { searchParams: Promise
         <div className="linha-filtro">
           <span className="rotulo-filtro">Mostrar</span>
           <nav className="filtros">
-            <Link href="/energisa?ver=sem-vinculo" className={`filtro${filtro === "sem-vinculo" ? " ativo" : ""}${semVinculo.length ? " perigo" : ""}`}>
+            <Link
+              href="/energisa?ver=sem-vinculo"
+              className={`filtro${filtro === "sem-vinculo" ? " ativo" : ""}${semVinculo.length ? " perigo" : ""}`}
+            >
               Sem vínculo ({semVinculo.length})
             </Link>
             <Link href="/energisa?ver=recentes" className={`filtro${filtro === "recentes" ? " ativo" : ""}`}>
@@ -195,7 +170,7 @@ export default async function Energisa({ searchParams }: { searchParams: Promise
 
       {visiveis.length === 0 ? (
         <div className="pagina-corpo">
-          <Vazio titulo={linhas.length ? "Nada neste filtro" : "O robô ainda não leu o portal"} />
+          <Vazio titulo={linhas.length ? "Nada neste filtro" : "Nenhuma lista recebida ainda"} />
         </div>
       ) : (
         <div className="tabela-wrap">
@@ -232,7 +207,11 @@ export default async function Energisa({ searchParams }: { searchParams: Promise
                         <>
                           <Link href={`/projeto/${l.projetoId}`}>{l.cliente}</Link>
                           <div className="fraco">
-                            {l.vinculo === "automatico" ? "vinculado pelo nome" : l.vinculo === "protocolo" ? "pelo protocolo" : "vinculado à mão"}
+                            {l.vinculo === "automatico"
+                              ? "vinculado pelo nome"
+                              : l.vinculo === "protocolo"
+                                ? "pelo protocolo"
+                                : "vinculado à mão"}
                             {" · "}
                             <form action={desvincular.bind(null, l.id)} className="form-mini">
                               <button type="submit" className="link-perigo">

@@ -5,12 +5,12 @@ import { projeto } from "./operacao";
 
 /**
  * Cada projeto que a empresa tem no portal de projetos da Energisa (AWGPE), do
- * jeito que o robô leu na última passada.
+ * jeito que chegou na última atualização.
  *
- * Não há API: o robô (`energisa/robo.ts`) abre a página "Meus projetos" num
- * navegador de verdade, logado com a conta da empresa, e lê a lista que a
- * própria página recebe pronta do servidor. Esta tabela é o retrato dessa
- * lista, mais o vínculo com o projeto do Selebi.
+ * Não há API, e o portal recusa acesso automatizado: a lista chega pelo
+ * favorito "Enviar ao Selebi" (`energisa/favorito.ts`), clicado por alguém com
+ * o portal aberto. Esta tabela é o retrato dessa lista, mais o vínculo com o
+ * projeto do Selebi.
  *
  * Um projeto do Selebi pode ter várias linhas: o indeferido e reenviado vira
  * outra entrada no portal ("V2", "V3"). Qual vale agora sai de `vigente()`.
@@ -55,12 +55,12 @@ export const energisaProjeto = pgTable(
 );
 
 /**
- * O robô da Energisa e o site conversando: em que pé o robô está, e o que
- * alguém pediu pela tela (entrar, ler agora, o código do SMS).
+ * A última atualização da lista da Energisa: quando, quantos projetos e quem
+ * enviou (`ultimaLeituraEm`, `totalProjetos`, `mensagem`).
  *
- * Uma linha por empresa. O robô roda noutro container e lê esta linha a cada
- * poucos segundos enquanto espera o código — o banco é o único lugar que os
- * dois já enxergam.
+ * Nasceu para um robô que lia o portal sozinho — a Energisa recusou o acesso
+ * automatizado (03/11/2026) e ele foi tirado. As colunas de pedido e código
+ * ficaram sem uso.
  */
 export const roboEnergisa = pgTable("robo_energisa", {
   empresaId: uuid("empresa_id")

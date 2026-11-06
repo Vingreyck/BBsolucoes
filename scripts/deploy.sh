@@ -25,7 +25,7 @@
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
-SERVICOS=(site coletor energisa)
+SERVICOS=(site coletor)
 
 dominio() {
   grep -E '^DOMINIO=' .env | head -1 | cut -d= -f2- | tr -d '"' | tr -d "'" | tr -d '\r'

@@ -6266,6 +6266,13 @@ a.funil-rotulo:hover {
   margin-top: 0.25rem;
 }
 
+.passos-simples {
+  margin: 0.25rem 0 0.75rem;
+  padding-left: 1.25rem;
+  display: grid;
+  gap: 0.35rem;
+}
+
 .botoes-linha {
   display: flex;
   gap: 0.4rem;

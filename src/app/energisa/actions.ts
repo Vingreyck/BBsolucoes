@@ -4,48 +4,50 @@ import { and, eq } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 
 import { db, schema } from "@/db";
-import { reagirNaEsteira } from "@/energisa/sincronizar";
+import { reagirNaEsteira, sincronizar } from "@/energisa/sincronizar";
 import { exigirGestaoWeb } from "@/os/acesso";
 
+export type ResultadoImportacao = { ok: true; texto: string } | { ok: false; erro: string };
+
 /**
- * O que a tela do robô da Energisa pede. O robô roda noutro container e lê a
- * linha `robo_energisa` a cada poucos segundos — estas ações só escrevem nela.
+ * A lista "Meus projetos" que o favorito "Enviar ao Selebi" trouxe do portal
+ * da Energisa. Grava, vincula, faz a esteira reagir e avisa o Healthchecks de
+ * que alguém atualizou hoje — se ninguém atualizar, é ele que manda o e-mail.
  */
-
-async function garantirLinha(empresaId: string) {
-  await db.insert(schema.roboEnergisa).values({ empresaId }).onConflictDoNothing();
-}
-
-export async function pedirEntrada(): Promise<void> {
+export async function importarDoPortal(lista: unknown): Promise<ResultadoImportacao> {
   const ator = await exigirGestaoWeb();
-  await garantirLinha(ator.empresaId);
+  if (!Array.isArray(lista) || lista.length === 0) return { ok: false, erro: "A lista chegou vazia." };
+  if (lista.length > 5000) return { ok: false, erro: "A lista é grande demais para ser a do portal." };
+  const crus = lista.filter((x): x is Record<string, unknown> => Boolean(x) && typeof x === "object");
+
+  const resumo = await sincronizar(ator.empresaId, crus);
+  const partes = [`${resumo.lidos} projetos lidos`];
+  if (resumo.novos) partes.push(`${resumo.novos} novos`);
+  if (resumo.mudaram) partes.push(`${resumo.mudaram} mudaram de situação`);
+  if (resumo.vinculados) partes.push(`${resumo.vinculados} vinculados`);
+  if (resumo.movidos.length) partes.push(`movidos na esteira: ${resumo.movidos.join(", ")}`);
+  const texto = partes.join(" · ");
+
+  await db.insert(schema.roboEnergisa).values({ empresaId: ator.empresaId }).onConflictDoNothing();
   await db
     .update(schema.roboEnergisa)
-    .set({ pedido: "entrar", pedidoPorId: ator.id, codigo: null, mensagem: "Pedido enviado ao robô: abrindo o login da Energisa…", atualizadoEm: new Date() })
+    .set({
+      estado: "conectado",
+      mensagem: `${texto} — enviado por ${ator.nome.split(" ")[0]}`,
+      ultimaLeituraEm: new Date(),
+      totalProjetos: resumo.lidos,
+      atualizadoEm: new Date(),
+    })
     .where(eq(schema.roboEnergisa.empresaId, ator.empresaId));
-  revalidatePath("/energisa");
-}
 
-export async function pedirLeitura(): Promise<void> {
-  const ator = await exigirGestaoWeb();
-  await garantirLinha(ator.empresaId);
-  await db
-    .update(schema.roboEnergisa)
-    .set({ pedido: "ler", pedidoPorId: ator.id, atualizadoEm: new Date() })
-    .where(eq(schema.roboEnergisa.empresaId, ator.empresaId));
-  revalidatePath("/energisa");
-}
+  const check = process.env.ENERGISA_HEALTHCHECK_URL?.trim();
+  if (check) {
+    await fetch(check, { method: "POST", body: texto, signal: AbortSignal.timeout(8_000) }).catch(() => undefined);
+  }
 
-/** O código do SMS. Vive na linha só até o robô usar (ele apaga na hora). */
-export async function enviarCodigo(form: FormData): Promise<void> {
-  const ator = await exigirGestaoWeb();
-  const codigo = String(form.get("codigo") ?? "").replace(/\D/g, "");
-  if (codigo.length < 4 || codigo.length > 8) return;
-  await db
-    .update(schema.roboEnergisa)
-    .set({ codigo, codigoEm: new Date(), pedidoPorId: ator.id, mensagem: "Código recebido. Entrando na Energisa…", atualizadoEm: new Date() })
-    .where(eq(schema.roboEnergisa.empresaId, ator.empresaId));
   revalidatePath("/energisa");
+  revalidatePath("/esteira");
+  return { ok: true, texto };
 }
 
 /** Liga a linha do portal ao projeto do Selebi escolhido, e a esteira já reage. */
