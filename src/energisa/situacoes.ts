@@ -171,6 +171,18 @@ export interface Candidato {
   cliente: string;
 }
 
+// São centenas de linhas contra os mesmos candidatos: o nome de cada cliente é
+// limpo uma vez só, e não uma vez por linha.
+const jaLimpos = new WeakMap<Candidato, Set<string>>();
+function palavrasDoCliente(c: Candidato): Set<string> {
+  let p = jaLimpos.get(c);
+  if (!p) {
+    p = new Set(palavras(c.cliente));
+    jaLimpos.set(c, p);
+  }
+  return p;
+}
+
 /**
  * Os projetos do Selebi que batem com o nome do empreendimento, do mais
  * provável ao menos. A nota é a fração das palavras do nome no empreendimento
@@ -181,7 +193,7 @@ export function sugerirProjetos(empreendimento: string, candidatos: Candidato[])
   if (!alvo.length) return [];
   return candidatos
     .map((c) => {
-      const doCliente = new Set(palavras(c.cliente));
+      const doCliente = palavrasDoCliente(c);
       const batem = alvo.filter((p) => doCliente.has(p));
       // Uma palavra curta e comum ("jose") sozinha não basta para sugerir.
       const forte = batem.some((p) => p.length >= 4) && (batem.length >= 2 || alvo.length === 1);

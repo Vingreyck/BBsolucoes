@@ -1,4 +1,4 @@
-import { and, eq, inArray } from "drizzle-orm";
+import { and, eq, inArray, isNull } from "drizzle-orm";
 
 import { db, schema } from "@/db";
 import { moverNaEsteira } from "@/projeto/esteira";
@@ -97,11 +97,10 @@ export async function sincronizar(empresaId: string, crus: Record<string, unknow
  * pelo nome do cliente no nome do empreendimento — só quando não há dúvida.
  */
 async function vincularPendentes(empresaId: string): Promise<number> {
-  const soltos = await db.query.energisaProjeto.findMany({
-    where: and(eq(schema.energisaProjeto.empresaId, empresaId)),
-    columns: { id: true, numero: true, empreendimento: true, projetoId: true },
+  const pendentes = await db.query.energisaProjeto.findMany({
+    where: and(eq(schema.energisaProjeto.empresaId, empresaId), isNull(schema.energisaProjeto.projetoId)),
+    columns: { id: true, numero: true, empreendimento: true },
   });
-  const pendentes = soltos.filter((s) => !s.projetoId);
   if (!pendentes.length) return 0;
 
   const projetos = await db.query.projeto.findMany({

@@ -27,9 +27,16 @@ const TOM: Record<string, string> = {
  * extensão do Chrome (ou pelo favorito "Enviar ao Selebi"), o vínculo de cada
  * linha ao projeto do Selebi e como instalar as duas.
  */
-export default async function Energisa({ searchParams }: { searchParams: Promise<{ ver?: string }> }) {
+/**
+ * Cada linha solta leva uma lista com todos os projetos abertos: com centenas de
+ * linhas de uma vez, a página passava de dezenas de milhares de itens e travava
+ * o servidor enquanto era montada.
+ */
+const POR_PAGINA = 30;
+
+export default async function Energisa({ searchParams }: { searchParams: Promise<{ ver?: string; pagina?: string }> }) {
   const ator = await exigirGestaoWeb();
-  const { ver = "" } = await searchParams;
+  const { ver = "", pagina: paginaPedida = "" } = await searchParams;
   const h = await headers();
   const host = h.get("x-forwarded-host") ?? h.get("host") ?? "";
   const protocolo = h.get("x-forwarded-proto") ?? (host.startsWith("localhost") ? "http" : "https");
@@ -69,14 +76,19 @@ export default async function Energisa({ searchParams }: { searchParams: Promise
   const recentes = linhas.filter((l) => (l.dataAbertura?.getTime() ?? 0) >= cincoDias);
   const esperando = linhas.filter((l) => l.projetoId && (l.fase === "analise" || l.fase === "vistoria_pendente"));
   const filtro = ver || (semVinculo.length ? "sem-vinculo" : "recentes");
-  const visiveis =
+  const doFiltro =
     filtro === "sem-vinculo"
       ? semVinculo
       : filtro === "recentes"
         ? recentes
         : filtro === "esperando"
           ? esperando
-          : linhas.slice(0, 300);
+          : linhas;
+  const totalPaginas = Math.max(1, Math.ceil(doFiltro.length / POR_PAGINA));
+  const pagina = Math.min(Math.max(1, Number.parseInt(paginaPedida, 10) || 1), totalPaginas);
+  const inicio = (pagina - 1) * POR_PAGINA;
+  const visiveis = doFiltro.slice(inicio, inicio + POR_PAGINA);
+  const linkPagina = (n: number) => `/energisa?ver=${filtro}&pagina=${n}`;
 
   const atualizadoHoje = ultima?.ultimaLeituraEm && haQuantoTempo(ultima.ultimaLeituraEm, agora) === "hoje";
   const deslogado = ultima?.estado === "desconectado";
@@ -283,6 +295,23 @@ export default async function Energisa({ searchParams }: { searchParams: Promise
               })}
             </tbody>
           </table>
+          {totalPaginas > 1 && (
+            <nav className="botoes-linha" aria-label="Páginas">
+              <span className="fraco">
+                {inicio + 1}–{inicio + visiveis.length} de {doFiltro.length}
+              </span>
+              {pagina > 1 && (
+                <Link href={linkPagina(pagina - 1)} className="botao secundario">
+                  Anteriores
+                </Link>
+              )}
+              {pagina < totalPaginas && (
+                <Link href={linkPagina(pagina + 1)} className="botao secundario">
+                  Próximas
+                </Link>
+              )}
+            </nav>
+          )}
         </div>
       )}
     </main>

@@ -50,6 +50,27 @@ export async function registrarLista(
   return { ok: true, texto, mudaram: resumo.mudaram, movidos: resumo.movidos };
 }
 
+/**
+ * A extensão leu o portal e a lista é a mesma do último envio: só anota a hora
+ * e avisa o Healthchecks, sem regravar nada. É o caso de quase toda leitura.
+ */
+export async function registrarSemMudanca(ator: Ator, total: unknown): Promise<ResultadoImportacao> {
+  const n = typeof total === "number" && Number.isFinite(total) ? Math.trunc(total) : null;
+  const texto = `Lista conferida, nada mudou${n !== null ? ` (${n} projetos)` : ""}`;
+  await gravarEstado(ator.empresaId, {
+    estado: "conectado",
+    mensagem: `${texto} — automático, pelo Chrome de ${primeiroNome(ator)}`,
+    ultimaLeituraEm: new Date(),
+    ...(n !== null ? { totalProjetos: n } : {}),
+  });
+  const check = process.env.ENERGISA_HEALTHCHECK_URL?.trim();
+  if (check) {
+    await fetch(check, { method: "POST", body: texto, signal: AbortSignal.timeout(8_000) }).catch(() => undefined);
+  }
+  revalidatePath("/energisa");
+  return { ok: true, texto, mudaram: 0, movidos: [] };
+}
+
 /** A extensão viu o portal sair da conta: fica em /energisa até a próxima leitura boa. */
 export async function registrarPortalDeslogado(ator: Ator): Promise<void> {
   const hora = new Date().toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit", timeZone: "America/Sao_Paulo" });

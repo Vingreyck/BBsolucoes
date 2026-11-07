@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Selebi — Energisa",
-  "version": "2.0",
+  "version": "2.1",
   "description": "Leva a lista \"Meus projetos\" do portal da Energisa para o Selebi a cada 30 minutos, enquanto o portal estiver aberto e logado.",
   "minimum_chrome_version": "120",
   "permissions": ["alarms", "scripting", "storage", "notifications"],

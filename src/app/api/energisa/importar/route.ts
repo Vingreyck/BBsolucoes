@@ -1,6 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server";
 
-import { registrarLista, registrarPortalDeslogado } from "@/energisa/importar";
+import { registrarLista, registrarPortalDeslogado, registrarSemMudanca } from "@/energisa/importar";
 import { atorDaWebOuNulo } from "@/os/acesso";
 
 export const dynamic = "force-dynamic";
@@ -22,7 +22,7 @@ export async function POST(req: NextRequest) {
   if (!ator) return NextResponse.json({ ok: false, erro: "Entre no Selebi neste Chrome." }, { status: 401 });
   if (!ator.gestao) return NextResponse.json({ ok: false, erro: "Este usuário não é da gestão." }, { status: 403 });
 
-  let corpo: { lista?: unknown; estado?: unknown };
+  let corpo: { lista?: unknown; estado?: unknown; total?: unknown };
   try {
     corpo = await req.json();
   } catch {
@@ -32,6 +32,9 @@ export async function POST(req: NextRequest) {
   if (corpo.estado === "portal_deslogado") {
     await registrarPortalDeslogado(ator);
     return NextResponse.json({ ok: true, texto: "anotado" });
+  }
+  if (corpo.estado === "sem_mudanca") {
+    return NextResponse.json(await registrarSemMudanca(ator, corpo.total));
   }
   const resultado = await registrarLista(ator, corpo.lista, "extensao");
   return NextResponse.json(resultado, { status: resultado.ok ? 200 : 400 });

@@ -10,6 +10,7 @@ const PORTAL = "https://servicos.energisa.com.br";
 const PAINEL = `${PORTAL}/AWGPE/dashboard?CodigoEmpresaWeb=3`;
 const ALARME = "ler-energisa";
 const MINUTOS = 30;
+const CHEIA_A_CADA = 6 * 60 * 60_000;
 const CAMPOS = [
   "numeroProjetoEletrico",
   "nomeEmpreendimento",
@@ -94,18 +95,35 @@ async function executar(motivo) {
   }
   if (!leitura.lista) return concluir("erro", motivo, leitura.erro);
 
+  // Quase sempre a lista é a mesma de meia hora atrás: aí vai só um "nada
+  // mudou" de poucos bytes, e o Selebi não regrava nada. A lista inteira vai
+  // quando muda, no clique e, por garantia, a cada 6 horas.
+  const marca = await impressao(leitura.lista);
+  const cheia = motivo === "clique" || antes.marca !== marca || Date.now() - (antes.cheiaEm ?? 0) > CHEIA_A_CADA;
+  let r = await mandar(cheia ? { lista: leitura.lista } : { estado: "sem_mudanca", total: leitura.lista.length });
+  if (!cheia && r.estado === "erro") r = await mandar({ lista: leitura.lista });
+  if (r.estado !== "ok") return concluir(r.estado, motivo, r.detalhe);
+
+  if (r.corpo.mudaram || r.corpo.movidos?.length) notificar("mudancas", "Energisa: novidade nos projetos", r.corpo.texto);
+  return concluir("ok", motivo, r.corpo.texto, { marca, ...(r.reenviou ? { cheiaEm: Date.now() } : {}) });
+}
+
+async function mandar(corpo) {
   let resposta;
   try {
-    resposta = await enviar({ lista: leitura.lista });
+    resposta = await enviar(corpo);
   } catch (e) {
-    return concluir("erro", motivo, `o Selebi não respondeu (${e?.message ?? e})`);
+    return { estado: "erro", detalhe: `o Selebi não respondeu (${e?.message ?? e})` };
   }
-  if (resposta.status === 401 || resposta.status === 403) return concluir("sem_selebi", motivo);
-  const corpo = await resposta.json().catch(() => null);
-  if (!corpo?.ok) return concluir("erro", motivo, corpo?.erro ?? `o Selebi respondeu ${resposta.status}`);
+  if (resposta.status === 401 || resposta.status === 403) return { estado: "sem_selebi" };
+  const dados = await resposta.json().catch(() => null);
+  if (!dados?.ok) return { estado: "erro", detalhe: dados?.erro ?? `o Selebi respondeu ${resposta.status}` };
+  return { estado: "ok", corpo: dados, reenviou: Array.isArray(corpo.lista) };
+}
 
-  if (corpo.mudaram || corpo.movidos?.length) notificar("mudancas", "Energisa: novidade nos projetos", corpo.texto);
-  return concluir("ok", motivo, corpo.texto);
+async function impressao(lista) {
+  const resumo = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(JSON.stringify(lista)));
+  return [...new Uint8Array(resumo)].map((b) => b.toString(16).padStart(2, "0")).join("");
 }
 
 // A aba do sistema de projetos (AWGPE) primeiro; entre várias, a que não está suspensa.
@@ -190,7 +208,7 @@ function enviar(corpo) {
   });
 }
 
-async function concluir(estado, motivo, detalhe = "") {
+async function concluir(estado, motivo, detalhe = "", leitura = {}) {
   const antes = await ultimo();
   const s = SITUACAO[estado];
   const agora = Date.now();
@@ -212,7 +230,8 @@ async function concluir(estado, motivo, detalhe = "") {
     notificar(estado, "Selebi — Energisa", detalhe ? `${s.aviso}\n(${detalhe})` : s.aviso);
     avisado = estado;
   }
-  await chrome.storage.local.set({ ultimo: { estado, detalhe, quando: agora, avisado } });
+  const { marca, cheiaEm } = { ...antes, ...leitura };
+  await chrome.storage.local.set({ ultimo: { estado, detalhe, quando: agora, avisado, marca, cheiaEm } });
 }
 
 async function ultimo() {
