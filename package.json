@@ -41,6 +41,7 @@
     "migrar": "tsx src/db/migrar.ts",
     "empresa:codigo": "tsx src/empresa/definir-codigo.ts",
     "usuario:aprovar": "tsx src/auth/aprovar-cli.ts",
+    "demo:revisao": "tsx src/empresa/preparar-demonstracao.ts",
     "testar:app": "tsx src/app-movel/testar-fluxo.ts",
     "testar:os": "tsx src/os/testar-os.ts",
     "os:automaticas": "tsx src/os/abrir-os-automaticas.ts",
