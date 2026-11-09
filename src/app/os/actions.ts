@@ -187,6 +187,39 @@ export async function acaoOsAction(osId: string, form: FormData): Promise<void> 
   redirect(destino(`/os/${osId}`, m));
 }
 
+/**
+ * O cartão "Agora" da OS a agendar: quem vai e quando, num envio só.
+ *
+ * São as duas ações de sempre, na ordem de sempre — primeiro o responsável
+ * (só se mudou), depois a data. Reagendamento sem motivo é recusado antes de
+ * mexer no responsável, para não ficar meio feito.
+ */
+export async function agendarOsAction(osId: string, form: FormData): Promise<void> {
+  const ator = await exigirAtorWeb();
+  const m = await tentar(async () => {
+    const agendadaPara = relogioDoCampo(texto(form, "agendadaPara"));
+    if (!agendadaPara) throw new ErroOs("validacao", "Escolha o dia e a hora.");
+    const os = await db.query.ordemServico.findFirst({
+      where: and(eq(schema.ordemServico.id, osId), eq(schema.ordemServico.empresaId, ator.empresaId)),
+      columns: { responsavelId: true, agendadaPara: true },
+    });
+    if (!os) throw new ErroOs("nao_encontrada", "Ordem de serviço não encontrada.");
+    const motivo = motivoDo(form) || null;
+    if (os.agendadaPara && !motivo) throw new ErroOs("validacao", "Diga o motivo do reagendamento.");
+    const responsavelId = form.has("responsavelId") ? nuloSeVazio(form, "responsavelId") : (os.responsavelId ?? null);
+    if ((os.responsavelId ?? null) !== responsavelId) {
+      await executarAcao(ator, osId, { tipo: "atribuir", responsavelId });
+    }
+    const r = await executarAcao(ator, osId, { tipo: "agendar", agendadaPara, motivo });
+    return [FEITO.agendar, ...r.avisos].filter(Boolean).join(" ");
+  });
+
+  revalidatePath(`/os/${osId}`);
+  revalidatePath("/os");
+  revalidatePath("/os/agenda");
+  redirect(destino(`/os/${osId}`, m));
+}
+
 export async function responderItemAction(osId: string, itemId: string, form: FormData): Promise<void> {
   const ator = await exigirAtorWeb();
   const tipoResposta = texto(form, "tipoResposta");

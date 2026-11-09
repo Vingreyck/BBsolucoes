@@ -6746,8 +6746,9 @@ a.funil-rotulo:hover {
  * ========================================================================= */
 
 :root {
-  /* altura da barra de busca fixa no topo: o cabeçalho das tabelas para logo abaixo dela */
-  --altura-topo: 57px;
+  /* altura da barra de busca fixa no topo: o cabeçalho das tabelas para logo
+     abaixo dela, e o quadro da esteira ocupa o resto da janela */
+  --altura-topo: 60px;
   --rolagem: rgba(17, 20, 24, 0.2);
   --rolagem-forte: rgba(17, 20, 24, 0.36);
 }
@@ -8025,4 +8026,823 @@ a.funil-rotulo:hover {
 
 .cartao-os .linha3 {
   font-size: 0.7rem;
+}
+
+/* ---- esteira: quadro do tamanho da tela e navegação de lado --------------
+ * Texto escondido para leitor de tela (.sr-only) é posicionado em relação ao
+ * ancestral posicionado mais próximo. Sem nenhum dentro do quadro, os das
+ * colunas lá da direita eram medidos pela página inteira e a esticavam: a
+ * tela rolava de lado e escorregava para baixo do menu. Toda caixa que rola
+ * vira o ponto de referência dos seus filhos. */
+.esteira,
+.cartoes,
+.tabela-rolagem,
+.tabela-wrap,
+.grade-wrap {
+  position: relative;
+}
+
+/* a coluna não cresce por causa de uma descrição comprida sem quebra */
+.esteira .coluna {
+  min-width: 0;
+}
+
+.esteira-mapa {
+  display: flex;
+  gap: 0.3rem;
+  padding: 0.6rem clamp(1rem, 3vw, 2rem) 0;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.esteira-mapa::-webkit-scrollbar {
+  display: none;
+}
+
+.esteira-mapa-etapa {
+  display: inline-flex;
+  flex-shrink: 0;
+  align-items: center;
+  gap: 0.4rem;
+  min-height: 28px;
+  padding: 0 0.6rem 0 0.45rem;
+  border: 1px solid var(--line-soft);
+  border-radius: 999px;
+  background: var(--surface);
+  color: var(--ink-3);
+  font-size: 0.74rem;
+  font-weight: 500;
+  white-space: nowrap;
+  transition:
+    background-color 0.15s var(--ease),
+    border-color 0.15s var(--ease),
+    color 0.15s var(--ease);
+}
+
+.esteira-mapa-etapa:hover {
+  border-color: var(--line);
+  color: var(--ink);
+}
+
+.esteira-mapa-ordem {
+  color: var(--ink-3);
+  font-size: 0.66rem;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.esteira-mapa-nome {
+  max-width: 11rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.esteira-mapa-n {
+  min-width: 1.2rem;
+  padding: 0 0.3rem;
+  border-radius: 999px;
+  background: var(--surface-2);
+  color: var(--ink-2);
+  font-size: 0.68rem;
+  font-weight: 600;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+
+/* as etapas que estão na tela agora ganham o fio de marca embaixo */
+.esteira-mapa-etapa.a-vista {
+  border-color: color-mix(in srgb, var(--accent) 40%, var(--line-soft));
+  background: var(--accent-soft);
+  color: var(--ink);
+}
+
+.esteira-mapa-etapa.a-vista .esteira-mapa-n {
+  background: color-mix(in srgb, var(--accent) 18%, transparent);
+  color: var(--accent);
+}
+
+.esteira-mapa-etapa.sem-projeto {
+  opacity: 0.6;
+}
+
+.esteira-moldura {
+  position: relative;
+  min-width: 0;
+}
+
+/* sombra nas bordas quando há mais coluna para aquele lado */
+.esteira-moldura::before,
+.esteira-moldura::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  bottom: 14px;
+  z-index: 3;
+  width: 48px;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.2s var(--ease);
+}
+
+.esteira-moldura::before {
+  left: 0;
+  background: linear-gradient(90deg, var(--bg), transparent);
+}
+
+.esteira-moldura::after {
+  right: 0;
+  background: linear-gradient(270deg, var(--bg), transparent);
+}
+
+.esteira-moldura.tem-esq::before,
+.esteira-moldura.tem-dir::after {
+  opacity: 1;
+}
+
+.esteira-seta {
+  position: absolute;
+  top: 50%;
+  z-index: 4;
+  display: grid;
+  place-items: center;
+  width: 38px;
+  height: 38px;
+  border: 1px solid var(--line);
+  border-radius: 50%;
+  background: var(--surface);
+  color: var(--ink);
+  box-shadow: var(--shadow-alta);
+  transform: translateY(-50%);
+  transition:
+    background-color 0.15s var(--ease),
+    color 0.15s var(--ease),
+    border-color 0.15s var(--ease);
+}
+
+.esteira-seta:hover {
+  border-color: color-mix(in srgb, var(--accent) 45%, var(--line));
+  color: var(--accent);
+}
+
+.esteira-seta.esq {
+  left: 0.6rem;
+}
+
+.esteira-seta.dir {
+  right: 0.6rem;
+}
+
+/* puxar o fundo do quadro com o mouse */
+.esteira {
+  cursor: grab;
+}
+
+.esteira.puxando {
+  cursor: grabbing;
+  user-select: none;
+}
+
+.esteira .coluna,
+.esteira .cartao-projeto {
+  cursor: auto;
+}
+
+/* Tela larga: o quadro ocupa o resto da janela e não a página. A barra de
+   rolagem de lado fica sempre no pé da tela, e cada coluna rola por dentro. */
+@media (min-width: 901px) {
+  .pagina-esteira {
+    display: flex;
+    flex-direction: column;
+    height: calc(100dvh - var(--altura-topo));
+  }
+
+  .pagina-esteira > .esteira-moldura {
+    flex: 1;
+    min-height: 0;
+  }
+
+  .pagina-esteira .esteira {
+    height: 100%;
+    padding-bottom: 0.75rem;
+  }
+
+  .pagina-esteira .esteira .coluna {
+    max-height: 100%;
+  }
+}
+
+/* a barra do topo com altura fixa: é a medida que as outras peças descontam */
+.barra-superior {
+  height: var(--altura-topo);
+  padding-top: 0;
+  padding-bottom: 0;
+}
+
+/* o cartão cabe na coluna: nome comprido corta com "…" em vez de empurrar a largura */
+.esteira .cartoes {
+  grid-template-columns: minmax(0, 1fr);
+  overflow-x: hidden;
+}
+
+.cartao-projeto {
+  min-width: 0;
+}
+
+/* uma linha só de meta: os cartões ficam da mesma altura e a coluna, alinhada */
+.cartao-projeto-meta {
+  display: block;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.cartao-projeto-meta .pilula {
+  margin-left: 0.35rem;
+}
+
+/* ---- agenda: arrastar para agendar --------------------------------------- */
+
+.fila-dica {
+  margin: -0.35rem 0 0.6rem;
+  color: var(--ink-3);
+  font-size: 0.76rem;
+}
+
+.agenda-arrastavel [draggable="true"] {
+  cursor: grab;
+}
+
+.agenda-arrastavel [draggable="true"]:active {
+  cursor: grabbing;
+}
+
+/* enquanto arrasta, a grade mostra onde dá para soltar */
+.agenda-arrastavel.arrastando .grade-semana td[data-dia] {
+  background-image: linear-gradient(color-mix(in srgb, var(--accent) 4%, transparent), color-mix(in srgb, var(--accent) 4%, transparent));
+}
+
+.grade-semana td.alvo {
+  background: var(--accent-soft) !important;
+  box-shadow: inset 0 0 0 2px color-mix(in srgb, var(--accent) 60%, transparent);
+}
+
+/* ---- janelinha (diálogo) ----------------------------------------------------- */
+
+.dialogo-fundo {
+  position: fixed;
+  inset: 0;
+  z-index: 2000;
+  display: grid;
+  place-items: center;
+  padding: 1rem;
+  background: rgba(8, 10, 14, 0.48);
+  backdrop-filter: blur(3px);
+  animation: aparecer 0.15s var(--ease);
+}
+
+.dialogo {
+  display: grid;
+  gap: 1rem;
+  width: min(420px, 100%);
+  padding: 1.25rem;
+  border: 1px solid var(--line-soft);
+  border-radius: 14px;
+  background: var(--surface);
+  box-shadow: var(--shadow-alta);
+  animation: subir 0.18s var(--ease);
+}
+
+.dialogo-topo {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.75rem;
+}
+
+.dialogo-topo > div {
+  flex: 1;
+  min-width: 0;
+}
+
+.dialogo-topo h2 {
+  margin: 0;
+  font-family: var(--fonte-titulo);
+  font-size: 1.15rem;
+  font-weight: 600;
+}
+
+.dialogo-topo p {
+  margin: 0.15rem 0 0;
+  color: var(--ink-2);
+  font-size: 0.86rem;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.dialogo-icone {
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+
+.dialogo-resumo {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.75rem;
+  margin: 0;
+  padding: 0.75rem 0.85rem;
+  border: 1px solid var(--line-soft);
+  border-radius: var(--raio-p);
+  background: var(--surface-2);
+}
+
+.dialogo-resumo dt {
+  color: var(--ink-3);
+  font-size: 0.72rem;
+}
+
+.dialogo-resumo dd {
+  margin: 0.1rem 0 0;
+  font-size: 0.9rem;
+  font-weight: 600;
+}
+
+.dialogo .entrada input {
+  width: 100%;
+  min-height: 38px;
+}
+
+.dialogo-erro {
+  margin: 0;
+  padding: 0.55rem 0.75rem;
+  border: 1px solid color-mix(in srgb, var(--crit) 25%, transparent);
+  border-radius: var(--raio-p);
+  background: var(--crit-soft);
+  color: var(--crit);
+  font-size: 0.84rem;
+}
+
+.dialogo-acoes {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.5rem;
+}
+
+@keyframes aparecer {
+  from {
+    opacity: 0;
+  }
+}
+
+@keyframes subir {
+  from {
+    opacity: 0;
+    transform: translateY(6px) scale(0.98);
+  }
+}
+
+/* botão de ícone feito com <button>: sem o fundo cinza padrão do navegador */
+button.botao-icone {
+  padding: 0;
+  background: transparent;
+}
+
+/* ---- usuários ------------------------------------------------------------- */
+
+.pessoa-linha {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.7rem;
+  min-width: 0;
+}
+
+.avatar-mini.avatar-medio {
+  width: 32px;
+  height: 32px;
+  font-size: 0.7rem;
+}
+
+.voce {
+  color: var(--ink-3);
+  font-weight: 500;
+}
+
+.papel-texto {
+  color: var(--ink-2);
+}
+
+/* o papel muda direto na linha, mas parece texto até alguém passar o mouse */
+.select-discreto {
+  min-height: 30px;
+  padding: 0.2rem 1.6rem 0.2rem 0.55rem;
+  border: 1px solid transparent;
+  border-radius: var(--raio-p);
+  background-color: transparent;
+  color: var(--ink);
+  font-size: 0.84rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition:
+    border-color 0.15s var(--ease),
+    background-color 0.15s var(--ease);
+}
+
+.select-discreto:hover,
+.select-discreto:focus-visible {
+  border-color: var(--line);
+  background-color: var(--surface);
+}
+
+.status-parado {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  color: var(--ink-3);
+  font-size: 0.8rem;
+}
+
+.status-parado span {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--ink-3);
+}
+
+.acoes-linha {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.15rem;
+}
+
+.acoes-linha form {
+  display: contents;
+}
+
+.botao-icone.perigo:hover {
+  border-color: color-mix(in srgb, var(--crit) 30%, transparent);
+  background: var(--crit-soft);
+  color: var(--crit);
+}
+
+.tabela .linha-esmaecida td {
+  opacity: 0.62;
+}
+
+.form-conta {
+  display: grid;
+  gap: 0.85rem;
+}
+
+.form-conta .entrada input,
+.form-conta .entrada select {
+  width: 100%;
+  min-height: 38px;
+}
+
+.dialogo-texto {
+  margin: 0;
+  color: var(--ink-2);
+  font-size: 0.88rem;
+  line-height: 1.55;
+}
+
+/* a senha sorteada: em destaque, com copiar, e o aviso de que some */
+.senha-gerada {
+  display: grid;
+  gap: 0.5rem;
+  padding: 0.9rem 1rem;
+  border: 1px solid color-mix(in srgb, var(--accent) 30%, var(--line-soft));
+  border-radius: var(--raio);
+  background: var(--accent-soft);
+}
+
+.senha-gerada-rotulo {
+  color: var(--ink-2);
+  font-size: 0.8rem;
+  font-weight: 600;
+}
+
+.senha-gerada-linha {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+}
+
+.senha-gerada code {
+  flex: 1;
+  padding: 0.45rem 0.65rem;
+  border: 1px solid var(--line-soft);
+  border-radius: var(--raio-p);
+  background: var(--surface);
+  color: var(--ink);
+  font-size: 1.05rem;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+}
+
+.senha-gerada small {
+  color: var(--ink-3);
+  font-size: 0.76rem;
+  line-height: 1.45;
+}
+
+.pedido .avatar-mini {
+  width: 32px;
+  height: 32px;
+}
+
+/* o select discreto: mesmo alinhamento e peso do texto ao lado, seta própria e pequena */
+.select-discreto {
+  margin-left: -0.55rem;
+  appearance: none;
+  -webkit-appearance: none;
+  font-weight: 400;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%2368707c' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 0.5rem center;
+  background-size: 12px;
+}
+
+/* ---- OS: o cartão "Agora" e as ações em janelinha -------------------------
+ * Um próximo passo por vez, à vista, logo abaixo do caminho (como o cartão
+ * de agendamento do Dynamics 365 Field Service e a "orientação" do Path do
+ * Salesforce). O resto fica no menu "Mais". */
+
+.agora {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 0.9rem 1.25rem;
+  margin: 1rem clamp(1rem, 3vw, 2rem) 0;
+  padding: 1.1rem 1.25rem;
+  border: 1px solid transparent;
+  border-radius: var(--raio);
+  background:
+    radial-gradient(460px 170px at 0% 0%, color-mix(in srgb, var(--sol) 9%, transparent), transparent 70%) padding-box,
+    linear-gradient(var(--surface), var(--surface)) padding-box,
+    linear-gradient(120deg, color-mix(in srgb, var(--cobre) 55%, transparent), var(--line-soft) 45%) border-box;
+  box-shadow: var(--shadow);
+}
+
+.agora-icone {
+  display: grid;
+  place-items: center;
+  align-self: start;
+  width: 44px;
+  height: 44px;
+  border-radius: 12px;
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+
+.agora-texto {
+  min-width: 0;
+}
+
+.agora-rotulo {
+  display: block;
+  color: var(--accent);
+  font-size: 0.66rem;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.agora-texto h2 {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+  margin: 0.1rem 0 0.25rem;
+  font-family: var(--fonte-titulo);
+  font-size: 1.2rem;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+
+.agora-texto p {
+  margin: 0;
+  max-width: 70ch;
+  color: var(--ink-2);
+  font-size: 0.88rem;
+  line-height: 1.5;
+}
+
+.agora-texto .agora-laudo {
+  margin-top: 0.6rem;
+  padding: 0.6rem 0.75rem;
+  border-left: 3px solid var(--line);
+  border-radius: 0 var(--raio-p) var(--raio-p) 0;
+  background: var(--surface-2);
+  color: var(--ink);
+  white-space: pre-line;
+}
+
+.agora-progresso {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.55rem;
+  margin-top: 0.55rem;
+  color: var(--ink-2);
+  font-size: 0.8rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.agora-progresso .progresso-trilho {
+  width: 160px;
+}
+
+.agora-acoes {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.5rem;
+}
+
+.agora-acoes form {
+  margin: 0;
+}
+
+/* a OS a agendar traz o formulário inteiro: vai para a linha de baixo */
+.agora-aberta .agora-acoes {
+  grid-column: 2 / -1;
+  justify-content: flex-start;
+}
+
+.form-agendar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 0.6rem 0.75rem;
+}
+
+.form-agendar .entrada {
+  min-width: 200px;
+}
+
+.form-agendar .entrada select,
+.form-agendar .entrada input {
+  min-height: 36px;
+}
+
+.agora-concluida .agora-icone {
+  background: var(--ok-soft);
+  color: var(--ok);
+}
+
+.agora-aguardando_peca .agora-icone {
+  background: var(--warn-soft);
+  color: var(--warn);
+}
+
+.agora-cancelada {
+  background: var(--surface);
+  border-color: var(--line-soft);
+}
+
+.agora-cancelada .agora-icone {
+  background: var(--surface-2);
+  color: var(--ink-3);
+}
+
+.agora-cancelada .agora-rotulo {
+  color: var(--ink-3);
+}
+
+@media (max-width: 1100px) {
+  .agora {
+    grid-template-columns: auto minmax(0, 1fr);
+  }
+
+  .agora-acoes,
+  .agora-aberta .agora-acoes {
+    grid-column: 1 / -1;
+    justify-content: flex-start;
+  }
+}
+
+.registro-aviso {
+  padding: 1rem clamp(1rem, 3vw, 2rem) 0;
+}
+
+/* ---- menu "Mais" ----------------------------------------------------------- */
+
+.menu-acoes {
+  position: relative;
+}
+
+.menu-acoes-lista {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  z-index: 960;
+  display: grid;
+  gap: 2px;
+  min-width: 270px;
+  padding: 0.35rem;
+  border: 1px solid var(--line-soft);
+  border-radius: var(--raio);
+  background: var(--surface);
+  box-shadow: var(--shadow-alta);
+  animation: subir 0.15s var(--ease);
+}
+
+.menu-acoes-lista button {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.55rem 0.65rem;
+  border: 0;
+  border-radius: var(--raio-p);
+  background: transparent;
+  color: var(--ink);
+  font-size: 0.86rem;
+  text-align: left;
+}
+
+.menu-acoes-lista button:hover,
+.menu-acoes-lista button:focus-visible {
+  background: var(--surface-2);
+}
+
+.menu-acoes-lista button svg {
+  flex-shrink: 0;
+  color: var(--ink-3);
+}
+
+.menu-acoes-lista button.perigo,
+.menu-acoes-lista button.perigo svg {
+  color: var(--crit);
+}
+
+.menu-acoes-lista button.perigo:hover {
+  background: var(--crit-soft);
+}
+
+/* a janelinha maior das ações da OS */
+.dialogo-largo {
+  width: min(560px, 100%);
+  max-height: calc(100dvh - 2rem);
+  overflow-y: auto;
+}
+
+.dialogo-topo p.dialogo-sub {
+  white-space: normal;
+  overflow: visible;
+}
+
+.dialogo-corpo .form-acao {
+  display: grid;
+  gap: 0.6rem;
+}
+
+.dialogo-corpo .form-acao select,
+.dialogo-corpo .form-acao input {
+  width: 100%;
+  min-height: 38px;
+}
+
+.dialogo-corpo .form-acao button {
+  justify-self: end;
+}
+
+.dialogo-corpo .form-ficha {
+  margin: 0;
+}
+
+/* ---- OS: cliente na lateral -------------------------------------------------- */
+
+.cliente-os {
+  display: grid;
+  gap: 0.3rem;
+}
+
+.cliente-os-nome {
+  font-size: 1rem;
+  font-weight: 600;
+}
+
+.cliente-os-endereco {
+  color: var(--ink-2);
+  font-size: 0.84rem;
+  line-height: 1.45;
+}
+
+.cliente-os-contato {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  margin-top: 0.55rem;
+}
+
+.cliente-os-contato .botao {
+  min-height: 32px;
+  padding: 0.3rem 0.7rem;
+  font-size: 0.8rem;
 }

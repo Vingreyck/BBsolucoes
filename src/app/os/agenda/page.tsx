@@ -7,6 +7,7 @@ import { formatarRelogio, inicioDaSemana, relogioAgora, relogioDoCampo } from "@
 import { numeroOs, PRIORIDADE_ROTULO, STATUS_ROTULO, TIPO_ROTULO } from "@/os/tipos";
 
 import { Cabecalho, Vazio } from "../../_ui";
+import { AgendaArrastavel } from "./arrastar";
 
 export const dynamic = "force-dynamic";
 
@@ -29,12 +30,16 @@ function hora(d: Date | null): string {
   return d ? `${String(d.getUTCHours()).padStart(2, "0")}:${String(d.getUTCMinutes()).padStart(2, "0")}` : "";
 }
 
+/** De onde a OS ainda pode ser (re)agendada: as mesmas situações da regra em `@/os/fluxo`. */
+const AGENDAVEL = new Set(["aberta", "agendada", "aguardando_peca"]);
+
 /**
  * A agenda da semana, por pessoa — o quadro do agendamento do IXC.
  *
  * À esquerda, a fila do que ainda não tem data, por prioridade e prazo; à
- * direita, a semana, uma linha por responsável. Agendar é abrir a OS e escolher
- * o dia — arrastar e soltar fica para quando fizer falta.
+ * direita, a semana, uma linha por responsável. A gestão agenda arrastando o
+ * cartão da fila (ou um já marcado) para a pessoa e o dia; a hora vem numa
+ * janelinha ao soltar (`arrastar.tsx`). Quem não usa mouse agenda pela OS.
  */
 export default async function Agenda({ searchParams }: { searchParams: Promise<{ semana?: string }> }) {
   const ator = await exigirAtorWeb();
@@ -61,6 +66,18 @@ export default async function Agenda({ searchParams }: { searchParams: Promise<{
         o.agendadaPara &&
         iso(o.agendadaPara) === iso(dia),
     );
+
+  // O cartão que pode ser arrastado leva o que a janelinha de agendar precisa.
+  const arrasto = (o: { id: string; numero: number; status: string; agendadaPara: Date | null; cliente: { nome: string } }) =>
+    ator.gestao && AGENDAVEL.has(o.status)
+      ? {
+          draggable: true,
+          "data-os-id": o.id,
+          "data-os-rotulo": `${numeroOs(o.numero)} · ${o.cliente.nome}`,
+          "data-hora": hora(o.agendadaPara),
+          "data-tinha-data": o.agendadaPara ? "1" : "",
+        }
+      : {};
 
   const anterior = iso(new Date(segunda.getTime() - 7 * 86_400_000));
   const proxima = iso(new Date(segunda.getTime() + 7 * 86_400_000));
@@ -98,11 +115,12 @@ export default async function Agenda({ searchParams }: { searchParams: Promise<{
         }
       />
 
-      <div className="agenda">
+      <Moldura arrastavel={ator.gestao}>
         <aside className="fila-agendar">
           <h2>
             <CalendarClock size={16} aria-hidden /> A agendar <span className="contador-cinza">{aAgendar.length}</span>
           </h2>
+          {ator.gestao && aAgendar.length > 0 && <p className="fila-dica">Arraste para a pessoa e o dia.</p>}
           {aAgendar.length === 0 ? (
             <Vazio icone={<CalendarCheck size={20} />} titulo="Nada esperando data">
               Toda OS aberta já tem dia marcado.
@@ -111,7 +129,7 @@ export default async function Agenda({ searchParams }: { searchParams: Promise<{
             <ul>
               {aAgendar.map((o) => (
                 <li key={o.id}>
-                  <Link href={`/os/${o.id}`} className={`cartao-os pr-${o.prioridade}`}>
+                  <Link href={`/os/${o.id}`} className={`cartao-os pr-${o.prioridade}`} {...arrasto(o)}>
                     <span className="linha1">
                       <strong>{numeroOs(o.numero)}</strong> {TIPO_ROTULO[o.tipo] ?? o.tipo}
                       {o.prioridade === "urgente" || o.prioridade === "alta" ? (
@@ -163,9 +181,21 @@ export default async function Agenda({ searchParams }: { searchParams: Promise<{
                       </span>
                     </th>
                     {dias.map((d, i) => (
-                      <td key={i} className={iso(d) === iso(hoje) ? "hoje" : ""}>
+                      <td
+                        key={i}
+                        className={iso(d) === iso(hoje) ? "hoje" : ""}
+                        data-dia={iso(d)}
+                        data-dia-rotulo={`${DIAS[i]}, ${dm(d)}`}
+                        data-pessoa={pessoa}
+                        data-pessoa-nome={pessoa ? nome : ""}
+                      >
                         {doDia(pessoa, d).map((o) => (
-                          <Link key={o.id} href={`/os/${o.id}`} className={`cartao-os st-${o.status} pr-${o.prioridade}`}>
+                          <Link
+                            key={o.id}
+                            href={`/os/${o.id}`}
+                            className={`cartao-os st-${o.status} pr-${o.prioridade}`}
+                            {...arrasto(o)}
+                          >
                             <span className="linha1">
                               <strong>{hora(o.agendadaPara)}</strong> {numeroOs(o.numero)}
                             </span>
@@ -185,7 +215,12 @@ export default async function Agenda({ searchParams }: { searchParams: Promise<{
             </tbody>
           </table>
         </div>
-      </div>
+      </Moldura>
     </main>
   );
+}
+
+/** Para a gestão, a agenda escuta o arrastar; para os outros é só a grade. */
+function Moldura({ arrastavel, children }: { arrastavel: boolean; children: React.ReactNode }) {
+  return arrastavel ? <AgendaArrastavel>{children}</AgendaArrastavel> : <div className="agenda">{children}</div>;
 }

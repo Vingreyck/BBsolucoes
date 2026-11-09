@@ -167,12 +167,24 @@ export default async function Esteira() {
         }
       />
 
-      <QuadroEsteira meuId={usuario.id} total={abertos.length} parados={parados} meus={meus}>
+      <QuadroEsteira
+        etapas={etapas.map((e) => ({
+          id: e.id,
+          ordem: String(Math.round(e.ordem / 10)).padStart(2, "0"),
+          nome: e.nome,
+          n: porEtapa.get(e.id)?.length ?? 0,
+        }))}
+        meuId={usuario.id}
+        total={abertos.length}
+        parados={parados}
+        meus={meus}
+      >
         {etapas.map((e) => {
           const lista = porEtapa.get(e.id) ?? [];
           return (
             <ColunaEsteira
               key={e.id}
+              etapaId={e.id}
               cabecalho={
                 <header className="coluna-topo">
                   <span className="ordem">

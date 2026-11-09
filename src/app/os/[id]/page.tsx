@@ -2,18 +2,26 @@ import { headers } from "next/headers";
 import {
   CalendarClock,
   Camera,
+  CheckCircle2,
+  ClipboardList,
   FileDown,
   FileText,
   History,
+  Link2,
   ListChecks,
   MapPinned,
   MessageCircle,
   MessageSquare,
   Navigation,
+  PauseCircle,
+  Pencil,
   Phone,
   PlayCircle,
+  RotateCcw,
   Route,
   UserRound,
+  UserX,
+  XCircle,
 } from "lucide-react";
 import Link from "next/link";
 import { notFound } from "next/navigation";
@@ -43,6 +51,7 @@ import {
 import {
   abrirRetornoAction,
   acaoOsAction,
+  agendarOsAction,
   agendarVisitaDeVoltaAction,
   anexarAction,
   comentarOsAction,
@@ -50,6 +59,8 @@ import {
   renovarLinkAction,
 } from "../actions";
 import { Cabecalho, Caminho, Cartao, Dados } from "../../_ui";
+import { iniciais } from "../../formatar";
+import { BotaoDialogo, MenuAcoes, type AcaoDoMenu } from "./acoes";
 import { FormMotivo, Historico, ItemChecklist } from "./partes";
 import Trajeto from "./trajeto";
 
@@ -169,8 +180,243 @@ export default async function DetalheOs({
         ? 3
         : Math.max(0, PASSOS.findIndex((p) => p.id === os.status));
 
+  // Toda resposta do servidor (feito ou recusado) faz o menu e as janelinhas
+  // nascerem de novo: a janelinha aberta fecha e a mensagem aparece.
+  const chave = `${os.status}|${os.eventos.length}|${ok ?? ""}|${erro ?? ""}`;
+  const ultimaPausa = [...os.eventos].reverse().find((e) => e.tipo === "pausada");
+  const motivoPausa = ((ultimaPausa?.dados ?? {}) as { motivo?: string }).motivo;
+
+  const formEditar = (
+    <form action={acaoOsAction.bind(null, os.id)} className="form-ficha compacto">
+      <input type="hidden" name="acao" value="editar" />
+      <label>
+        Descrição
+        <textarea name="descricao" rows={4} defaultValue={os.descricao} maxLength={4000} />
+      </label>
+      <div className="dupla">
+        <label>
+          Prioridade
+          <select name="prioridade" defaultValue={os.prioridade}>
+            {Object.entries(PRIORIDADE_ROTULO).map(([v, r]) => (
+              <option key={v} value={v}>
+                {r}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label>
+          Prazo
+          <input type="datetime-local" name="prazoSla" defaultValue={relogioParaCampo(os.prazoSla)} />
+        </label>
+      </div>
+      <div className="ficha-acoes">
+        <button type="submit">Salvar</button>
+      </div>
+    </form>
+  );
+
+  const formResponsavel = (
+    <form action={acaoOsAction.bind(null, os.id)} className="form-ficha compacto">
+      <input type="hidden" name="acao" value="atribuir" />
+      <label>
+        Quem atende
+        <select name="responsavelId" defaultValue={os.responsavel?.id ?? ""}>
+          <option value="">Ninguém</option>
+          {pessoas.map((u) => (
+            <option key={u.id} value={u.id}>
+              {u.nome} ({PAPEL[u.papel] ?? u.papel})
+            </option>
+          ))}
+        </select>
+      </label>
+      <div className="ficha-acoes">
+        <button type="submit">Salvar</button>
+      </div>
+    </form>
+  );
+
+  /** Agendar e reagendar: quem vai e quando, e o motivo quando já havia data. */
+  const formAgendar = (
+    <form action={agendarOsAction.bind(null, os.id)} className="form-agendar">
+      {gestao && (
+        <label className="entrada">
+          <span className="entrada-rotulo">Quem vai</span>
+          <select name="responsavelId" defaultValue={os.responsavel?.id ?? ""}>
+            <option value="">Ninguém ainda</option>
+            {pessoas.map((u) => (
+              <option key={u.id} value={u.id}>
+                {u.nome} ({PAPEL[u.papel] ?? u.papel})
+              </option>
+            ))}
+          </select>
+        </label>
+      )}
+      <label className="entrada">
+        <span className="entrada-rotulo">Dia e hora</span>
+        <input type="datetime-local" name="agendadaPara" defaultValue={relogioParaCampo(os.agendadaPara)} required />
+      </label>
+      {os.agendadaPara && (
+        <>
+          <label className="entrada">
+            <span className="entrada-rotulo">Motivo do reagendamento</span>
+            <select name="motivo" required defaultValue="">
+              <option value="" disabled>
+                Escolha…
+              </option>
+              {MOTIVOS_REAGENDAMENTO.map((m) => (
+                <option key={m} value={m}>
+                  {m}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="entrada">
+            <span className="entrada-rotulo">
+              Detalhe <span className="entrada-opcional">(obrigatório em “Outro”)</span>
+            </span>
+            <input type="text" name="motivoDetalhe" maxLength={400} />
+          </label>
+        </>
+      )}
+      <button type="submit" className="botao">
+        <CalendarClock size={15} aria-hidden /> {os.agendadaPara ? "Reagendar" : "Agendar"}
+      </button>
+    </form>
+  );
+
+  const formConcluir = (
+    <form action={acaoOsAction.bind(null, os.id)} className="form-ficha compacto">
+      <input type="hidden" name="acao" value="concluir" />
+      {pendentes.length > 0 && (
+        <p className="nota alerta-nota">
+          {pendentes.length === 1 ? "Falta 1 item obrigatório" : `Faltam ${pendentes.length} itens obrigatórios`} do
+          checklist — a conclusão vai ser recusada até eles serem cumpridos.
+        </p>
+      )}
+      <div className="linha-radios">
+        <label>
+          <input type="radio" name="resultado" value="resolvido" defaultChecked /> Resolvido
+        </label>
+        <label>
+          <input type="radio" name="resultado" value="nao_resolvido" /> Não resolvido — precisa voltar
+        </label>
+      </div>
+      <label>
+        Laudo técnico
+        <textarea
+          name="laudo"
+          rows={4}
+          defaultValue={os.laudo ?? ""}
+          placeholder="O que foi encontrado e o que foi feito. Obrigatório se não resolveu."
+          maxLength={8000}
+        />
+      </label>
+      <label>
+        Quem recebeu / assinou pelo cliente
+        <input type="text" name="assinaturaNome" defaultValue={os.assinaturaNome ?? ""} maxLength={200} />
+      </label>
+      {deixados.length > 0 && (
+        <CamposVisitaDeVolta
+          deixados={deixados.map((i) => i.descricao)}
+          pessoas={pessoas}
+          padrao={os.responsavelId}
+          obrigatorio={false}
+        />
+      )}
+      <div className="ficha-acoes">
+        <button type="submit">Concluir OS</button>
+      </div>
+    </form>
+  );
+
+  // O que não é o próximo passo: secundário ou perigoso, no menu "Mais".
+  const maisAcoes: AcaoDoMenu[] = [];
+  if (gestao && !fechada) {
+    maisAcoes.push({
+      id: "editar",
+      rotulo: "Editar descrição, prioridade e prazo",
+      icone: <Pencil size={15} aria-hidden />,
+      titulo: "Editar dados da OS",
+      conteudo: formEditar,
+    });
+    maisAcoes.push({
+      id: "responsavel",
+      rotulo: os.responsavel ? "Trocar responsável" : "Definir responsável",
+      icone: <UserRound size={15} aria-hidden />,
+      titulo: os.responsavel ? "Trocar responsável" : "Definir responsável",
+      descricao: "Quem recebe o aviso no app e aparece na agenda.",
+      conteudo: formResponsavel,
+    });
+  }
+  if (gestao && (os.status === "agendada" || os.status === "aguardando_peca")) {
+    maisAcoes.push({
+      id: "reagendar",
+      rotulo: "Reagendar",
+      icone: <CalendarClock size={15} aria-hidden />,
+      titulo: "Reagendar",
+      descricao: "O responsável recebe o aviso da nova data.",
+      conteudo: formAgendar,
+    });
+  }
+  if (executa && os.status === "em_andamento") {
+    maisAcoes.push({
+      id: "pausar",
+      rotulo: "Pausar (aguardando peça ou cliente)",
+      icone: <PauseCircle size={15} aria-hidden />,
+      titulo: "Pausar o atendimento",
+      descricao: "A OS fica parada até alguém retomar. O motivo vai para o histórico.",
+      conteudo: <FormMotivo osId={os.id} acao="pausar" motivos={MOTIVOS_PAUSA} botao="Pausar" />,
+    });
+  }
+  if (executa && ["agendada", "em_deslocamento", "em_andamento"].includes(os.status)) {
+    maisAcoes.push({
+      id: "nao_atendida",
+      rotulo: "Não foi possível atender",
+      icone: <UserX size={15} aria-hidden />,
+      titulo: "Não foi possível atender",
+      descricao: "A OS volta para a fila “A agendar”, sem data, com o motivo no histórico.",
+      conteudo: <FormMotivo osId={os.id} acao="nao_atendida" motivos={MOTIVOS_NAO_ATENDIDA} botao="Registrar" />,
+    });
+  }
+  if (gestao && linkPublico) {
+    maisAcoes.push({
+      id: "novo_link",
+      rotulo: "Gerar outro link do relatório",
+      icone: <Link2 size={15} aria-hidden />,
+      titulo: "Gerar outro link do relatório",
+      descricao: "O link atual para de abrir. Use se ele foi parar com quem não devia.",
+      conteudo: (
+        <form action={renovarLinkAction.bind(null, os.id)} className="ficha-acoes">
+          <button type="submit">Gerar outro link</button>
+        </form>
+      ),
+    });
+  }
+  if (gestao && fechada) {
+    maisAcoes.push({
+      id: "reabrir",
+      rotulo: "Reabrir a OS",
+      icone: <RotateCcw size={15} aria-hidden />,
+      titulo: "Reabrir a OS",
+      conteudo: (
+        <FormMotivo osId={os.id} acao="reabrir" motivos={["Cliente reclamou", "Concluída por engano", "Outro"]} botao="Reabrir" />
+      ),
+    });
+  }
+  if (gestao && !fechada) {
+    maisAcoes.push({
+      id: "cancelar",
+      rotulo: "Cancelar a OS",
+      icone: <XCircle size={15} aria-hidden />,
+      perigo: true,
+      titulo: "Cancelar a OS",
+      descricao: "A OS sai da agenda e da fila. Dá para reabrir depois, com motivo.",
+      conteudo: <FormMotivo osId={os.id} acao="cancelar" motivos={MOTIVOS_CANCELAMENTO} botao="Cancelar OS" perigo />,
+    });
+  }
+
   return (
-    <main className="registro">
+    <main className="registro registro-os">
       <Cabecalho
         trilha={[{ href: "/os", rotulo: "Ordens de serviço" }]}
         titulo={`OS ${numeroOs(os.numero)}`}
@@ -193,45 +439,20 @@ export default async function DetalheOs({
               {os.agendadaPara ? formatarRelogio(os.agendadaPara) : "sem data"}
               {prazoVencido ? " · prazo vencido" : ""}
             </span>
-            <span className="meta-pessoa">
-              <span className="avatar-mini" aria-hidden>
-                {(os.responsavel?.nome ?? "?").slice(0, 1).toUpperCase()}
-              </span>
-              {os.responsavel?.nome ?? "sem responsável"}
-            </span>
           </>
         }
         acoes={
           <>
-            {os.cliente.telefone && (
-              <a href={`tel:${soDigitos(os.cliente.telefone)}`} className="botao secundario" title="Ligar para o cliente">
-                <Phone size={15} aria-hidden /> Ligar
-              </a>
-            )}
-            {wa && (
-              <a href={`https://wa.me/${wa}`} className="botao secundario" target="_blank" rel="noopener">
-                <MessageCircle size={15} aria-hidden /> WhatsApp
-              </a>
-            )}
-            {mapaCliente && (
-              <a href={mapaCliente} className="botao secundario" target="_blank" rel="noopener">
-                <Navigation size={15} aria-hidden /> Rota
-              </a>
-            )}
             <a href={`/os/${os.id}/relatorio`} className="botao secundario" target="_blank" rel="noopener">
               <FileDown size={15} aria-hidden /> PDF
             </a>
+            <MenuAcoes key={chave} acoes={maisAcoes} />
           </>
         }
       />
 
       <div className="faixa-caminho">
-        {os.status === "cancelada" ? (
-          <p className="aviso erro">Esta OS foi cancelada.</p>
-        ) : (
-          <Caminho etapas={PASSOS} atual={passoAtual} rotuloAtual="situação atual" />
-        )}
-        {os.status === "aguardando_peca" && <p className="aviso">Pausada: aguardando peça ou o cliente.</p>}
+        {os.status !== "cancelada" && <Caminho etapas={PASSOS} atual={passoAtual} rotuloAtual="situação atual" />}
       </div>
 
       {ok && <p className="aviso ok">{ok}</p>}
@@ -241,169 +462,99 @@ export default async function DetalheOs({
         </p>
       )}
 
-      <div className="registro-grade">
-        <div className="registro-principal">
-          <Cartao titulo="Solicitação" icone={<FileText size={16} />}>
-            <p className="descricao-os">{os.descricao}</p>
-            {gestao && !fechada && (
-              <details className="dobra">
-                <summary>Editar dados da OS</summary>
-                <form action={acaoOsAction.bind(null, os.id)} className="form-ficha compacto">
-                  <input type="hidden" name="acao" value="editar" />
-                  <label>
-                    Descrição
-                    <textarea name="descricao" rows={3} defaultValue={os.descricao} maxLength={4000} />
-                  </label>
-                  <div className="dupla">
-                    <label>
-                      Prioridade
-                      <select name="prioridade" defaultValue={os.prioridade}>
-                        {Object.entries(PRIORIDADE_ROTULO).map(([v, r]) => (
-                          <option key={v} value={v}>
-                            {r}
-                          </option>
-                        ))}
-                      </select>
-                    </label>
-                    <label>
-                      Prazo
-                      <input type="datetime-local" name="prazoSla" defaultValue={relogioParaCampo(os.prazoSla)} />
-                    </label>
-                  </div>
-                  <div className="ficha-acoes">
-                    <button type="submit">Salvar</button>
-                  </div>
-                </form>
-              </details>
-            )}
-          </Cartao>
-
-          {!fechada && executa && (
-            <Cartao titulo="Atendimento" icone={<PlayCircle size={16} />} destaque>
-              <div className="botoes">
-                {(os.status === "aberta" || os.status === "agendada") && (
-                  <form action={acaoOsAction.bind(null, os.id)}>
-                    <input type="hidden" name="acao" value="deslocamento" />
-                    <button type="submit" className="botao secundario">
-                      Saiu para o local
-                    </button>
-                  </form>
-                )}
-                {["aberta", "agendada", "em_deslocamento"].includes(os.status) && (
-                  <form action={acaoOsAction.bind(null, os.id)}>
-                    <input type="hidden" name="acao" value="iniciar" />
-                    <button type="submit" className="botao">
-                      Iniciar atendimento
-                    </button>
-                  </form>
-                )}
-                {os.status === "aguardando_peca" && (
-                  <form action={acaoOsAction.bind(null, os.id)}>
-                    <input type="hidden" name="acao" value="retomar" />
-                    <button type="submit" className="botao">
-                      Retomar atendimento
-                    </button>
-                  </form>
-                )}
-              </div>
-
-              {(os.status === "em_andamento" || gestao) && (
-                <details className="dobra" open={os.status === "em_andamento" && pendentes.length === 0}>
-                  <summary>Concluir</summary>
-                  {pendentes.length > 0 && (
-                    <p className="nota alerta-nota">
-                      {pendentes.length === 1 ? "Falta 1 item obrigatório" : `Faltam ${pendentes.length} itens obrigatórios`}{" "}
-                      do checklist — a conclusão vai ser recusada até eles serem cumpridos.
-                    </p>
-                  )}
-                  <form action={acaoOsAction.bind(null, os.id)} className="form-ficha compacto">
-                    <input type="hidden" name="acao" value="concluir" />
-                    <div className="linha-radios">
-                      <label>
-                        <input type="radio" name="resultado" value="resolvido" defaultChecked /> Resolvido
-                      </label>
-                      <label>
-                        <input type="radio" name="resultado" value="nao_resolvido" /> Não resolvido — precisa voltar
-                      </label>
-                    </div>
-                    <label>
-                      Laudo técnico
-                      <textarea
-                        name="laudo"
-                        rows={3}
-                        defaultValue={os.laudo ?? ""}
-                        placeholder="O que foi encontrado e o que foi feito. Obrigatório se não resolveu."
-                        maxLength={8000}
-                      />
-                    </label>
-                    <label>
-                      Quem recebeu / assinou pelo cliente
-                      <input type="text" name="assinaturaNome" defaultValue={os.assinaturaNome ?? ""} maxLength={200} />
-                    </label>
-                    {deixados.length > 0 && (
-                      <CamposVisitaDeVolta
-                        deixados={deixados.map((i) => i.descricao)}
-                        pessoas={pessoas}
-                        padrao={os.responsavelId}
-                        obrigatorio={false}
-                      />
-                    )}
-                    <div className="ficha-acoes">
-                      <button type="submit">Concluir OS</button>
-                    </div>
-                  </form>
-                </details>
-              )}
-
-              {os.status === "em_andamento" && (
-                <details className="dobra">
-                  <summary>Pausar (aguardando peça ou cliente)</summary>
-                  <FormMotivo osId={os.id} acao="pausar" motivos={MOTIVOS_PAUSA} botao="Pausar" />
-                </details>
-              )}
-              {["agendada", "em_deslocamento", "em_andamento"].includes(os.status) && (
-                <details className="dobra">
-                  <summary>Não foi possível atender</summary>
-                  <p className="nota">A OS volta para a fila “A agendar”, sem data, com o motivo no histórico.</p>
-                  <FormMotivo osId={os.id} acao="nao_atendida" motivos={MOTIVOS_NAO_ATENDIDA} botao="Registrar" />
-                </details>
-              )}
-              {gestao && (
-                <details className="dobra">
-                  <summary>Cancelar a OS</summary>
-                  <FormMotivo osId={os.id} acao="cancelar" motivos={MOTIVOS_CANCELAMENTO} botao="Cancelar OS" perigo />
-                </details>
-              )}
-            </Cartao>
+      {/* O próximo passo: uma ação principal, a que a situação da OS pede agora. */}
+      <section className={`agora agora-${os.status}`} aria-labelledby="agora-titulo" key={`agora-${chave}`}>
+        <span className="agora-icone" aria-hidden>
+          {os.status === "aberta" ? (
+            <CalendarClock size={20} />
+          ) : os.status === "agendada" ? (
+            <Navigation size={20} />
+          ) : os.status === "em_deslocamento" ? (
+            <MapPinned size={20} />
+          ) : os.status === "em_andamento" ? (
+            <PlayCircle size={20} />
+          ) : os.status === "aguardando_peca" ? (
+            <PauseCircle size={20} />
+          ) : os.status === "concluida" ? (
+            <CheckCircle2 size={20} />
+          ) : (
+            <XCircle size={20} />
           )}
+        </span>
 
-          {fechada && (
-            <Cartao
-              titulo={os.status === "concluida" ? "Conclusão" : "Cancelada"}
-              icone={<ListChecks size={16} />}
-              acao={
-                os.resultado ? (
+        <div className="agora-texto">
+          <span className="agora-rotulo">Agora</span>
+          {os.status === "aberta" && (
+            <>
+              <h2 id="agora-titulo">{gestao ? "Agende o atendimento" : "Esperando o escritório agendar"}</h2>
+              <p>
+                {gestao
+                  ? "Escolha quem vai e quando. A pessoa recebe o aviso no app e a OS entra na agenda."
+                  : "Se já for atender, marque a saída ou comece o atendimento."}
+                {prazoVencido && <strong className="texto-perigo"> O prazo já venceu.</strong>}
+              </p>
+            </>
+          )}
+          {os.status === "agendada" && (
+            <>
+              <h2 id="agora-titulo">
+                Agendada para {os.agendadaPara ? formatarRelogio(os.agendadaPara) : "—"}
+                {os.responsavel ? ` com ${os.responsavel.nome.split(" ")[0]}` : ""}
+              </h2>
+              <p>Ao sair para o cliente, marque a saída: ele acompanha a chegada e o tempo de deslocamento fica registrado.</p>
+            </>
+          )}
+          {os.status === "em_deslocamento" && (
+            <>
+              <h2 id="agora-titulo">A caminho do cliente</h2>
+              <p>Ao chegar, comece o atendimento. A chegada fica marcada com a hora e o lugar.</p>
+            </>
+          )}
+          {os.status === "em_andamento" && (
+            <>
+              <h2 id="agora-titulo">
+                Em atendimento{tempo.ms ? ` há ${formatarDuracao(tempo.ms)}` : ""}
+              </h2>
+              <p>
+                {os.checklist.length === 0
+                  ? "Quando terminar, conclua com o laudo e o nome de quem recebeu."
+                  : pendentes.length === 0
+                    ? "Checklist completo. Falta concluir com o laudo e o nome de quem recebeu."
+                    : `Faltam ${pendentes.length} ${pendentes.length === 1 ? "item obrigatório" : "itens obrigatórios"} do checklist antes de concluir.`}
+              </p>
+              {os.checklist.length > 0 && (
+                <span className="agora-progresso" title={`${feitos} de ${obrigatorios.length || os.checklist.length}`}>
+                  <span className="progresso-trilho">
+                    <span style={{ width: `${progressoChecklist}%` }} />
+                  </span>
+                  <span>
+                    {feitos}/{obrigatorios.length || os.checklist.length} {obrigatorios.length ? "obrigatórios" : "itens"}
+                  </span>
+                </span>
+              )}
+            </>
+          )}
+          {os.status === "aguardando_peca" && (
+            <>
+              <h2 id="agora-titulo">Pausada</h2>
+              <p>{motivoPausa ? `Motivo: ${motivoPausa}.` : "Aguardando peça ou o cliente."} Quando der para seguir, retome.</p>
+            </>
+          )}
+          {os.status === "concluida" && (
+            <>
+              <h2 id="agora-titulo">
+                Concluída {os.concluidaEm ? `em ${formatarInstante(os.concluidaEm, false)}` : ""}
+                {os.resultado && (
                   <span className={`pilula ${os.resultado === "resolvido" ? "st-concluida" : "st-aguardando_peca"}`}>
                     {RESULTADO_ROTULO[os.resultado] ?? os.resultado}
                   </span>
-                ) : null
-              }
-            >
-              {os.laudo && <p className="descricao-os">{os.laudo}</p>}
-              {os.status === "concluida" && (
-                <dl className="campos">
-                  <div>
-                    <dt>Concluída</dt>
-                    <dd>{formatarInstante(os.concluidaEm)}</dd>
-                  </div>
-                  {os.assinaturaNome && (
-                    <div>
-                      <dt>Recebido por</dt>
-                      <dd>{os.assinaturaNome}</dd>
-                    </div>
-                  )}
-                </dl>
-              )}
+                )}
+              </h2>
+              <p>
+                {os.assinaturaNome ? `Recebido por ${os.assinaturaNome}. ` : ""}
+                {linkPublico ? "Mande o relatório para o cliente: ele abre o link sem precisar de login." : ""}
+              </p>
+              {os.laudo && <p className="agora-laudo">{os.laudo}</p>}
               {os.retornos.length > 0 && (
                 <p className="nota">
                   Retorno:{" "}
@@ -414,38 +565,143 @@ export default async function DetalheOs({
                   ))}
                 </p>
               )}
-              {gestao && os.status === "concluida" && deixados.length > 0 && !visitaAberta && (
-                <form action={agendarVisitaDeVoltaAction.bind(null, os.id)} className="form-ficha compacto">
-                  <CamposVisitaDeVolta
-                    deixados={deixados.map((i) => i.descricao)}
-                    pessoas={pessoas}
-                    padrao={os.responsavelId}
-                    obrigatorio
-                  />
-                  <div className="ficha-acoes">
-                    <button type="submit">Abrir a visita de volta</button>
-                  </div>
+            </>
+          )}
+          {os.status === "cancelada" && (
+            <>
+              <h2 id="agora-titulo">Cancelada</h2>
+              <p>Esta OS não está mais na agenda nem na fila. O motivo está no histórico.</p>
+            </>
+          )}
+        </div>
+
+        <div className="agora-acoes">
+          {os.status === "aberta" && gestao && formAgendar}
+          {os.status === "aberta" && !gestao && executa && (
+            <>
+              <form action={acaoOsAction.bind(null, os.id)}>
+                <input type="hidden" name="acao" value="iniciar" />
+                <button type="submit" className="botao">
+                  <PlayCircle size={15} aria-hidden /> Iniciar atendimento
+                </button>
+              </form>
+              <form action={acaoOsAction.bind(null, os.id)}>
+                <input type="hidden" name="acao" value="deslocamento" />
+                <button type="submit" className="botao secundario">
+                  Saiu para o local
+                </button>
+              </form>
+            </>
+          )}
+          {os.status === "agendada" && executa && (
+            <>
+              <form action={acaoOsAction.bind(null, os.id)}>
+                <input type="hidden" name="acao" value="deslocamento" />
+                <button type="submit" className="botao">
+                  <Navigation size={15} aria-hidden /> Saiu para o local
+                </button>
+              </form>
+              <form action={acaoOsAction.bind(null, os.id)}>
+                <input type="hidden" name="acao" value="iniciar" />
+                <button type="submit" className="botao secundario">
+                  Já estou lá: iniciar
+                </button>
+              </form>
+            </>
+          )}
+          {os.status === "em_deslocamento" && executa && (
+            <form action={acaoOsAction.bind(null, os.id)}>
+              <input type="hidden" name="acao" value="iniciar" />
+              <button type="submit" className="botao">
+                <MapPinned size={15} aria-hidden /> Cheguei: iniciar atendimento
+              </button>
+            </form>
+          )}
+          {os.status === "em_andamento" && executa && (
+            <>
+              <BotaoDialogo
+                key={`concluir-${chave}`}
+                rotulo="Concluir OS"
+                icone={<CheckCircle2 size={15} aria-hidden />}
+                classe="botao"
+                titulo="Concluir a OS"
+                descricao="O laudo e o nome de quem recebeu vão para o relatório do cliente."
+              >
+                {formConcluir}
+              </BotaoDialogo>
+              {pendentes.length > 0 && (
+                <a href="#checklist" className="botao secundario">
+                  <ListChecks size={15} aria-hidden /> Ver o que falta
+                </a>
+              )}
+            </>
+          )}
+          {os.status === "aguardando_peca" && executa && (
+            <form action={acaoOsAction.bind(null, os.id)}>
+              <input type="hidden" name="acao" value="retomar" />
+              <button type="submit" className="botao">
+                <PlayCircle size={15} aria-hidden /> Retomar atendimento
+              </button>
+            </form>
+          )}
+          {os.status === "concluida" && (
+            <>
+              {linkPublico && wa && (
+                <a
+                  href={`https://wa.me/${wa}?text=${encodeURIComponent(mensagemWa)}`}
+                  className="botao botao-whatsapp"
+                  target="_blank"
+                  rel="noopener"
+                >
+                  <MessageCircle size={15} aria-hidden /> Enviar relatório pelo WhatsApp
+                </a>
+              )}
+              <a href={`/os/${os.id}/relatorio`} className="botao secundario" target="_blank" rel="noopener">
+                <FileDown size={15} aria-hidden /> Baixar PDF
+              </a>
+              {gestao && os.resultado === "nao_resolvido" && os.retornos.length === 0 && (
+                <form action={abrirRetornoAction.bind(null, os.id)}>
+                  <button type="submit" className="botao secundario">
+                    Abrir OS de retorno
+                  </button>
                 </form>
               )}
-              {gestao && (
-                <div className="botoes">
-                  {os.resultado === "nao_resolvido" && os.retornos.length === 0 && (
-                    <form action={abrirRetornoAction.bind(null, os.id)}>
-                      <button type="submit" className="botao">
-                        Abrir OS de retorno
-                      </button>
-                    </form>
-                  )}
-                  <details className="dobra">
-                    <summary>Reabrir</summary>
-                    <FormMotivo osId={os.id} acao="reabrir" motivos={["Cliente reclamou", "Concluída por engano", "Outro"]} botao="Reabrir" />
-                  </details>
-                </div>
-              )}
-            </Cartao>
+            </>
           )}
+          {os.status === "cancelada" && gestao && (
+            <BotaoDialogo key={`reabrir-${chave}`} rotulo="Reabrir" icone={<RotateCcw size={15} aria-hidden />} titulo="Reabrir a OS">
+              <FormMotivo osId={os.id} acao="reabrir" motivos={["Cliente reclamou", "Concluída por engano", "Outro"]} botao="Reabrir" />
+            </BotaoDialogo>
+          )}
+        </div>
+      </section>
+
+      {gestao && os.status === "concluida" && deixados.length > 0 && !visitaAberta && (
+        <div className="registro-aviso">
+          <Cartao titulo="Visita de volta" icone={<CalendarClock size={16} />} destaque>
+            <form action={agendarVisitaDeVoltaAction.bind(null, os.id)} className="form-ficha compacto">
+              <CamposVisitaDeVolta
+                deixados={deixados.map((i) => i.descricao)}
+                pessoas={pessoas}
+                padrao={os.responsavelId}
+                obrigatorio
+              />
+              <div className="ficha-acoes">
+                <button type="submit">Abrir a visita de volta</button>
+              </div>
+            </form>
+          </Cartao>
+        </div>
+      )}
+
+      <div className="registro-grade">
+        <div className="registro-principal">
+          <Cartao titulo="Solicitação" icone={<FileText size={16} />}>
+            <p className="descricao-os">{os.descricao}</p>
+          </Cartao>
 
           <Cartao
+            id="checklist"
             titulo="Checklist"
             icone={<ListChecks size={16} />}
             contador={
@@ -469,13 +725,7 @@ export default async function DetalheOs({
                   {secoes.length > 1 && <h3>{secao.nome}</h3>}
                   <ul className="itens-os">
                     {secao.itens.map((item) => (
-                      <ItemChecklist
-                        key={item.id}
-                        osId={os.id}
-                        item={item}
-                        podeResponder={podeResponder}
-                        podeRemoverDe={podeRemoverDe}
-                      />
+                      <ItemChecklist key={item.id} osId={os.id} item={item} podeResponder={podeResponder} podeRemoverDe={podeRemoverDe} />
                     ))}
                   </ul>
                 </div>
@@ -524,45 +774,6 @@ export default async function DetalheOs({
             )}
           </Cartao>
 
-          <Cartao id="relatorio" titulo="Relatório para o cliente" icone={<FileDown size={16} />}>
-            <p className="nota">
-              O PDF é gerado na hora, com as fotos, o checklist e a assinatura.
-              {!fechada && " Enquanto a OS não é concluída, ele sai marcado como parcial."}
-            </p>
-            <div className="botoes">
-              <a href={`/os/${os.id}/relatorio`} className="botao secundario" target="_blank" rel="noopener">
-                Baixar PDF
-              </a>
-              {linkPublico && wa && (
-                <a
-                  href={`https://wa.me/${wa}?text=${encodeURIComponent(mensagemWa)}`}
-                  className="botao"
-                  target="_blank"
-                  rel="noopener"
-                >
-                  Enviar pelo WhatsApp
-                </a>
-              )}
-            </div>
-            {linkPublico ? (
-              <>
-                <label className="link-publico">
-                  Link do cliente (abre sem login)
-                  <input type="text" readOnly value={linkPublico} />
-                </label>
-                {gestao && (
-                  <form action={renovarLinkAction.bind(null, os.id)} className="form-mini">
-                    <button type="submit" className="link-perigo">
-                      gerar outro link (o atual para de abrir)
-                    </button>
-                  </form>
-                )}
-              </>
-            ) : (
-              <p className="nota">O link para mandar ao cliente é criado quando a OS é concluída.</p>
-            )}
-          </Cartao>
-
           <Cartao id="comentarios" titulo="Comentários" icone={<MessageSquare size={16} />} contador={comentarios.length || undefined}>
             {comentarios.length > 0 && (
               <ul className="comentarios">
@@ -587,41 +798,58 @@ export default async function DetalheOs({
 
         <aside className="registro-lateral">
           <Cartao titulo="Cliente" icone={<UserRound size={16} />}>
+            <div className="cliente-os">
+              <strong className="cliente-os-nome">{os.cliente.nome}</strong>
+              {endereco && <span className="cliente-os-endereco">{endereco}</span>}
+              {(os.cliente.telefone || mapaCliente) && (
+                <div className="cliente-os-contato">
+                  {os.cliente.telefone && (
+                    <a href={`tel:${soDigitos(os.cliente.telefone)}`} className="botao secundario" title={os.cliente.telefone}>
+                      <Phone size={15} aria-hidden /> Ligar
+                    </a>
+                  )}
+                  {wa && (
+                    <a href={`https://wa.me/${wa}`} className="botao secundario" target="_blank" rel="noopener">
+                      <MessageCircle size={15} aria-hidden /> WhatsApp
+                    </a>
+                  )}
+                  {mapaCliente && (
+                    <a href={mapaCliente} className="botao secundario" target="_blank" rel="noopener">
+                      <Navigation size={15} aria-hidden /> Rota
+                    </a>
+                  )}
+                </div>
+              )}
+            </div>
+          </Cartao>
+
+          <Cartao titulo="Detalhes" icone={<ClipboardList size={16} />}>
             <Dados
               itens={[
-                ["Nome", os.cliente.nome],
                 [
-                  "Telefone",
-                  os.cliente.telefone ? (
-                    <>
-                      <a href={`tel:${soDigitos(os.cliente.telefone)}`}>{os.cliente.telefone}</a>
-                      {wa && (
-                        <>
-                          {" · "}
-                          <a href={`https://wa.me/${wa}`} target="_blank" rel="noopener">
-                            WhatsApp
-                          </a>
-                        </>
-                      )}
-                    </>
+                  "Responsável",
+                  os.responsavel ? (
+                    <span className="meta-pessoa">
+                      <span className="avatar-mini" aria-hidden>
+                        {iniciais(os.responsavel.nome)}
+                      </span>
+                      {os.responsavel.nome}
+                    </span>
+                  ) : (
+                    <span className="texto-atencao">ninguém ainda</span>
+                  ),
+                ],
+                ["Agendada", os.agendadaPara ? formatarRelogio(os.agendadaPara) : null],
+                [
+                  "Prazo",
+                  os.prazoSla ? (
+                    <span className={prazoVencido ? "texto-perigo" : undefined}>
+                      {formatarRelogio(os.prazoSla)}
+                      {prazoVencido ? " · vencido" : ""}
+                    </span>
                   ) : null,
                 ],
-                [
-                  "Endereço",
-                  endereco ? (
-                    <>
-                      {endereco}
-                      {mapaCliente && (
-                        <>
-                          {" · "}
-                          <a href={mapaCliente} target="_blank" rel="noopener">
-                            mapa
-                          </a>
-                        </>
-                      )}
-                    </>
-                  ) : null,
-                ],
+                ["Telefone", os.cliente.telefone],
                 ["Usina", os.usina?.nome],
                 [
                   "Venda",
@@ -632,121 +860,45 @@ export default async function DetalheOs({
                     </>
                   ) : null,
                 ],
+                [
+                  "Aberta",
+                  <>
+                    {formatarInstante(os.criadoEm, false)}
+                    {os.abertaPor ? ` por ${os.abertaPor.nome}` : ""}
+                    {os.origem === "alerta" ? " (alerta)" : os.origem === "cliente" ? " (pedido do cliente)" : ""}
+                  </>,
+                ],
+                ["Retorno de", os.osOrigem ? <Link href={`/os/${os.osOrigem.id}`}>{numeroOs(os.osOrigem.numero)}</Link> : null],
               ]}
             />
           </Cartao>
 
-          <Cartao titulo="Quem e quando" icone={<CalendarClock size={16} />}>
-            <dl className="campos">
-              <div>
-                <dt>Responsável</dt>
-                <dd className={os.responsavel ? "" : "fraco"}>{os.responsavel?.nome ?? "ninguém ainda"}</dd>
-              </div>
-              <div>
-                <dt>Agendada</dt>
-                <dd className={os.agendadaPara ? "" : "fraco"}>{os.agendadaPara ? formatarRelogio(os.agendadaPara) : "sem data"}</dd>
-              </div>
-              <div>
-                <dt>Prazo</dt>
-                <dd className={prazoVencido ? "ruim" : os.prazoSla ? "" : "fraco"}>
-                  {os.prazoSla ? formatarRelogio(os.prazoSla) : "sem prazo"}
-                  {prazoVencido ? " · vencido" : ""}
-                </dd>
-              </div>
-              <div>
-                <dt>Aberta</dt>
-                <dd>
-                  {formatarInstante(os.criadoEm, false)}
-                  {os.abertaPor ? ` por ${os.abertaPor.nome}` : ""}
-                  {os.origem === "alerta" ? " (alerta)" : os.origem === "cliente" ? " (pedido do cliente)" : ""}
-                </dd>
-              </div>
-              {os.osOrigem && (
-                <div>
-                  <dt>Retorno de</dt>
-                  <dd>
-                    <Link href={`/os/${os.osOrigem.id}`}>{numeroOs(os.osOrigem.numero)}</Link>
-                  </dd>
-                </div>
-              )}
-            </dl>
-
-            {gestao && !fechada && (
-              <>
-                <details className="dobra">
-                  <summary>{os.responsavel ? "Trocar responsável" : "Definir responsável"}</summary>
-                  <form action={acaoOsAction.bind(null, os.id)} className="form-acao">
-                    <input type="hidden" name="acao" value="atribuir" />
-                    <select name="responsavelId" defaultValue={os.responsavel?.id ?? ""}>
-                      <option value="">Ninguém</option>
-                      {pessoas.map((u) => (
-                        <option key={u.id} value={u.id}>
-                          {u.nome} ({PAPEL[u.papel] ?? u.papel})
-                        </option>
-                      ))}
-                    </select>
-                    <button type="submit" className="botao secundario">
-                      Salvar
-                    </button>
-                  </form>
-                </details>
-                {["aberta", "agendada", "aguardando_peca"].includes(os.status) && (
-                  <details className="dobra" open={os.status === "aberta" && !os.agendadaPara}>
-                    <summary>{os.agendadaPara ? "Reagendar" : "Agendar"}</summary>
-                    <form action={acaoOsAction.bind(null, os.id)} className="form-acao">
-                      <input type="hidden" name="acao" value="agendar" />
-                      <input type="datetime-local" name="agendadaPara" defaultValue={relogioParaCampo(os.agendadaPara)} required />
-                      {os.agendadaPara && (
-                        <>
-                          <select name="motivo" required defaultValue="">
-                            <option value="" disabled>
-                              Motivo do reagendamento…
-                            </option>
-                            {MOTIVOS_REAGENDAMENTO.map((m) => (
-                              <option key={m} value={m}>
-                                {m}
-                              </option>
-                            ))}
-                          </select>
-                          <input type="text" name="motivoDetalhe" placeholder="Detalhe (obrigatório em “Outro”)" maxLength={400} />
-                        </>
-                      )}
-                      <button type="submit" className="botao secundario">
-                        Salvar
-                      </button>
-                    </form>
-                  </details>
-                )}
-              </>
-            )}
-          </Cartao>
-
-          <Cartao titulo="Em campo" icone={<MapPinned size={16} />}>
-            <dl className="campos">
-              <div>
-                <dt>Chegada</dt>
-                <dd className={chegada ? "" : "fraco"}>
-                  {chegada ? formatarInstante(chegada.ocorridoEm, false) : "—"}
-                  {chegada?.latitude && chegada.longitude && (
-                    <>
-                      {" · "}
-                      <a href={`https://www.google.com/maps?q=${chegada.latitude},${chegada.longitude}`} target="_blank" rel="noopener">
-                        onde
-                      </a>
-                    </>
-                  )}
-                </dd>
-              </div>
-              <div>
-                <dt>Conclusão</dt>
-                <dd className={os.concluidaEm ? "" : "fraco"}>{os.concluidaEm ? formatarInstante(os.concluidaEm, false) : "—"}</dd>
-              </div>
-              <div>
-                <dt>Tempo</dt>
-                <dd className={tempo.ms ? "" : "fraco"}>{tempo.ms ? formatarDuracao(tempo.ms) : "—"}</dd>
-              </div>
-            </dl>
-          </Cartao>
+          {(chegada || os.concluidaEm || tempo.ms > 0) && (
+            <Cartao titulo="Em campo" icone={<MapPinned size={16} />}>
+              <Dados
+                itens={[
+                  [
+                    "Chegada",
+                    chegada ? (
+                      <>
+                        {formatarInstante(chegada.ocorridoEm, false)}
+                        {chegada.latitude && chegada.longitude && (
+                          <>
+                            {" · "}
+                            <a href={`https://www.google.com/maps?q=${chegada.latitude},${chegada.longitude}`} target="_blank" rel="noopener">
+                              onde
+                            </a>
+                          </>
+                        )}
+                      </>
+                    ) : null,
+                  ],
+                  ["Conclusão", os.concluidaEm ? formatarInstante(os.concluidaEm, false) : null],
+                  ["Tempo", tempo.ms ? formatarDuracao(tempo.ms) : null],
+                ]}
+              />
+            </Cartao>
+          )}
 
           {mostrarTrajeto && (
             <Cartao id="trajeto" titulo="Trajeto" icone={<Route size={16} />}>
