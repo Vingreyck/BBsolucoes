@@ -1,8 +1,9 @@
-import { SunMedium } from "lucide-react";
 import type { Metadata } from "next";
 
+import { SimboloSelebi } from "../_ui/marca";
+
 export const metadata: Metadata = {
-  title: "Excluir conta — BBSolution",
+  title: "Excluir conta — BB-Selebi",
 };
 
 /**
@@ -15,24 +16,22 @@ export default function ExcluirConta() {
   return (
     <main className="pagina-publica">
       <header className="publica-topo">
-        <span className="marca-selo" aria-hidden>
-          <SunMedium size={16} />
-        </span>
-        BBSolution
+        <SimboloSelebi tamanho={24} />
+        BB-Selebi
       </header>
       <article className="documento-publico">
         <h1>Excluir conta e dados</h1>
-        <p className="dica">Aplicativo BBSolution · BB Soluções</p>
+        <p className="dica">Aplicativo BB-Selebi · BB Soluções</p>
 
         <p>
-          Quem usa o BBSolution tem uma conta criada pela empresa (nome, CPF e senha). Você pode pedir
+          Quem usa o BB-Selebi tem uma conta criada pela empresa (nome, CPF e senha). Você pode pedir
           a exclusão dela e dos dados pessoais ligados a ela a qualquer momento, sem precisar
           reinstalar o aplicativo.
         </p>
 
         <h2>Pelo aplicativo (na hora)</h2>
         <p>
-          No BBSolution, abra <strong>Perfil</strong> e toque em <strong>Excluir minha conta</strong>. O app pede a sua
+          No BB-Selebi, abra <strong>Perfil</strong> e toque em <strong>Excluir minha conta</strong>. O app pede a sua
           senha para confirmar e a exclusão é feita na mesma hora.
         </p>
 
@@ -48,7 +47,7 @@ export default function ExcluirConta() {
             ) : (
               " ao responsável pela sua empresa"
             )}{" "}
-            com o assunto <strong>Excluir conta BBSolution</strong>.
+            com o assunto <strong>Excluir conta BB-Selebi</strong>.
           </li>
           <li>Informe o seu nome completo e o seu CPF, para confirmarmos que a conta é sua.</li>
           <li>

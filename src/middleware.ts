@@ -28,7 +28,8 @@ export function middleware(requisicao: NextRequest) {
 
 export const config = {
   /**
-   * Deixa passar os estáticos do Next, o favicon e a API do app.
+   * Deixa passar os estáticos do Next, os ícones (aba e tela inicial do
+   * celular, que aparecem também no login) e a API do app.
    *
    * O app não usa cookie: manda o token no cabeçalho `Authorization`, e cada
    * rota de `/api/app/` confere a sessão no banco. Se esta barreira pegasse
@@ -46,5 +47,5 @@ export const config = {
    * login no Selebi: quem abre é quem recebeu o link, e a rota confere a chave
    * longa e aleatória do link no banco.
    */
-  matcher: ["/((?!_next/static|_next/image|favicon.ico|api/app/|api/saude|api/energisa/|r/|privacidade|excluir-conta).*)"],
+  matcher: ["/((?!_next/static|_next/image|favicon.ico|icon.svg|apple-icon.png|api/app/|api/saude|api/energisa/|r/|privacidade|excluir-conta).*)"],
 };

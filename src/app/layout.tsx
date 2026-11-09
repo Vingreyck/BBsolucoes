@@ -1,6 +1,6 @@
 import { and, count, eq, isNull, ne } from "drizzle-orm";
 import type { Metadata } from "next";
-import { Inter } from "next/font/google";
+import { Inter, Outfit } from "next/font/google";
 
 import { podeVerDocumentos } from "@/auth/permissao";
 import { usuarioAtual } from "@/auth/sessao";
@@ -18,6 +18,9 @@ import "./globals.css";
  * build e servida pelo próprio site — o navegador não fala com o Google.
  */
 const fonte = Inter({ subsets: ["latin"], display: "swap", variable: "--fonte" });
+/** Outfit 600: só no nome "Selebi", ao lado do símbolo (`app/_ui/marca.tsx`). */
+const fonteMarca = Outfit({ subsets: ["latin"], weight: "600", display: "swap", variable: "--fonte-marca" });
+const fontes = `${fonte.variable} ${fonteMarca.variable}`;
 
 export const metadata: Metadata = {
   title: "Selebi",
@@ -57,7 +60,7 @@ export default async function RootLayout({
   // Sem sessão não há menu: login e páginas públicas ficam limpas.
   if (!usuario) {
     return (
-      <html lang="pt-BR" className={fonte.variable}>
+      <html lang="pt-BR" className={fontes}>
         <body>{children}</body>
       </html>
     );
@@ -124,7 +127,7 @@ export default async function RootLayout({
   ];
 
   return (
-    <html lang="pt-BR" className={fonte.variable} suppressHydrationWarning>
+    <html lang="pt-BR" className={fontes} suppressHydrationWarning>
       <head>
         {/* Antes de pintar: aplica o menu recolhido, se a pessoa deixou assim. Sem isto
             a tela abriria com o menu largo e encolheria logo depois, piscando. */}

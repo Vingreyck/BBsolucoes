@@ -1,8 +1,9 @@
-import { SunMedium } from "lucide-react";
 import type { Metadata } from "next";
 
+import { SimboloSelebi } from "../_ui/marca";
+
 export const metadata: Metadata = {
-  title: "Política de privacidade — BBSolution",
+  title: "Política de privacidade — BB-Selebi",
 };
 
 /**
@@ -16,17 +17,15 @@ export default function Privacidade() {
   return (
     <main className="pagina-publica">
       <header className="publica-topo">
-        <span className="marca-selo" aria-hidden>
-          <SunMedium size={16} />
-        </span>
-        BBSolution
+        <SimboloSelebi tamanho={24} />
+        BB-Selebi
       </header>
       <article className="documento-publico">
         <h1>Política de privacidade</h1>
-        <p className="dica">Aplicativo BBSolution · atualizada em 30/09/2026</p>
+        <p className="dica">Aplicativo BB-Selebi · atualizada em 09/11/2026</p>
 
         <p>
-          O BBSolution é o aplicativo de trabalho da equipe da BB Soluções (energia solar, Sergipe).
+          O BB-Selebi é o aplicativo de trabalho da equipe da BB Soluções (energia solar, Sergipe).
           Ele serve para receber ordens de serviço, registrar o atendimento em campo e enviar o
           relatório ao escritório. Só usa quem foi cadastrado e aprovado pela empresa.
         </p>

@@ -5,6 +5,7 @@ import { exigirUsuario } from "@/auth/sessao";
 import { db, schema } from "@/db";
 
 import { Cabecalho, Vazio } from "../../_ui";
+import { endereco, paginar, Paginacao } from "../../_ui/paginacao";
 import { Ligar } from "./ligar";
 
 export const dynamic = "force-dynamic";
@@ -22,7 +23,11 @@ export const dynamic = "force-dynamic";
  * encontrar o contrato e o telefone no dossiê.
  */
 
-export default async function SemDono() {
+/** Cada cartão leva a lista de clientes para escolher: poucos por página deixam a tela leve. */
+const POR_PAGINA = 12;
+
+export default async function SemDono({ searchParams }: { searchParams: Promise<{ pagina?: string }> }) {
+  const { pagina: paginaPedida } = await searchParams;
   const usuario = await exigirUsuario();
 
   const orfas = await db.query.usina.findMany({
@@ -110,6 +115,8 @@ export default async function SemDono() {
     );
   }
 
+  const pagina = paginar(orfas, paginaPedida, POR_PAGINA);
+
   return (
     <main>
       <Cabecalho
@@ -136,8 +143,8 @@ export default async function SemDono() {
         </div>
       </details>
 
-      <div className="cartoes">
-        {orfas.map((u) => {
+      <div className="cartoes" id="lista">
+        {pagina.itens.map((u) => {
           const portal = u.vinculosPortal[0]?.contaPortal?.fabricante ?? "—";
           return (
             <div key={u.id} className="cartao cartao-orfa">
@@ -161,6 +168,7 @@ export default async function SemDono() {
           );
         })}
       </div>
+      <Paginacao {...pagina} rotulo="usinas sem dono" href={(n) => endereco("/usinas/sem-dono", {}, { pagina: n })} />
     </main>
   );
 }

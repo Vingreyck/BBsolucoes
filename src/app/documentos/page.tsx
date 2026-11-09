@@ -1,5 +1,5 @@
 import { asc, eq } from "drizzle-orm";
-import { FolderOpen, Info, MessageCircle, Search, SearchX, TrendingUp } from "lucide-react";
+import { ExternalLink, FolderOpen, Info, MessageCircle, Search, SearchX, TrendingUp } from "lucide-react";
 import Link from "next/link";
 
 import { exigirAcessoDocumentos } from "@/auth/permissao";
@@ -7,6 +7,10 @@ import { db, schema } from "@/db";
 import { ehDoCliente } from "@/documentos/cobranca";
 
 import { Cabecalho, Cartao, Vazio } from "../_ui";
+import { endereco, paginar, Paginacao } from "../_ui/paginacao";
+import { Pendencias } from "../_ui/pendencias";
+import { SeletorFiltro } from "../_ui/seletor-filtro";
+import { semAcento } from "../formatar";
 
 export const dynamic = "force-dynamic";
 
@@ -61,11 +65,11 @@ const ROTULO: Record<string, string> = {
 export default async function Documentos({
   searchParams,
 }: {
-  searchParams: Promise<{ filtro?: string; busca?: string; etapa?: string }>;
+  searchParams: Promise<{ filtro?: string; busca?: string; etapa?: string; pagina?: string }>;
 }) {
   const acesso = await exigirAcessoDocumentos();
   const usuario = acesso.usuario;
-  const { filtro = "", busca = "", etapa: etapaFiltro = "" } = await searchParams;
+  const { filtro = "", busca = "", etapa: etapaFiltro = "", pagina: paginaPedida } = await searchParams;
 
   const [etapas, todasExigencias, projetos] = await Promise.all([
     db.query.etapa.findMany({
@@ -156,27 +160,21 @@ export default async function Documentos({
       falta,
       semAssinatura,
       soTrabalho,
-      total: p.documentos.length,
+      exigidos: exigidosAgora.length,
       pasta: p.documentos.find((d) => d.linkDrive)?.linkDrive ?? null,
     };
   });
+  // Ordem de arquivo: pelo nome, como as pastas do Drive.
+  linhas.sort((a, b) => a.projeto.titulo.localeCompare(b.projeto.titulo, "pt-BR"));
 
-  const alvo = busca
-    .trim()
-    .toLowerCase()
-    .normalize("NFD")
-    .replace(/[̀-ͯ]/g, "");
+  const alvo = semAcento(busca.trim());
 
   const ativos = linhas.filter((l) => l.projeto.situacao !== "concluido");
   const base = filtro === "concluidos" ? linhas : ativos;
 
   const filtradas = base.filter((l) => {
     if (alvo) {
-      const nome = (l.projeto.cliente?.nome ?? l.projeto.titulo)
-        .toLowerCase()
-        .normalize("NFD")
-        .replace(/[̀-ͯ]/g, "");
-      if (!nome.includes(alvo)) return false;
+      if (!semAcento(`${l.projeto.titulo} ${l.projeto.cliente?.nome ?? ""}`).includes(alvo)) return false;
     }
     if (etapaFiltro && l.projeto.etapa.slug !== etapaFiltro) return false;
     if (filtro === "pendentes") return l.falta.length > 0;
@@ -225,6 +223,10 @@ export default async function Documentos({
     );
   }
 
+  const pagina = paginar(filtradas, paginaPedida);
+  const atuais = { busca, filtro, etapa: etapaFiltro };
+  const maiorGargalo = Math.max(1, ...maioresGargalos.map(([, n]) => n));
+
   return (
     <main>
       <Cabecalho
@@ -237,15 +239,13 @@ export default async function Documentos({
         }
         meta={
           <span>
-            {filtradas.length === base.length
-              ? `${base.length} ${filtro === "concluidos" ? "dossiês" : "em andamento"}`
-              : `${filtradas.length} de ${base.length}`}
+            {base.length} {filtro === "concluidos" ? "dossiês" : "em andamento"}
           </span>
         }
       />
 
-      {maioresGargalos.length > 0 && (
-        <div className="pagina-corpo pagina-corpo-topo">
+      <div className="pagina-corpo pilha">
+        {maioresGargalos.length > 0 && (
           <Cartao
             titulo="O que está segurando mais gente"
             icone={<TrendingUp size={16} />}
@@ -256,255 +256,224 @@ export default async function Documentos({
                 <li key={tipo}>
                   <a
                     className="funil-rotulo"
-                    href={ehDoCliente(tipo) ? `/documentos/cobranca?tipo=${tipo}` : montar({ filtro: "pendentes", busca })}
+                    href={ehDoCliente(tipo) ? `/documentos/cobranca?tipo=${tipo}` : endereco("/documentos", { filtro: "pendentes", busca })}
                   >
                     {ROTULO[tipo] ?? tipo}
                   </a>
                   <span className="funil-barra">
-                    <span style={{ width: `${Math.max(4, (n / Math.max(1, ...maioresGargalos.map(([, n]) => n))) * 100)}%` }} />
+                    <span style={{ width: `${Math.max(4, (n / maiorGargalo) * 100)}%` }} />
                   </span>
                   <span className="funil-num">{n}</span>
                 </li>
               ))}
             </ul>
           </Cartao>
-        </div>
-      )}
+        )}
 
-      <div className="caixa-filtros">
-        <form className="campo-busca campo-busca-largo" action="/documentos">
-          <Search size={15} aria-hidden />
-          <input type="search" name="busca" placeholder="Nome do cliente" defaultValue={busca} aria-label="Buscar cliente" />
-          {filtro && <input type="hidden" name="filtro" value={filtro} />}
-          {etapaFiltro && <input type="hidden" name="etapa" value={etapaFiltro} />}
-        </form>
-
-        <div className="linha-filtro">
-        <span className="rotulo-filtro">Situação</span>
-        <nav className="filtros">
-          <Filtro atual={filtro} valor="" busca={busca} etapa={etapaFiltro}>
-            Em andamento ({ativos.length})
-          </Filtro>
-          <Filtro atual={filtro} valor="pendentes" busca={busca} etapa={etapaFiltro} perigo>
-            Esperando documento ({pendentes})
-          </Filtro>
-          {esperandoAssinatura > 0 && (
-            <Filtro atual={filtro} valor="assinatura" busca={busca} etapa={etapaFiltro} perigo>
-              Falta assinar ({esperandoAssinatura})
-            </Filtro>
-          )}
-          {apenasTrabalho > 0 && (
-            <Filtro atual={filtro} valor="trabalho" busca={busca} etapa={etapaFiltro} perigo>
-              Só o arquivo de trabalho ({apenasTrabalho})
-            </Filtro>
-          )}
-          <Filtro atual={filtro} valor="emdia" busca={busca} etapa={etapaFiltro}>
-            Em dia ({emDia})
-          </Filtro>
-          <Filtro atual={filtro} valor="concluidos" busca={busca} etapa={etapaFiltro}>
-            Incluir concluídos ({concluidos})
-          </Filtro>
-        </nav>
-      </div>
-
-        <div className="linha-filtro">
-        <span className="rotulo-filtro">Etapa</span>
-        <nav className="filtros">
-          <FiltroEtapa atual={etapaFiltro} valor="" busca={busca} filtro={filtro}>
-            Todas
-          </FiltroEtapa>
-          {etapas
-            .filter((e) => (porEtapa.get(e.slug) ?? 0) > 0)
-            .map((e) => (
-              <FiltroEtapa
-                key={e.slug}
-                atual={etapaFiltro}
-                valor={e.slug}
-                busca={busca}
-                filtro={filtro}
-              >
-                {e.nome} ({porEtapa.get(e.slug)})
-              </FiltroEtapa>
-            ))}
-        </nav>
-      </div>
-
-      </div>
-
-      {!acesso.tudo && (
-        <p className="aviso">
-          <strong>Você está vendo os documentos das suas etapas</strong> —{" "}
-          {[...acesso.tipos].map((t) => ROTULO[t] ?? t).join(", ")}. O resto do
-          dossiê existe, mas é de outra pessoa: documento de cliente guarda CNH,
-          CPF e conta de luz, e cada um enxerga só o que precisa para trabalhar.
-        </p>
-      )}
-
-      <details className="como-ler">
-        <summary>
-          <Info size={15} aria-hidden /> Como os documentos são cobrados
-        </summary>
-        <div>
-          <p>
-            <strong>Cada documento só é cobrado a partir da etapa em que deveria
-            existir.</strong>{" "}
-            A conta de luz na coleta de informações, as fotos do padrão na vistoria
-            técnica, o documento do titular na documentação, contrato e procuração
-            no contrato, projeto/memorial/ART no projeto, o protocolo na aprovação
-            da concessionária. Quem fechou ontem não aparece devendo ART. A regra
-            está na tabela <code>exigencia_documento</code> e é para o dono
-            corrigir olhando.
+        {!acesso.tudo && (
+          <p className="aviso aviso-solto">
+            <strong>Você está vendo os documentos das suas etapas</strong> —{" "}
+            {[...acesso.tipos].map((t) => ROTULO[t] ?? t).join(", ")}. O resto do
+            dossiê existe, mas é de outra pessoa: documento de cliente guarda CNH,
+            CPF e conta de luz, e cada um enxerga só o que precisa para trabalhar.
           </p>
+        )}
 
-          <p>
-            <strong>Arquivo de trabalho não conta como documento.</strong> O{" "}
-            <code>.dwg</code> do projeto e a planilha <code>.xlsm</code> do memorial
-            são o meio do caminho — nove clientes tinham como único memorial a
-            planilha e passavam por completos. Documento pessoal fica com a pessoa,
-            não com a venda: quem já mandou a CNH não precisa mandar de novo no
-            segundo projeto.
-          </p>
-        </div>
-      </details>
+        <section className="lista" id="lista" aria-label="Dossiês">
+          <div className="lista-barra">
+            <form className="campo-busca" action="/documentos">
+              <Search size={15} aria-hidden />
+              <input type="search" name="busca" placeholder="Buscar cliente" defaultValue={busca} aria-label="Buscar cliente" />
+              {filtro && <input type="hidden" name="filtro" value={filtro} />}
+              {etapaFiltro && <input type="hidden" name="etapa" value={etapaFiltro} />}
+            </form>
+            <SeletorFiltro
+              rotulo="Etapa"
+              atual={etapaFiltro}
+              opcoes={[
+                { valor: "", rotulo: "Todas", href: endereco("/documentos", atuais, { etapa: null }) },
+                ...etapas
+                  .filter((e) => (porEtapa.get(e.slug) ?? 0) > 0)
+                  .map((e) => ({
+                    valor: e.slug,
+                    rotulo: `${e.nome} (${porEtapa.get(e.slug)})`,
+                    href: endereco("/documentos", atuais, { etapa: e.slug }),
+                  })),
+              ]}
+            />
+            <nav className="filtros" aria-label="Situação">
+              <Filtro atual={filtro} valor="" atuais={atuais} n={ativos.length}>
+                Em andamento
+              </Filtro>
+              <Filtro atual={filtro} valor="pendentes" atuais={atuais} n={pendentes} perigo>
+                Esperando documento
+              </Filtro>
+              {esperandoAssinatura > 0 && (
+                <Filtro atual={filtro} valor="assinatura" atuais={atuais} n={esperandoAssinatura} perigo>
+                  Falta assinar
+                </Filtro>
+              )}
+              {apenasTrabalho > 0 && (
+                <Filtro atual={filtro} valor="trabalho" atuais={atuais} n={apenasTrabalho} perigo>
+                  Só o arquivo de trabalho
+                </Filtro>
+              )}
+              <Filtro atual={filtro} valor="emdia" atuais={atuais} n={emDia}>
+                Em dia
+              </Filtro>
+              <Filtro atual={filtro} valor="concluidos" atuais={atuais} n={concluidos}>
+                Com os concluídos
+              </Filtro>
+            </nav>
+          </div>
 
-      <div className="tabela-wrap">
-        <table className="tabela">
-          <thead>
-            <tr>
-              <th>Dossiê</th>
-              <th>Etapa</th>
-              <th>Falta para avançar</th>
-              <th>Atenção</th>
-              <th>Papéis</th>
-              <th>Drive</th>
-            </tr>
-          </thead>
-          <tbody>
-            {filtradas.map(
-              ({ projeto, falta, semAssinatura, soTrabalho, total, pasta }) => (
-                <tr key={projeto.id}>
-                  <td className="forte">
-                    <a href={`/documentos/${projeto.id}`}>{projeto.titulo}</a>
-                    {projeto.situacao === "concluido" && (
-                      <span className="pilula sev-info">concluído</span>
-                    )}
-                  </td>
-                  <td className="fraco">{projeto.etapa.nome}</td>
-                  <td>
-                    {falta.length === 0 ? (
-                      <span className="pilula sev-info">em dia</span>
-                    ) : (
-                      falta.map((e) => (
-                        <span key={e.tipo} className="pilula sev-critico">
-                          {ROTULO[e.tipo] ?? e.tipo}
-                        </span>
-                      ))
-                    )}
-                  </td>
-                  <td>
-                    {soTrabalho.map((e) => (
-                      <span key={`t-${e.tipo}`} className="pilula sev-atencao">
-                        {ROTULO[e.tipo] ?? e.tipo}: só o arquivo de trabalho
-                      </span>
+          {filtradas.length === 0 ? (
+            <Vazio
+              icone={<SearchX size={20} />}
+              titulo="Nenhum dossiê bate com esse filtro"
+              acao={
+                <a href="/documentos" className="botao secundario">
+                  Limpar filtros
+                </a>
+              }
+            />
+          ) : (
+            <>
+              <div className="tabela-rolagem">
+                <table className="tabela tabela-dossies">
+                  <thead>
+                    <tr>
+                      <th scope="col">Cliente</th>
+                      <th scope="col">Etapa</th>
+                      <th scope="col">Entregues</th>
+                      <th scope="col">Falta para avançar</th>
+                      <th scope="col" className="col-acao">
+                        <span className="sr-only">Pasta no Drive</span>
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {pagina.itens.map(({ projeto, falta, semAssinatura, soTrabalho, exigidos, pasta }) => (
+                      <tr key={projeto.id}>
+                        <td>
+                          <a className="celula-dupla" href={`/documentos/${projeto.id}`}>
+                            <strong>{projeto.titulo}</strong>
+                            <small>
+                              {[projeto.cliente?.cidade, projeto.situacao === "concluido" ? "concluído" : null]
+                                .filter(Boolean)
+                                .join(" · ") || "sem cidade"}
+                            </small>
+                          </a>
+                        </td>
+                        <td className="fraco">{projeto.etapa.nome}</td>
+                        <td>
+                          <Progresso feitos={exigidos - falta.length} total={exigidos} />
+                        </td>
+                        <td>
+                          <Pendencias
+                            itens={[
+                              ...falta.map((e) => ({ rotulo: ROTULO[e.tipo] ?? e.tipo })),
+                              ...semAssinatura.map((e) => ({ rotulo: `${ROTULO[e.tipo] ?? e.tipo} (falta assinar)`, peso: "meio" as const })),
+                              ...soTrabalho.map((e) => ({ rotulo: `${ROTULO[e.tipo] ?? e.tipo} (só o de trabalho)`, peso: "meio" as const })),
+                            ]}
+                            vazio={
+                              <span className="status-ok">
+                                <span aria-hidden /> em dia
+                              </span>
+                            }
+                          />
+                        </td>
+                        <td className="col-acao">
+                          {pasta && (
+                            <a
+                              className="botao-icone"
+                              href={pasta}
+                              target="_blank"
+                              rel="noreferrer"
+                              title="Abrir a pasta no Drive"
+                              aria-label={`Abrir a pasta de ${projeto.titulo} no Drive`}
+                            >
+                              <ExternalLink size={15} aria-hidden />
+                            </a>
+                          )}
+                        </td>
+                      </tr>
                     ))}
-                    {semAssinatura.map((e) => (
-                      <span key={`a-${e.tipo}`} className="pilula sev-atencao">
-                        {ROTULO[e.tipo] ?? e.tipo}: falta assinar
-                      </span>
-                    ))}
-                    {soTrabalho.length === 0 && semAssinatura.length === 0 && (
-                      <span className="fraco">—</span>
-                    )}
-                  </td>
-                  <td className="fraco">{total}</td>
-                  <td>
-                    {pasta ? (
-                      <a href={pasta} target="_blank" rel="noreferrer">
-                        abrir
-                      </a>
-                    ) : (
-                      "—"
-                    )}
-                  </td>
-                </tr>
-              ),
-            )}
-          </tbody>
-        </table>
+                  </tbody>
+                </table>
+              </div>
+              <Paginacao {...pagina} rotulo="dossiês" href={(n) => endereco("/documentos", atuais, { pagina: n })} />
+            </>
+          )}
+        </section>
+
+        <details className="como-ler como-ler-solto">
+          <summary>
+            <Info size={15} aria-hidden /> Como os documentos são cobrados
+          </summary>
+          <div>
+            <p>
+              <strong>Cada documento só é cobrado a partir da etapa em que deveria existir.</strong> A conta de luz na
+              coleta de informações, as fotos do padrão na vistoria técnica, o documento do titular na documentação,
+              contrato e procuração no contrato, projeto/memorial/ART no projeto, o protocolo na aprovação da
+              concessionária. Quem fechou ontem não aparece devendo ART. A regra está na tabela{" "}
+              <code>exigencia_documento</code> e é para o dono corrigir olhando.
+            </p>
+            <p>
+              <strong>Arquivo de trabalho não conta como documento.</strong> O <code>.dwg</code> do projeto e a planilha{" "}
+              <code>.xlsm</code> do memorial são o meio do caminho — nove clientes tinham como único memorial a planilha e
+              passavam por completos. Documento pessoal fica com a pessoa, não com a venda: quem já mandou a CNH não
+              precisa mandar de novo no segundo projeto.
+            </p>
+          </div>
+        </details>
       </div>
-
-      {filtradas.length === 0 && (
-        <div className="pagina-corpo">
-          <Vazio
-            icone={<SearchX size={20} />}
-            titulo="Nenhum dossiê bate com esse filtro"
-            acao={
-              <a href="/documentos" className="botao secundario">
-                Limpar filtros
-              </a>
-            }
-          />
-        </div>
-      )}
     </main>
   );
 }
 
-function montar(params: Record<string, string>) {
-  const p = new URLSearchParams();
-  for (const [k, v] of Object.entries(params)) if (v) p.set(k, v);
-  const q = p.toString();
-  return `/documentos${q ? `?${q}` : ""}`;
+/** Quantos dos documentos exigidos até a etapa atual já chegaram. */
+function Progresso({ feitos, total }: { feitos: number; total: number }) {
+  if (total === 0) return <span className="fraco">—</span>;
+  const pct = Math.round((feitos / total) * 100);
+  return (
+    <span
+      className={`progresso-mini${feitos === total ? " completo" : ""}`}
+      title={`${feitos} de ${total} documentos exigidos até esta etapa`}
+    >
+      <span className="progresso-trilho" aria-hidden>
+        <span style={{ width: `${pct}%` }} />
+      </span>
+      <span>
+        {feitos}/{total}
+      </span>
+    </span>
+  );
 }
 
 function Filtro({
   atual,
   valor,
-  busca,
-  etapa,
+  atuais,
+  n,
   perigo,
   children,
 }: {
   atual: string;
   valor: string;
-  busca: string;
-  etapa: string;
+  atuais: Record<string, string>;
+  n: number;
   perigo?: boolean;
   children: React.ReactNode;
 }) {
   const ativo = atual === valor;
   return (
     <a
-      href={montar({ busca, filtro: valor, etapa })}
+      href={endereco("/documentos", atuais, { filtro: valor, pagina: null })}
       className={`filtro${ativo ? " ativo" : ""}${perigo ? " perigo" : ""}`}
       aria-current={ativo ? "page" : undefined}
     >
-      {children}
-    </a>
-  );
-}
-
-function FiltroEtapa({
-  atual,
-  valor,
-  busca,
-  filtro,
-  children,
-}: {
-  atual: string;
-  valor: string;
-  busca: string;
-  filtro: string;
-  children: React.ReactNode;
-}) {
-  const ativo = atual === valor;
-  return (
-    <a
-      href={montar({ busca, filtro, etapa: valor })}
-      className={`filtro${ativo ? " ativo" : ""}`}
-      aria-current={ativo ? "page" : undefined}
-    >
-      {children}
+      {children} <span className="filtro-n">{n}</span>
     </a>
   );
 }

@@ -1,63 +1,93 @@
 /*
- * Tokens. O cobre é a cor da marca (o mesmo do ícone do app); o resto é neutro,
- * como nos hubs: fundo cinza bem claro, superfícies brancas, uma cor só para
- * ação e as de estado (ok, atenção, perigo) guardadas para o que pede olhar.
+ * Tokens: a linguagem "Órbita", tirada da marca (app/_ui/marca.tsx).
+ * O sol dourado é a energia, o cobre é a marca e a ação, e o resto é grafite
+ * neutro. As cores de estado (ok, atenção, perigo) só aparecem onde significam
+ * alguma coisa.
+ *
+ * Contraste conferido (WCAG 2.2 AA): texto com pelo menos 4,5:1 nos fundos em
+ * que aparece, formas (barras, foco) com 3:1. No escuro a profundidade vem da
+ * superfície mais clara, não da sombra (como no Material), e nada é preto puro.
  */
 :root {
+  color-scheme: light dark;
+
+  /* as duas cores da logo, iguais nos dois temas */
+  --sol: #ffc247;
+  --cobre: #c9561a;
+
   --bg: #f4f5f7;
   --surface: #ffffff;
-  --surface-2: #f8f9fb;
-  --ink: #111827;
-  --ink-2: #4b5563;
-  --ink-3: #6b7280;
+  --surface-2: #f7f8fa;
+  --surface-3: #eef0f3;
+  --ink: #111418;
+  --ink-2: #474f5b;
+  --ink-3: #68707c;
   --line: #d9dde3;
-  --line-soft: #e8eaee;
-  --accent: #b4561c;
-  --accent-forte: #97450f;
-  --accent-soft: rgba(180, 86, 28, 0.09);
+  --line-soft: #e7e9ed;
+  --accent: #b4501a;
+  --accent-forte: #963f12;
+  --accent-soft: rgba(201, 86, 26, 0.09);
+  /* botão principal: cobre num degradê curto; o branco fica acima de 4,6:1 */
+  --acao-topo: #bc561e;
+  --acao-base: #a84914;
+  --acao-borda: #96400f;
+  /* gráfico de geração */
+  --energia: #c9561a;
+  --energia-forte: #9a3f10;
   --ok: #15803d;
   --ok-soft: rgba(21, 128, 61, 0.1);
   --warn: #a16207;
   --warn-soft: rgba(161, 98, 7, 0.1);
   --crit: #b91c1c;
   --crit-soft: rgba(185, 28, 28, 0.08);
-  --raio: 10px;
-  --raio-p: 6px;
-  --shadow: 0 1px 2px rgba(16, 24, 40, 0.05), 0 1px 3px rgba(16, 24, 40, 0.06);
-  --shadow-alta: 0 4px 6px -2px rgba(16, 24, 40, 0.05), 0 12px 24px -4px rgba(16, 24, 40, 0.1);
+  --raio: 12px;
+  --raio-p: 8px;
+  --shadow: 0 1px 2px rgba(17, 20, 24, 0.04), 0 1px 3px rgba(17, 20, 24, 0.05);
+  --shadow-alta: 0 2px 4px -2px rgba(17, 20, 24, 0.06), 0 14px 28px -6px rgba(17, 20, 24, 0.14);
+  --ease: cubic-bezier(0.2, 0.7, 0.2, 1);
+  --fonte-titulo: var(--fonte-marca), var(--fonte), system-ui, sans-serif;
 
-  /* o menu lateral é escuro nos dois temas, como no Linear e no Jobber */
-  --lateral-bg: #15181d;
-  --lateral-ink: #b8bec7;
+  /* o menu lateral é escuro nos dois temas */
+  --lateral-bg: #12151a;
+  --lateral-bg-2: #0e1115;
+  --lateral-ink: #b4bbc5;
   --lateral-ink-forte: #f3f4f6;
-  --lateral-linha: #262a31;
-  --lateral-ativo: rgba(255, 255, 255, 0.08);
+  --lateral-ink-fraco: #7a828e;
+  --lateral-linha: #232830;
+  --lateral-hover: rgba(255, 255, 255, 0.05);
+  --lateral-ativo: rgba(255, 255, 255, 0.075);
   --lateral-largura: 248px;
 }
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --bg: #0d1014;
-    --surface: #151a20;
-    --surface-2: #1b2128;
-    --ink: #e6e9ed;
-    --ink-2: #a3acb6;
-    --ink-3: #7d8792;
-    --line: #2f3740;
-    --line-soft: #232a32;
-    --accent: #e5894a;
-    --accent-forte: #f0a26c;
-    --accent-soft: rgba(229, 137, 74, 0.13);
+    --bg: #0c0f13;
+    --surface: #13171d;
+    --surface-2: #181d24;
+    --surface-3: #1f252e;
+    --ink: #e9ecf0;
+    --ink-2: #a8b0ba;
+    --ink-3: #808994;
+    --line: #2a313b;
+    --line-soft: #1f252d;
+    --accent: #ec8c4e;
+    --accent-forte: #f6a673;
+    --accent-soft: rgba(236, 140, 78, 0.13);
+    --acao-borda: #c9561a;
+    --energia: #e8894b;
+    --energia-forte: #ffc247;
     --ok: #4ade80;
     --ok-soft: rgba(74, 222, 128, 0.12);
     --warn: #facc15;
     --warn-soft: rgba(250, 204, 21, 0.12);
     --crit: #f87171;
     --crit-soft: rgba(248, 113, 113, 0.12);
-    --shadow: 0 1px 2px rgba(0, 0, 0, 0.4), 0 1px 3px rgba(0, 0, 0, 0.3);
-    --shadow-alta: 0 12px 28px rgba(0, 0, 0, 0.45);
-    --lateral-bg: #0a0c10;
-    --lateral-linha: #1c2027;
+    /* o fio de luz no alto de cada superfície é o que a separa do fundo */
+    --shadow: inset 0 1px 0 rgba(255, 255, 255, 0.035), 0 1px 2px rgba(0, 0, 0, 0.5);
+    --shadow-alta: inset 0 1px 0 rgba(255, 255, 255, 0.05), 0 16px 36px -8px rgba(0, 0, 0, 0.65);
+    --lateral-bg: #0e1115;
+    --lateral-bg-2: #0a0c0f;
+    --lateral-linha: #1b1f26;
   }
 }
 
@@ -79,6 +109,36 @@ body {
   line-height: 1.5;
   font-feature-settings: "cv11", "ss01";
   -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+::selection {
+  background: color-mix(in srgb, var(--sol) 45%, transparent);
+}
+
+/* Foco do teclado igual em todo o sistema: anel cobre afastado do controle.
+   `:where` não pesa na especificidade, então o foco próprio de cada tela manda. */
+:where(a, button, summary, [tabindex]):focus-visible {
+  outline: 2px solid var(--cobre);
+  outline-offset: 2px;
+}
+
+/* Títulos de página na fonte da marca. */
+.topo h1,
+.cabecalho-titulo h1,
+.inicio-topo h1,
+.acesso-cabecalho h1 {
+  font-family: var(--fonte-titulo);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    transition-duration: 0.01ms !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+  }
 }
 
 .topo {
@@ -93,7 +153,7 @@ body {
 .topo h1 {
   margin: 0;
   font-size: 1.35rem;
-  font-weight: 650;
+  font-weight: 600;
   letter-spacing: -0.02em;
 }
 
@@ -125,7 +185,7 @@ body {
   gap: 0.75rem;
   padding: 1.25rem clamp(1rem, 3vw, 2rem) 3rem;
   overflow-x: auto;
-  align-items: start;
+  align-items: flex-start;
 }
 
 .coluna {
@@ -2695,7 +2755,10 @@ body {
   width: var(--lateral-largura);
   display: flex;
   flex-direction: column;
-  background: var(--lateral-bg);
+  /* o sol nasce no canto da marca: um brilho dourado bem fraco atrás do símbolo */
+  background:
+    radial-gradient(260px 160px at 28px -20px, rgba(255, 194, 71, 0.11), transparent 70%),
+    linear-gradient(180deg, var(--lateral-bg), var(--lateral-bg-2));
   color: var(--lateral-ink);
   border-right: 1px solid var(--lateral-linha);
 }
@@ -2707,26 +2770,22 @@ body {
   padding: 1rem 1rem 0.75rem;
 }
 
+/* O nome "Selebi" ao lado do símbolo: Outfit 600, só aqui (ver app/_ui/marca.tsx). */
+.marca-sistema,
+.acesso-marca-nome,
+.publica-topo {
+  font-family: var(--fonte-marca), var(--fonte), system-ui, sans-serif;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+
 .marca-sistema {
   display: inline-flex;
   align-items: center;
-  gap: 0.55rem;
-  font-weight: 700;
-  font-size: 1.05rem;
-  letter-spacing: -0.02em;
+  gap: 0.5rem;
+  font-size: 1.2rem;
   color: var(--lateral-ink-forte);
   text-decoration: none;
-}
-
-.marca-selo {
-  display: grid;
-  place-items: center;
-  width: 28px;
-  height: 28px;
-  border-radius: 8px;
-  background: linear-gradient(135deg, #c8692b, #97450f);
-  color: #fff;
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.2);
 }
 
 .lateral-fechar {
@@ -2755,7 +2814,7 @@ body {
 }
 
 .lateral-acao:hover {
-  background: #c8692b;
+  filter: brightness(1.08);
 }
 
 .lateral-nav {
@@ -2764,7 +2823,7 @@ body {
   padding: 0.25rem 0.6rem 1rem;
   /* rolagem fina e escura: a barra branca padrão do Windows rasgava o menu */
   scrollbar-width: thin;
-  scrollbar-color: #2e333b transparent;
+  scrollbar-color: #2b3038 transparent;
 }
 
 .lateral-grupo + .lateral-grupo {
@@ -2772,52 +2831,72 @@ body {
 }
 
 .lateral-titulo {
-  padding: 0 0.6rem 0.35rem;
-  font-size: 0.68rem;
+  padding: 0 0.6rem 0.4rem;
+  font-size: 0.66rem;
   font-weight: 600;
-  letter-spacing: 0.08em;
+  letter-spacing: 0.09em;
   text-transform: uppercase;
-  color: #6b727d;
+  color: var(--lateral-ink-fraco);
 }
 
 .lateral-item {
+  position: relative;
   display: flex;
   align-items: center;
-  gap: 0.65rem;
-  padding: 0.45rem 0.6rem;
+  gap: 0.7rem;
+  min-height: 34px;
+  padding: 0.4rem 0.6rem;
   border-radius: var(--raio-p);
   color: var(--lateral-ink);
   text-decoration: none;
   font-size: 0.875rem;
   font-weight: 500;
-  transition: background 0.12s, color 0.12s;
+  transition: background 0.15s var(--ease), color 0.15s var(--ease);
 }
 
 .lateral-item svg {
   flex-shrink: 0;
-  opacity: 0.8;
+  opacity: 0.75;
+  transition: color 0.15s var(--ease), opacity 0.15s var(--ease);
 }
 
 .lateral-item:hover {
-  background: rgba(255, 255, 255, 0.05);
+  background: var(--lateral-hover);
   color: var(--lateral-ink-forte);
 }
 
+.lateral-item:hover svg {
+  opacity: 1;
+}
+
+/* onde a pessoa está: fundo um pouco mais claro, ícone dourado e um traço de
+   sol a cobre encostado na borda, como um arco da marca */
 .lateral-item.ativo {
   background: var(--lateral-ativo);
   color: var(--lateral-ink-forte);
-  box-shadow: inset 2px 0 0 #e5894a;
+}
+
+.lateral-item.ativo::before {
+  content: "";
+  position: absolute;
+  left: -0.6rem;
+  top: 50%;
+  width: 3px;
+  height: 18px;
+  border-radius: 0 3px 3px 0;
+  background: linear-gradient(180deg, var(--sol), var(--cobre));
+  transform: translateY(-50%);
 }
 
 .lateral-item.ativo svg {
-  color: #e5894a;
+  color: var(--sol);
   opacity: 1;
 }
 
 .lateral-item:focus-visible,
 .lateral-acao:focus-visible,
 .lateral-sair:focus-visible {
-  outline: 2px solid #e5894a;
+  outline: 2px solid var(--sol);
   outline-offset: 1px;
 }
 
@@ -2826,10 +2905,11 @@ body {
   min-width: 1.35rem;
   padding: 0 0.4rem;
   border-radius: 999px;
-  background: rgba(248, 113, 113, 0.18);
+  background: rgba(248, 113, 113, 0.16);
   color: #fca5a5;
   font-size: 0.72rem;
   font-weight: 600;
+  line-height: 1.5;
   text-align: center;
   font-variant-numeric: tabular-nums;
 }
@@ -2842,6 +2922,7 @@ body {
   border-top: 1px solid var(--lateral-linha);
 }
 
+/* as iniciais dentro de um anel de sol a cobre, o mesmo giro da marca */
 .avatar {
   display: grid;
   place-items: center;
@@ -2849,10 +2930,14 @@ body {
   width: 32px;
   height: 32px;
   border-radius: 50%;
-  background: #2a2f37;
-  color: #f3c7a6;
-  font-size: 0.75rem;
+  background:
+    linear-gradient(#1d2128, #1d2128) padding-box,
+    conic-gradient(from 200deg, var(--sol), var(--cobre), rgba(201, 86, 26, 0.15), var(--sol)) border-box;
+  border: 1.5px solid transparent;
+  color: #f6d9b8;
+  font-size: 0.72rem;
   font-weight: 700;
+  letter-spacing: 0.02em;
 }
 
 .lateral-quem {
@@ -2872,7 +2957,7 @@ body {
 }
 
 .lateral-quem small {
-  color: #7d848f;
+  color: var(--lateral-ink-fraco);
   font-size: 0.72rem;
 }
 
@@ -2893,7 +2978,7 @@ body {
 }
 
 .lateral-sair:hover {
-  background: rgba(255, 255, 255, 0.06);
+  background: var(--lateral-hover);
   color: #fca5a5;
 }
 
@@ -2975,9 +3060,9 @@ body {
 }
 
 .topo h1 {
-  font-size: 1.45rem;
-  font-weight: 700;
-  letter-spacing: -0.025em;
+  font-size: 1.5rem;
+  font-weight: 600;
+  letter-spacing: -0.02em;
 }
 
 .tabela-wrap {
@@ -3023,9 +3108,10 @@ body {
 
 .inicio-topo h1 {
   margin: 0;
-  font-size: 1.65rem;
-  font-weight: 700;
-  letter-spacing: -0.03em;
+  font-size: 1.75rem;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  line-height: 1.2;
 }
 
 .inicio-data {
@@ -3038,25 +3124,78 @@ body {
   text-transform: uppercase;
 }
 
+.inicio-topo {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 0.75rem 1.5rem;
+}
+
+/* ---- está coletando? -------------------------------------------------- */
+
+.selo-coleta {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  padding: 0.3rem 0.75rem;
+  border: 1px solid var(--line-soft);
+  border-radius: 999px;
+  background: var(--surface);
+  box-shadow: var(--shadow);
+  color: var(--ink-2);
+  font-size: 0.8rem;
+  font-weight: 500;
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.selo-coleta:hover {
+  border-color: var(--line);
+  color: var(--ink);
+}
+
+.selo-coleta > span {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--ink-3);
+}
+
+.selo-coleta.ok > span {
+  background: var(--ok);
+  animation: pulsar 1.8s ease-in-out infinite;
+}
+
+.selo-coleta.atrasada > span {
+  background: var(--warn);
+}
+
+.selo-coleta.parada > span {
+  background: var(--crit);
+}
+
+/* ---- números do dia ---------------------------------------------------- */
+
 .indicadores {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
   gap: 0.85rem;
-  margin: 1.5rem 0;
+  margin: 1rem 0 1.25rem;
 }
 
 .indicador {
   position: relative;
   display: flex;
   flex-direction: column;
-  padding: 1rem 1.1rem;
+  padding: 0.9rem 1rem 1rem;
   background: var(--surface);
   border: 1px solid var(--line-soft);
   border-radius: var(--raio);
   box-shadow: var(--shadow);
   color: var(--ink);
   text-decoration: none;
-  transition: box-shadow 0.15s, transform 0.15s, border-color 0.15s;
+  transition: box-shadow 0.18s var(--ease), transform 0.18s var(--ease), border-color 0.18s var(--ease);
 }
 
 .indicador:hover {
@@ -3065,54 +3204,371 @@ body {
   border-color: var(--line);
 }
 
+.indicador-topo {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  margin-bottom: 0.55rem;
+}
+
+/* ícone neutro: a cor fica para o que significa algo (atraso, alerta) */
 .indicador-icone {
   display: grid;
   place-items: center;
-  width: 34px;
-  height: 34px;
-  margin-bottom: 0.75rem;
+  flex-shrink: 0;
+  width: 28px;
+  height: 28px;
   border-radius: 8px;
-  background: var(--accent-soft);
+  background: var(--surface-2);
+  border: 1px solid var(--line-soft);
+  color: var(--ink-3);
+  transition: color 0.18s var(--ease);
+}
+
+.indicador > .indicador-icone {
+  margin-bottom: 0.7rem;
+}
+
+.indicador:hover .indicador-icone {
   color: var(--accent);
 }
 
 .indicador-valor {
-  font-size: 1.85rem;
-  font-weight: 700;
+  font-size: 1.95rem;
+  font-weight: 600;
   letter-spacing: -0.03em;
-  line-height: 1.1;
-  font-variant-numeric: tabular-nums;
+  line-height: 1.05;
 }
 
 .indicador-rotulo {
-  margin-top: 0.15rem;
-  font-size: 0.86rem;
-  font-weight: 600;
+  margin-bottom: 0.45rem;
+  overflow: hidden;
+  font-size: 0.8rem;
+  font-weight: 500;
+  color: var(--ink-2);
+  white-space: nowrap;
+  text-overflow: ellipsis;
 }
 
 .indicador-detalhe {
-  margin-top: 0.2rem;
-  font-size: 0.78rem;
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  margin-top: 0.35rem;
+  font-size: 0.76rem;
   color: var(--ink-3);
 }
 
+.indicador.tom-perigo .indicador-valor,
 .indicador.tom-perigo .indicador-icone {
-  background: var(--crit-soft);
   color: var(--crit);
 }
 
-.indicador.tom-perigo .indicador-valor {
-  color: var(--crit);
+.indicador.tom-atencao .indicador-detalhe,
+.indicador.tom-ok .indicador-detalhe {
+  color: var(--ink-2);
 }
 
-.indicador.tom-atencao .indicador-icone {
-  background: var(--warn-soft);
-  color: var(--warn);
+.indicador.tom-atencao .indicador-detalhe::before,
+.indicador.tom-ok .indicador-detalhe::before {
+  content: "";
+  flex-shrink: 0;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--warn);
 }
 
-.indicador.tom-ok .indicador-icone {
-  background: var(--ok-soft);
-  color: var(--ok);
+.indicador.tom-ok .indicador-detalhe::before {
+  background: var(--ok);
+  animation: pulsar 1.8s ease-in-out infinite;
+}
+
+/* ---- geração do parque: a peça de assinatura do Início ------------------ */
+
+.geracao {
+  display: grid;
+  grid-template-columns: minmax(230px, 290px) minmax(0, 1fr);
+  grid-template-areas: "topo topo" "numeros grafico";
+  gap: 0.9rem 2rem;
+  margin-top: 1.4rem;
+  padding: 1.1rem 1.25rem 1rem;
+  border: 1px solid transparent;
+  border-radius: var(--raio);
+  /* de cima para baixo: o brilho do sol no canto, a superfície e, na borda,
+     um fio de luz dourado que se apaga em cobre */
+  background:
+    radial-gradient(460px 240px at 0% 0%, color-mix(in srgb, var(--sol) 10%, transparent), transparent 70%) padding-box,
+    linear-gradient(var(--surface), var(--surface)) padding-box,
+    linear-gradient(135deg, color-mix(in srgb, var(--sol) 60%, transparent), color-mix(in srgb, var(--cobre) 35%, transparent) 26%, var(--line-soft) 55%) border-box;
+  box-shadow: var(--shadow);
+}
+
+.geracao-vazia {
+  display: block;
+}
+
+.geracao-topo {
+  grid-area: topo;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.geracao-topo h2 {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  margin: 0;
+  font-size: 0.92rem;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+
+.geracao-topo h2 svg {
+  color: var(--energia);
+}
+
+.geracao-numeros {
+  grid-area: numeros;
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  min-width: 0;
+}
+
+.geracao-total {
+  display: flex;
+  flex-direction: column;
+  margin: 0;
+}
+
+/* o número do parque: Inter, como os outros números, só que grande (48 px) */
+.geracao-valor {
+  font-size: 3rem;
+  font-weight: 600;
+  letter-spacing: -0.035em;
+  line-height: 1;
+}
+
+.geracao-valor small {
+  margin-left: 0.35rem;
+  font-size: 1.05rem;
+  font-weight: 500;
+  letter-spacing: 0;
+  color: var(--ink-2);
+}
+
+.geracao-rotulo {
+  margin-top: 0.4rem;
+  font-size: 0.8rem;
+  color: var(--ink-3);
+}
+
+.geracao-dados {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.75rem 1rem;
+  margin: 0;
+  padding-top: 0.9rem;
+  border-top: 1px solid var(--line-soft);
+}
+
+.geracao-dados dt {
+  font-size: 0.74rem;
+  color: var(--ink-3);
+}
+
+.geracao-dados dd {
+  margin: 0.1rem 0 0;
+  font-size: 0.95rem;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.geracao-dados dd small {
+  font-size: 0.72rem;
+  font-weight: 500;
+  color: var(--ink-3);
+}
+
+/* ---- o gráfico ---------------------------------------------------------- */
+
+.grafico-geracao {
+  grid-area: grafico;
+  position: relative;
+  display: grid;
+  grid-template-columns: 3.4rem minmax(0, 1fr);
+  grid-template-rows: 172px 1.4rem;
+  min-width: 0;
+}
+
+.grafico-eixo-y {
+  position: relative;
+}
+
+.grafico-eixo-y span {
+  position: absolute;
+  right: 0.55rem;
+  transform: translateY(50%);
+  font-size: 0.68rem;
+  color: var(--ink-3);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.grafico-eixo-y small {
+  font-size: 0.62rem;
+}
+
+.grafico-area {
+  position: relative;
+  border-radius: 6px;
+}
+
+.grafico-area:focus-visible {
+  outline-offset: 4px;
+}
+
+.grafico-grade span {
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 1px;
+  background: var(--line-soft);
+}
+
+.grafico-media {
+  position: absolute;
+  left: 0;
+  right: 0;
+  z-index: 2;
+  height: 0;
+  border-top: 1px solid color-mix(in srgb, var(--ink-3) 55%, transparent);
+  pointer-events: none;
+}
+
+.grafico-media span {
+  position: absolute;
+  right: 0;
+  bottom: 2px;
+  padding: 0 0.3rem;
+  border-radius: 4px;
+  background: var(--surface);
+  font-size: 0.66rem;
+  color: var(--ink-3);
+}
+
+.grafico-colunas {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: stretch;
+}
+
+/* a coluna inteira é o alvo do mouse, bem maior que a barra */
+.grafico-coluna {
+  position: relative;
+  flex: 1;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  border-radius: 6px;
+}
+
+.grafico-coluna.ativa {
+  background: color-mix(in srgb, var(--ink) 4%, transparent);
+}
+
+.grafico-barra {
+  display: block;
+  width: clamp(4px, 58%, 16px);
+  border-radius: 4px 4px 0 0;
+  background: var(--energia);
+  transform-origin: bottom;
+  animation: crescer 0.45s var(--ease) both;
+  transition: background-color 0.15s var(--ease);
+}
+
+.grafico-coluna.ativa .grafico-barra {
+  background: var(--energia-forte);
+}
+
+/* dia sem leitura: um risco no chão, para não parecer zero */
+.grafico-barra.sem-dado {
+  height: 2px;
+  border-radius: 1px;
+  background: var(--line);
+}
+
+@keyframes crescer {
+  from {
+    transform: scaleY(0);
+  }
+}
+
+.grafico-dica {
+  position: absolute;
+  top: -0.35rem;
+  z-index: 3;
+  display: flex;
+  flex-direction: column;
+  padding: 0.4rem 0.6rem;
+  border: 1px solid var(--line-soft);
+  border-radius: 8px;
+  background: var(--surface);
+  box-shadow: var(--shadow-alta);
+  transform: translate(-50%, -100%);
+  white-space: nowrap;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.12s var(--ease);
+}
+
+.grafico-dica.visivel {
+  opacity: 1;
+}
+
+.grafico-dica.inicio {
+  transform: translate(-12%, -100%);
+}
+
+.grafico-dica.fim {
+  transform: translate(-88%, -100%);
+}
+
+.grafico-dica strong {
+  font-size: 0.88rem;
+  font-weight: 600;
+}
+
+.grafico-dica span {
+  font-size: 0.72rem;
+  color: var(--ink-3);
+}
+
+.grafico-eixo-x {
+  grid-column: 2;
+  position: relative;
+}
+
+.grafico-eixo-x span {
+  position: absolute;
+  top: 0.35rem;
+  transform: translateX(-50%);
+  font-size: 0.68rem;
+  color: var(--ink-3);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+@media (max-width: 900px) {
+  .geracao {
+    grid-template-columns: 1fr;
+    grid-template-areas: "topo" "numeros" "grafico";
+  }
 }
 
 .inicio-grade {
@@ -3450,16 +3906,8 @@ body {
   gap: 0.65rem;
 }
 
-.acesso-marca .marca-selo {
-  width: 34px;
-  height: 34px;
-  border-radius: 10px;
-}
-
 .acesso-marca-nome {
-  font-size: 1.2rem;
-  font-weight: 700;
-  letter-spacing: -0.02em;
+  font-size: 1.45rem;
   color: #fff;
 }
 
@@ -3540,9 +3988,9 @@ body {
 
 .acesso-cabecalho h1 {
   margin: 0;
-  font-size: 1.6rem;
-  font-weight: 700;
-  letter-spacing: -0.03em;
+  font-size: 1.7rem;
+  font-weight: 600;
+  letter-spacing: -0.02em;
 }
 
 .acesso-cabecalho p {
@@ -4077,18 +4525,18 @@ a.resultado:hover {
   border: 0;
   border-radius: var(--raio-p);
   background: none;
-  color: #7d848f;
+  color: var(--lateral-ink-fraco);
   font-size: 0.8rem;
   text-align: left;
 }
 
 .lateral-recolher:hover {
-  background: rgba(255, 255, 255, 0.05);
+  background: var(--lateral-hover);
   color: var(--lateral-ink-forte);
 }
 
 .lateral-recolher:focus-visible {
-  outline: 2px solid #e5894a;
+  outline: 2px solid var(--sol);
   outline-offset: 1px;
 }
 
@@ -4119,10 +4567,8 @@ a.resultado:hover {
     content: "";
     width: 28px;
     height: 28px;
-    border-radius: 8px;
-    background:
-      url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='white' stroke-width='2' stroke-linecap='round'%3E%3Ccircle cx='12' cy='12' r='4'/%3E%3Cpath d='M12 3v1M12 20v1M3 12h1M20 12h1M5.6 5.6l.7.7M17.7 17.7l.7.7M5.6 18.4l.7-.7M17.7 6.3l.7-.7'/%3E%3C/svg%3E") center / 16px no-repeat,
-      linear-gradient(135deg, #c8692b, #97450f);
+    /* O símbolo pequeno do Selebi (o mesmo de app/_ui/marca.tsx). */
+    background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='12 12 76 76'%3E%3Cg fill='none' stroke='%23C9561A' stroke-width='13' stroke-linecap='round'%3E%3Cpath d='M50 20 A15 15 0 0 0 35.18 37.33'/%3E%3Cpath d='M50 20 A15 15 0 0 0 35.18 37.33' transform='rotate(120 50 50)'/%3E%3Cpath d='M50 20 A15 15 0 0 0 35.18 37.33' transform='rotate(240 50 50)'/%3E%3C/g%3E%3Ccircle cx='50' cy='50' r='9.5' fill='%23FFC247'/%3E%3C/svg%3E") center / 28px no-repeat;
   }
 
   html[data-menu="recolhido"] .lateral-nav {
@@ -4284,9 +4730,9 @@ a.resultado:hover {
 
 .cabecalho-titulo h1 {
   margin: 0;
-  font-size: 1.55rem;
-  font-weight: 700;
-  letter-spacing: -0.03em;
+  font-size: 1.6rem;
+  font-weight: 600;
+  letter-spacing: -0.02em;
   line-height: 1.2;
 }
 
@@ -5426,8 +5872,8 @@ a.resultado:hover {
   gap: 0.15rem;
   background: var(--surface);
   overflow-x: auto;
+  overflow-y: hidden;
   flex-wrap: nowrap;
-  scrollbar-width: thin;
 }
 
 .aba {
@@ -6139,9 +6585,7 @@ a.funil-rotulo:hover {
   max-width: 760px;
   margin: 0 auto;
   padding: 1.25rem 0;
-  font-weight: 700;
-  font-size: 1.05rem;
-  letter-spacing: -0.02em;
+  font-size: 1.15rem;
 }
 
 .documento-publico {
@@ -6283,4 +6727,1302 @@ a.funil-rotulo:hover {
   display: inline-flex;
   align-items: center;
   gap: 0.35rem;
+}
+
+/* =========================================================================
+ * Órbita: acabamento.
+ *
+ * A última camada, de propósito no fim: aqui moram as peças que se repetem
+ * em todas as telas (botão, filtro, tabela, paginação, etiqueta) no desenho
+ * novo, e por estar depois de tudo vale sobre as versões antigas espalhadas
+ * acima. As regras de base que guiaram cada peça:
+ * - organizado: colunas alinhadas, um ponto de cor só onde há estado, número
+ *   à direita, "26–50 de 190" em toda lista longa (NN/g, Pencil & Paper,
+ *   GOV.UK);
+ * - moderno: bordas finas, sombra curta, raio 8/12, movimento de 150 ms,
+ *   rolagem fina;
+ * - lindo: o cobre e o dourado da marca usados pouco, para valerem quando
+ *   aparecem.
+ * ========================================================================= */
+
+:root {
+  /* altura da barra de busca fixa no topo: o cabeçalho das tabelas para logo abaixo dela */
+  --altura-topo: 57px;
+  --rolagem: rgba(17, 20, 24, 0.2);
+  --rolagem-forte: rgba(17, 20, 24, 0.36);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --rolagem: rgba(255, 255, 255, 0.14);
+    --rolagem-forte: rgba(255, 255, 255, 0.28);
+  }
+}
+
+/* ---- barras de rolagem ---------------------------------------------------
+ * Finas, sem as setinhas do Windows, com o polegar arredondado e o trilho
+ * transparente. Chrome, Edge, Brave e Safari usam o ::-webkit-scrollbar; o
+ * Firefox, que não tem ele, usa as propriedades padrão. As duas formas não se
+ * misturam no mesmo elemento: no Chrome, quem define scrollbar-color perde o
+ * ::-webkit-scrollbar. */
+
+@supports selector(::-webkit-scrollbar) {
+  ::-webkit-scrollbar {
+    width: 12px;
+    height: 12px;
+  }
+
+  ::-webkit-scrollbar-track,
+  ::-webkit-scrollbar-corner {
+    background: transparent;
+  }
+
+  ::-webkit-scrollbar-thumb {
+    background-color: var(--rolagem);
+    background-clip: padding-box;
+    border: 3px solid transparent;
+    border-radius: 999px;
+    min-height: 40px;
+  }
+
+  ::-webkit-scrollbar-thumb:hover {
+    background-color: var(--rolagem-forte);
+  }
+
+  ::-webkit-scrollbar-button {
+    display: none;
+    width: 0;
+    height: 0;
+  }
+}
+
+@supports not selector(::-webkit-scrollbar) {
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: var(--rolagem) transparent;
+  }
+}
+
+/* ---- botões ----------------------------------------------------------- */
+
+.botao {
+  min-height: 34px;
+  padding: 0.4rem 0.85rem;
+  border-radius: var(--raio-p);
+  font-size: 0.84rem;
+  font-weight: 600;
+  transition:
+    filter 0.15s var(--ease),
+    background-color 0.15s var(--ease),
+    border-color 0.15s var(--ease),
+    color 0.15s var(--ease),
+    box-shadow 0.15s var(--ease),
+    transform 0.1s var(--ease);
+}
+
+/* a ação principal: cobre em degradê curto, com um fio de luz no alto */
+.botao:not(.secundario):not(.perigo):not(.botao-whatsapp),
+.botao-link,
+.botao-grande,
+.lateral-acao,
+.form-login button,
+.oc-acoes button.primario,
+.os-acoes button.primario,
+.ficha-acoes button {
+  color: #fff;
+  background: linear-gradient(180deg, var(--acao-topo), var(--acao-base));
+  border: 1px solid var(--acao-borda);
+  box-shadow:
+    0 1px 2px rgba(17, 20, 24, 0.16),
+    inset 0 1px 0 rgba(255, 255, 255, 0.16);
+}
+
+.botao:not(.secundario):not(.perigo):not(.botao-whatsapp):hover,
+.botao-link:hover,
+.botao-grande:hover:not(:disabled),
+.lateral-acao:hover,
+.form-login button:hover:not(:disabled),
+.oc-acoes button.primario:hover,
+.os-acoes button.primario:hover,
+.ficha-acoes button:hover {
+  color: #fff;
+  background: linear-gradient(180deg, var(--acao-topo), var(--acao-base));
+  border-color: var(--acao-borda);
+  filter: brightness(1.08);
+}
+
+.botao:active:not(:disabled),
+.botao-grande:active:not(:disabled) {
+  transform: translateY(1px);
+}
+
+.botao.secundario {
+  color: var(--ink);
+  background: var(--surface);
+  border: 1px solid var(--line);
+  box-shadow: var(--shadow);
+  font-weight: 500;
+}
+
+.botao.secundario:hover {
+  color: var(--ink);
+  background: var(--surface-2);
+  border-color: color-mix(in srgb, var(--ink) 22%, var(--line));
+  filter: none;
+}
+
+.botao.botao-whatsapp {
+  background: linear-gradient(180deg, #23a058, #1c8a4a);
+  border-color: #17783f;
+  box-shadow:
+    0 1px 2px rgba(17, 20, 24, 0.16),
+    inset 0 1px 0 rgba(255, 255, 255, 0.16);
+}
+
+.botao.botao-whatsapp:hover {
+  filter: brightness(1.07);
+}
+
+/* botão só de ícone, para a ação discreta de uma linha */
+.botao-icone {
+  display: inline-grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  border: 1px solid transparent;
+  border-radius: var(--raio-p);
+  color: var(--ink-3);
+  transition:
+    background-color 0.15s var(--ease),
+    border-color 0.15s var(--ease),
+    color 0.15s var(--ease);
+}
+
+.botao-icone:hover {
+  background: var(--surface-2);
+  border-color: var(--line-soft);
+  color: var(--accent);
+}
+
+/* ---- filtros: etiquetas, botões segmentados e select -------------------- */
+
+.filtros {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+}
+
+.filtro {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  min-height: 30px;
+  padding: 0 0.75rem;
+  border: 1px solid var(--line-soft);
+  border-radius: 999px;
+  background: var(--surface);
+  color: var(--ink-2);
+  font-size: 0.8rem;
+  font-weight: 500;
+  text-decoration: none;
+  white-space: nowrap;
+  transition:
+    background-color 0.15s var(--ease),
+    border-color 0.15s var(--ease),
+    color 0.15s var(--ease);
+}
+
+.filtro:hover {
+  border-color: var(--line);
+  background: var(--surface-2);
+  color: var(--ink);
+}
+
+/* escolhido: grafite cheio, neutro. O cobre fica para ação. */
+.filtro.ativo,
+.filtro.perigo.ativo {
+  border-color: var(--ink);
+  background: var(--ink);
+  color: var(--surface);
+}
+
+/* "perigo" deixou de pintar a etiqueta toda: é um ponto vermelho antes do nome */
+.filtro.perigo:not(.ativo) {
+  border-color: var(--line-soft);
+  color: var(--ink-2);
+}
+
+.filtro.perigo::before {
+  content: "";
+  flex-shrink: 0;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--crit);
+}
+
+.filtro-n {
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: var(--ink-3);
+  font-variant-numeric: tabular-nums;
+}
+
+.filtro.ativo .filtro-n {
+  color: color-mix(in srgb, var(--surface) 72%, transparent);
+}
+
+.segmentado {
+  display: inline-flex;
+  gap: 2px;
+  padding: 3px;
+  border: 1px solid var(--line-soft);
+  border-radius: 10px;
+  background: var(--surface-2);
+}
+
+.segmentado button {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  min-height: 28px;
+  padding: 0 0.75rem;
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--ink-2);
+  font-size: 0.8rem;
+  font-weight: 500;
+  transition:
+    background-color 0.15s var(--ease),
+    color 0.15s var(--ease),
+    box-shadow 0.15s var(--ease);
+}
+
+.segmentado button:hover {
+  color: var(--ink);
+}
+
+.segmentado button[aria-pressed="true"] {
+  background: var(--surface);
+  color: var(--ink);
+  font-weight: 600;
+  box-shadow:
+    0 1px 2px rgba(17, 20, 24, 0.08),
+    0 0 0 1px var(--line-soft);
+}
+
+.segmentado-n {
+  font-size: 0.72rem;
+  color: var(--ink-3);
+  font-variant-numeric: tabular-nums;
+}
+
+.seletor-filtro {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  min-height: 32px;
+  padding: 0 0.15rem 0 0.75rem;
+  border: 1px solid var(--line-soft);
+  border-radius: var(--raio-p);
+  background: var(--surface);
+  color: var(--ink-3);
+  font-size: 0.8rem;
+  transition:
+    border-color 0.15s var(--ease),
+    box-shadow 0.15s var(--ease);
+}
+
+.seletor-filtro:hover {
+  border-color: var(--line);
+}
+
+.seletor-filtro > span {
+  font-weight: 500;
+}
+
+.seletor-filtro select {
+  max-width: 16rem;
+  height: 30px;
+  padding: 0 0.5rem;
+  border: 0;
+  background: transparent;
+  color: var(--ink);
+  font-size: 0.82rem;
+  font-weight: 600;
+  box-shadow: none;
+  cursor: pointer;
+}
+
+.seletor-filtro select:focus-visible {
+  outline: none;
+  box-shadow: none;
+}
+
+.seletor-filtro:focus-within {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-soft);
+}
+
+.seletor-filtro.ativo {
+  border-color: color-mix(in srgb, var(--accent) 45%, var(--line-soft));
+}
+
+.campo-busca input {
+  min-height: 34px;
+  border-color: var(--line-soft);
+  background: var(--surface);
+}
+
+.campo-busca input:hover {
+  border-color: var(--line);
+}
+
+.campo-limpar {
+  position: absolute;
+  right: 0.35rem;
+  display: grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--ink-3);
+}
+
+.campo-limpar:hover {
+  background: var(--surface-2);
+  color: var(--ink);
+}
+
+/* ---- etiquetas de estado ------------------------------------------------- */
+
+.pilula {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.32rem;
+  min-height: 20px;
+  padding: 0.1rem 0.5rem;
+  border-radius: 999px;
+  font-size: 0.7rem;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  line-height: 1.2;
+  white-space: nowrap;
+  vertical-align: middle;
+}
+
+/* estado (da OS, do alerta) leva um ponto: cor e texto juntos, nunca só cor */
+.pilula[class*="st-"]::before,
+.pilula[class*="sev-"]::before {
+  content: "";
+  flex-shrink: 0;
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: currentColor;
+}
+
+/* o que falta, numa tabela: etiqueta neutra com um ponto de peso */
+.pendencias {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.3rem;
+}
+
+.pendencia {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.38rem;
+  min-height: 22px;
+  padding: 0.1rem 0.5rem;
+  border: 1px solid var(--line-soft);
+  border-radius: 6px;
+  background: var(--surface-2);
+  color: var(--ink-2);
+  font-size: 0.74rem;
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+.pendencia::before {
+  content: "";
+  flex-shrink: 0;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--crit);
+}
+
+.pendencia.meio::before {
+  background: var(--warn);
+}
+
+.pendencia.mais {
+  color: var(--ink-3);
+  cursor: help;
+}
+
+.pendencia.mais::before {
+  display: none;
+}
+
+.progresso-mini {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.55rem;
+  color: var(--ink-2);
+  font-size: 0.78rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.progresso-trilho {
+  width: 64px;
+  height: 6px;
+  border-radius: 999px;
+  background: var(--surface-3);
+  overflow: hidden;
+}
+
+.progresso-trilho > span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--cobre);
+}
+
+.progresso-mini.completo .progresso-trilho > span {
+  background: var(--ok);
+}
+
+.avatar-mini {
+  display: inline-grid;
+  place-items: center;
+  flex-shrink: 0;
+  width: 24px;
+  height: 24px;
+  border: 1px solid color-mix(in srgb, var(--cobre) 24%, transparent);
+  border-radius: 50%;
+  background: color-mix(in srgb, var(--cobre) 13%, var(--surface));
+  color: var(--accent);
+  font-size: 0.6rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  line-height: 1;
+}
+
+.avatar-mini.sem-dono {
+  border: 1px dashed var(--line);
+  background: transparent;
+  color: var(--ink-3);
+}
+
+/* ---- tabelas ------------------------------------------------------------- */
+
+.tabela th,
+.tabela td {
+  padding: 0.6rem 0.85rem;
+  border-bottom: 1px solid var(--line-soft);
+}
+
+.tabela thead th {
+  height: 38px;
+  padding-top: 0;
+  padding-bottom: 0;
+  font-size: 0.68rem;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+  background: var(--surface-2);
+  border-bottom: 1px solid var(--line-soft);
+}
+
+.tabela tbody tr {
+  transition: background-color 0.12s var(--ease);
+}
+
+/* o dado de apoio fica um tom abaixo; o nome que identifica a linha, em tinta cheia */
+.tabela tbody td {
+  color: var(--ink-2);
+}
+
+.tabela tbody td strong,
+.tabela tbody td.forte,
+.tabela tbody .celula-dupla > span:first-child {
+  color: var(--ink);
+}
+
+/* a linha sob o mouse acende de leve; listras atrapalham os outros estados (Pencil & Paper) */
+.tabela tbody tr:hover {
+  background: color-mix(in srgb, var(--ink) 3%, transparent);
+}
+
+.tabela td .pilula + .pilula {
+  margin-left: 0.25rem;
+}
+
+/* o nome que identifica a linha fica em tinta forte, não em cobre */
+.tabela a.celula-dupla {
+  color: var(--ink);
+  text-decoration: none;
+}
+
+.tabela a.celula-dupla strong {
+  font-weight: 600;
+  transition: color 0.12s var(--ease);
+}
+
+.tabela a.celula-dupla:hover strong {
+  color: var(--accent);
+}
+
+.celula-dupla small {
+  color: var(--ink-3);
+  font-size: 0.76rem;
+}
+
+.com-icone {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+}
+
+.col-acao {
+  width: 1%;
+  text-align: right;
+  white-space: nowrap;
+}
+
+/* ---- lista: barra de filtros, tabela e paginação num bloco só ------------- */
+
+.lista {
+  min-width: 0;
+  scroll-margin-top: calc(var(--altura-topo) + 0.75rem);
+  border: 1px solid var(--line-soft);
+  border-radius: var(--raio);
+  background: var(--surface);
+  box-shadow: var(--shadow);
+}
+
+.lista-barra {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.6rem 0.75rem;
+  padding: 0.75rem 1rem;
+  border-bottom: 1px solid var(--line-soft);
+}
+
+.lista-barra .campo-busca {
+  flex: 1 1 220px;
+  min-width: 200px;
+  max-width: 320px;
+}
+
+.lista-barra-rotulo {
+  font-size: 0.68rem;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+}
+
+.lista .vazio-novo {
+  padding: 2.5rem 1rem;
+}
+
+.lista .tabela {
+  min-width: 720px;
+}
+
+/* o cabeçalho da tabela gruda logo abaixo da barra de busca do topo */
+.lista .tabela thead th {
+  position: sticky;
+  top: var(--altura-topo);
+  z-index: 2;
+}
+
+.lista .tabela tbody tr:last-child td {
+  border-bottom: 0;
+}
+
+.tabela-rolagem {
+  overflow: visible;
+}
+
+@media (max-width: 1000px) {
+  .tabela-rolagem {
+    overflow-x: auto;
+  }
+
+  .lista .tabela thead th {
+    position: static;
+  }
+}
+
+.como-ler-solto,
+.aviso-solto {
+  margin: 0;
+  max-width: none;
+}
+
+/* ---- paginação ------------------------------------------------------------ */
+
+.paginacao {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.6rem 1rem;
+  padding: 0.65rem 1rem;
+}
+
+.lista .paginacao {
+  border-top: 1px solid var(--line-soft);
+}
+
+.paginacao-resumo {
+  margin: 0;
+  font-size: 0.8rem;
+  color: var(--ink-3);
+}
+
+.paginacao-resumo strong {
+  color: var(--ink);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.paginacao-lista {
+  display: flex;
+  align-items: center;
+  gap: 0.2rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.paginacao-numero,
+.paginacao-seta {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.2rem;
+  min-width: 34px;
+  height: 34px;
+  padding: 0 0.55rem;
+  border: 1px solid transparent;
+  border-radius: var(--raio-p);
+  color: var(--ink-2);
+  font-size: 0.84rem;
+  font-weight: 500;
+  text-decoration: none;
+  font-variant-numeric: tabular-nums;
+  transition:
+    background-color 0.15s var(--ease),
+    border-color 0.15s var(--ease),
+    color 0.15s var(--ease);
+}
+
+.paginacao-numero:hover,
+.paginacao-seta:hover {
+  border-color: var(--line-soft);
+  background: var(--surface-2);
+  color: var(--ink);
+}
+
+.paginacao-numero[aria-current="page"] {
+  border-color: color-mix(in srgb, var(--accent) 35%, transparent);
+  background: var(--accent-soft);
+  color: var(--accent);
+  font-weight: 700;
+}
+
+.paginacao-seta.desligada {
+  opacity: 0.38;
+}
+
+.paginacao-reticencias {
+  min-width: 22px;
+  text-align: center;
+  color: var(--ink-3);
+}
+
+@media (max-width: 640px) {
+  .paginacao {
+    justify-content: center;
+  }
+
+  .paginacao-seta span {
+    display: none;
+  }
+}
+
+/* ---- cobrar documentos ---------------------------------------------------- */
+
+.tabela-cobranca td {
+  vertical-align: middle;
+}
+
+.tabela-cobranca td:nth-child(2) {
+  min-width: 21rem;
+}
+
+.sem-telefone {
+  color: var(--warn) !important;
+}
+
+.adicionar-telefone {
+  position: relative;
+  display: inline-block;
+  text-align: left;
+}
+
+.adicionar-telefone summary {
+  list-style: none;
+}
+
+.adicionar-telefone summary::-webkit-details-marker {
+  display: none;
+}
+
+.adicionar-telefone .form-telefone {
+  position: absolute;
+  right: 0;
+  top: calc(100% + 6px);
+  z-index: 20;
+  display: grid;
+  gap: 0.45rem;
+  width: 290px;
+  padding: 0.75rem;
+  border: 1px solid var(--line-soft);
+  border-radius: var(--raio);
+  background: var(--surface);
+  box-shadow: var(--shadow-alta);
+}
+
+.adicionar-telefone .form-telefone label {
+  font-size: 0.78rem;
+  font-weight: 600;
+  white-space: normal;
+}
+
+.adicionar-telefone .form-telefone > div {
+  display: flex;
+  gap: 0.4rem;
+}
+
+.adicionar-telefone .form-telefone input {
+  flex: 1;
+  width: auto;
+  background: var(--surface);
+}
+
+@media (max-width: 1000px) {
+  .adicionar-telefone .form-telefone {
+    position: static;
+    margin-top: 0.4rem;
+    width: 260px;
+    box-shadow: none;
+  }
+}
+
+/* ---- Início: linhas dos painéis em colunas fixas ------------------------- */
+
+.linha-os,
+.linha-alerta {
+  display: grid;
+  grid-template-columns: 30px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 0.8rem;
+  padding: 0.65rem 1.1rem;
+}
+
+.linha-os {
+  grid-template-columns: 30px minmax(0, 1fr) 24px 108px 96px;
+}
+
+.linha-os-corpo small {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.linha-os-status {
+  display: flex;
+}
+
+/* o porquê da linha estar ali: atrasada, sem dono, crítica… em ícone e cor */
+.linha-icone {
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  border: 1px solid var(--line-soft);
+  border-radius: var(--raio-p);
+  background: var(--surface-2);
+  color: var(--ink-3);
+}
+
+.linha-icone.m-atrasada,
+.linha-icone.s-critico {
+  border-color: transparent;
+  background: var(--crit-soft);
+  color: var(--crit);
+}
+
+.linha-icone.m-sem-dono,
+.linha-icone.m-parado,
+.linha-icone.s-atencao {
+  border-color: transparent;
+  background: var(--warn-soft);
+  color: var(--warn);
+}
+
+.linha-quando {
+  justify-self: end;
+  font-size: 0.78rem;
+  color: var(--ink-3);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.linha-quando.atrasada {
+  color: var(--crit);
+  font-weight: 600;
+}
+
+.linha-quando.parado {
+  color: var(--warn);
+  font-weight: 600;
+}
+
+@media (max-width: 640px) {
+  .linha-os {
+    grid-template-columns: 30px minmax(0, 1fr) auto;
+  }
+
+  .linha-os .avatar-mini,
+  .linha-os-status {
+    display: none;
+  }
+}
+
+/* ---- esteira ---------------------------------------------------------------- */
+
+.esteira-barra {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.6rem 0.75rem;
+  padding: 1rem clamp(1rem, 3vw, 2rem) 0.25rem;
+}
+
+.esteira-barra .campo-busca {
+  flex: 1 1 260px;
+  max-width: 360px;
+}
+
+.esteira-barra input::-webkit-search-cancel-button {
+  display: none;
+}
+
+.pagina-esteira .esteira {
+  gap: 0.75rem;
+  padding: 0.75rem clamp(1rem, 3vw, 2rem) 1.5rem;
+}
+
+.esteira .coluna {
+  flex: 0 0 272px;
+  max-height: calc(100vh - 250px);
+  min-height: 0;
+  border: 1px solid var(--line-soft);
+  border-radius: var(--raio);
+  background: var(--surface-2);
+  box-shadow: none;
+  transition: opacity 0.2s var(--ease);
+}
+
+.esteira .coluna.vazia {
+  flex-basis: 200px;
+  border-style: dashed;
+  background: transparent;
+}
+
+/* filtrando, a etapa sem nenhum achado encolhe: os achados ficam perto uns dos outros */
+.esteira .coluna.apagada {
+  flex-basis: 180px;
+  opacity: 0.55;
+}
+
+.esteira .coluna.apagada .desc {
+  display: none;
+}
+
+.esteira .coluna-topo {
+  display: grid;
+  gap: 0.25rem;
+  padding: 0.75rem 0.85rem 0.6rem;
+  border-bottom: 0;
+}
+
+.esteira .coluna-topo .ordem {
+  color: var(--ink-3);
+  font-size: 0.64rem;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+}
+
+.esteira .coluna-topo .nome {
+  margin: 0;
+  font-size: 0.9rem;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+
+.esteira .coluna-topo .qtd {
+  min-width: 1.6rem;
+  padding: 0.05rem 0.45rem;
+  border: 1px solid var(--line-soft);
+  border-radius: 999px;
+  background: var(--surface);
+  color: var(--ink-2);
+  font-size: 0.74rem;
+  font-weight: 600;
+  text-align: center;
+}
+
+.esteira .coluna-topo .desc {
+  overflow: hidden;
+  color: var(--ink-3);
+  font-size: 0.74rem;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.coluna-achados,
+.coluna-vazia {
+  margin: 0;
+  padding: 0 0.85rem 0.5rem;
+  color: var(--ink-3);
+  font-size: 0.74rem;
+}
+
+.coluna-vazia {
+  padding-bottom: 0.9rem;
+}
+
+.esteira .cartoes {
+  display: grid;
+  gap: 0.45rem;
+  padding: 0 0.5rem 0.5rem;
+  overflow-y: auto;
+}
+
+.cartao-projeto {
+  display: grid;
+  gap: 0.2rem;
+  padding: 0.65rem 0.7rem 0.55rem;
+  border: 1px solid var(--line-soft);
+  border-radius: 10px;
+  background: var(--surface);
+  box-shadow: var(--shadow);
+  transition:
+    border-color 0.15s var(--ease),
+    box-shadow 0.15s var(--ease),
+    transform 0.15s var(--ease);
+}
+
+.cartao-projeto:hover {
+  border-color: var(--line);
+  box-shadow: var(--shadow-alta);
+  transform: translateY(-1px);
+}
+
+.cartao-projeto-titulo {
+  overflow: hidden;
+  color: var(--ink);
+  font-size: 0.86rem;
+  font-weight: 600;
+  letter-spacing: -0.005em;
+  text-decoration: none;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.cartao-projeto-titulo:hover {
+  color: var(--accent);
+}
+
+.cartao-projeto-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.35rem;
+  color: var(--ink-3);
+  font-size: 0.75rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.cartao-projeto-extra {
+  display: grid;
+  justify-items: start;
+  gap: 0.35rem;
+  margin-top: 0.2rem;
+}
+
+.cartao-projeto-extra form {
+  width: 100%;
+}
+
+.cartao-projeto .botao-cartao {
+  width: 100%;
+  min-height: 28px;
+  font-size: 0.76rem;
+}
+
+.cartao-projeto-rodape {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  margin-top: 0.3rem;
+}
+
+/* quanto tempo na etapa: neutro, âmbar a partir de 15 dias, vermelho com prazo estourado */
+.idade {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  margin-right: auto;
+  padding: 0.12rem 0.45rem;
+  border-radius: 999px;
+  background: var(--surface-2);
+  color: var(--ink-3);
+  font-size: 0.72rem;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.idade.n-atencao {
+  background: var(--warn-soft);
+  color: var(--warn);
+}
+
+.idade.n-critico {
+  background: var(--crit-soft);
+  color: var(--crit);
+}
+
+/* mover de etapa: aparece ao passar o mouse ou com o teclado no cartão;
+   em tela de toque fica sempre à mostra */
+.cartao-projeto .mover {
+  display: flex;
+  gap: 2px;
+  margin: 0;
+  opacity: 0;
+  transition: opacity 0.15s var(--ease);
+}
+
+.cartao-projeto:hover .mover,
+.cartao-projeto:focus-within .mover {
+  opacity: 1;
+}
+
+@media (hover: none) {
+  .cartao-projeto .mover {
+    opacity: 1;
+  }
+}
+
+.cartao-projeto .mover button {
+  display: grid;
+  place-items: center;
+  width: 26px;
+  height: 24px;
+  padding: 0;
+  border: 1px solid var(--line-soft);
+  border-radius: 6px;
+  background: var(--surface);
+  color: var(--ink-2);
+}
+
+.cartao-projeto .mover button:hover {
+  border-color: color-mix(in srgb, var(--accent) 45%, var(--line-soft));
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+
+.coluna-mais {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.35rem;
+  margin: 0 0.5rem 0.6rem;
+  min-height: 32px;
+  border: 1px dashed var(--line);
+  border-radius: var(--raio-p);
+  background: transparent;
+  color: var(--ink-2);
+  font-size: 0.78rem;
+  font-weight: 600;
+  transition:
+    background-color 0.15s var(--ease),
+    color 0.15s var(--ease),
+    border-color 0.15s var(--ease);
+}
+
+.coluna-mais span {
+  color: var(--ink-3);
+  font-weight: 500;
+}
+
+.coluna-mais:hover {
+  border-color: color-mix(in srgb, var(--accent) 45%, var(--line));
+  background: var(--surface);
+  color: var(--accent);
+}
+
+/* ---- estado vazio: o ícone ganha um arco da marca em volta --------------- */
+
+.vazio-icone {
+  position: relative;
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+}
+
+.vazio-icone::before {
+  content: "";
+  position: absolute;
+  inset: -7px;
+  border: 1.5px solid transparent;
+  border-top-color: var(--cobre);
+  border-right-color: color-mix(in srgb, var(--sol) 75%, transparent);
+  border-radius: 50%;
+  transform: rotate(-40deg);
+}
+
+/* ---- caminho de etapas ---------------------------------------------------- */
+
+.caminho {
+  border-radius: 10px;
+}
+
+.caminho-passo {
+  background: var(--surface);
+  color: var(--ink-3);
+  box-shadow: inset 0 0 0 1px var(--line-soft);
+}
+
+.caminho-passo.feita {
+  background: color-mix(in srgb, var(--cobre) 12%, var(--surface));
+  color: var(--accent);
+}
+
+.caminho-passo.atual {
+  background: linear-gradient(90deg, var(--acao-topo), var(--acao-base));
+  color: #fff;
+}
+
+/* ---- menu recolhido: o traço do item ativo encosta na borda certa -------- */
+
+@media (min-width: 901px) {
+  html[data-menu="recolhido"] .lateral-item.ativo::before {
+    left: -0.5rem;
+  }
+}
+
+/* ---- telas de acesso: a órbita da marca, grande e apagada, girando ------- */
+
+.acesso-marca {
+  background:
+    radial-gradient(640px 420px at 12% 112%, rgba(255, 194, 71, 0.2), transparent 65%),
+    radial-gradient(520px 360px at 96% -8%, rgba(201, 86, 26, 0.22), transparent 60%),
+    linear-gradient(160deg, #13161c, #0c0e12);
+}
+
+/* gira a imagem inteira, não os arcos lá dentro: assim quem gira é a placa de
+   vídeo (uma camada só), sem redesenhar o SVG a cada quadro */
+.acesso-orbita {
+  position: absolute !important;
+  right: -24%;
+  bottom: -11%;
+  width: min(520px, 78%);
+  aspect-ratio: 1;
+  pointer-events: none;
+  animation: girar 120s linear infinite;
+  will-change: transform;
+}
+
+@keyframes girar {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.acesso-marca-meio li svg {
+  color: var(--sol);
+}
+
+@media (max-width: 860px) {
+  .acesso-orbita {
+    display: none;
+  }
+}
+
+/* ---- agenda: o nome do cliente aparece inteiro --------------------------- */
+
+/* sábado e domingo quase sempre vazios: colunas mais estreitas, mais espaço para a semana */
+.grade-semana thead th:nth-child(n + 7) {
+  width: 8%;
+}
+
+.grade-semana th.pessoa {
+  width: 128px;
+}
+
+.cartao-os {
+  gap: 0.1rem;
+  padding: 0.45rem 0.55rem;
+  border-radius: var(--raio-p);
+  background: var(--surface);
+  box-shadow: var(--shadow);
+}
+
+.cartao-os .linha1 {
+  justify-content: space-between;
+  font-variant-numeric: tabular-nums;
+}
+
+.cartao-os .linha1 strong {
+  font-weight: 700;
+}
+
+/* o número da OS fica em segundo plano: quem bate o olho procura a hora e o cliente */
+.cartao-os .linha1 {
+  color: var(--ink-3);
+  font-size: 0.7rem;
+}
+
+.cartao-os .linha1 strong {
+  color: var(--ink);
+  font-size: 0.78rem;
+}
+
+/* até duas linhas para o nome, em vez de cortar em "Luciana Pr…" */
+.cartao-os .linha2 {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  line-height: 1.25;
+}
+
+.cartao-os .linha3 {
+  font-size: 0.7rem;
 }

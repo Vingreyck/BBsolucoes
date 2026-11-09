@@ -1,5 +1,5 @@
 import { eq } from "drizzle-orm";
-import { CheckCircle2, Info, MessageCircle } from "lucide-react";
+import { CheckCircle2, Info, MessageCircle, Phone, Plus } from "lucide-react";
 import Link from "next/link";
 
 import { exigirAcessoDocumentos } from "@/auth/permissao";
@@ -8,6 +8,8 @@ import { diasEntre, haQuantoTempo, linkWhatsapp, mensagemDeCobranca, ROTULO_PEDI
 import { filaDeCobranca, ordenarFila } from "@/documentos/fila-cobranca";
 
 import { Cabecalho, Vazio } from "../../_ui";
+import { endereco, paginar, Paginacao } from "../../_ui/paginacao";
+import { Pendencias } from "../../_ui/pendencias";
 import { salvarTelefone } from "../actions";
 import { BotaoCobrar } from "./botao-cobrar";
 
@@ -23,9 +25,9 @@ export const dynamic = "force-dynamic";
  * mesma empresa no mesmo dia —, e cada envio fica anotado com quem e quando,
  * para o próximo da equipe não cobrar de novo quem acabou de ser cobrado.
  */
-export default async function Cobranca({ searchParams }: { searchParams: Promise<{ tipo?: string }> }) {
+export default async function Cobranca({ searchParams }: { searchParams: Promise<{ tipo?: string; pagina?: string }> }) {
   const acesso = await exigirAcessoDocumentos();
-  const { tipo = "" } = await searchParams;
+  const { tipo = "", pagina: paginaPedida } = await searchParams;
   const empresaId = acesso.usuario.empresaId;
 
   const [fila, empresa] = await Promise.all([
@@ -40,6 +42,7 @@ export default async function Cobranca({ searchParams }: { searchParams: Promise
   const linhas = ordenarFila(tipo ? fila.filter((l) => l.tipos.includes(tipo)) : fila);
   const semTelefone = fila.filter((l) => !l.whatsapp).length;
   const agora = new Date();
+  const pagina = paginar(linhas, paginaPedida);
 
   return (
     <main>
@@ -61,13 +64,13 @@ export default async function Cobranca({ searchParams }: { searchParams: Promise
           </Vazio>
         </div>
       ) : (
-        <>
-          <div className="caixa-filtros">
-            <div className="linha-filtro">
-              <span className="rotulo-filtro">Falta</span>
-              <nav className="filtros">
-                <Link href="/documentos/cobranca" className={`filtro${tipo ? "" : " ativo"}`}>
-                  Tudo ({fila.length})
+        <div className="pagina-corpo pilha">
+          <section className="lista" id="lista" aria-label="Fila de cobrança">
+            <div className="lista-barra">
+              <span className="lista-barra-rotulo">Falta</span>
+              <nav className="filtros" aria-label="Documento que falta">
+                <Link href="/documentos/cobranca" className={`filtro${tipo ? "" : " ativo"}`} aria-current={tipo ? undefined : "page"}>
+                  Tudo <span className="filtro-n">{fila.length}</span>
                 </Link>
                 {tipos.map(([t, n]) => (
                   <Link
@@ -76,14 +79,124 @@ export default async function Cobranca({ searchParams }: { searchParams: Promise
                     className={`filtro${tipo === t ? " ativo" : ""}`}
                     aria-current={tipo === t ? "page" : undefined}
                   >
-                    {ROTULO_PEDIDO[t] ?? t} ({n})
+                    {ROTULO_PEDIDO[t] ?? t} <span className="filtro-n">{n}</span>
                   </Link>
                 ))}
               </nav>
             </div>
-          </div>
 
-          <details className="como-ler">
+            {linhas.length > 0 && (
+              <>
+                <div className="tabela-rolagem">
+                  <table className="tabela tabela-cobranca">
+                    <thead>
+                      <tr>
+                        <th scope="col">Cliente</th>
+                        <th scope="col">Falta mandar</th>
+                        <th scope="col">Etapa</th>
+                        <th scope="col">Última cobrança</th>
+                        <th scope="col" className="col-acao">
+                          <span className="sr-only">Ação</span>
+                        </th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {pagina.itens.map((l) => {
+                        const recente =
+                          l.ultimaCobranca && agora.getTime() - l.ultimaCobranca.quando.getTime() < 2 * 86_400_000;
+                        const texto = mensagemDeCobranca({
+                          cliente: l.cliente,
+                          empresa: empresa?.nome ?? "nossa empresa",
+                          tipos: l.tipos,
+                          jaCobrado: l.vezes > 0,
+                        });
+                        return (
+                          <tr key={l.projetoId} className={recente ? "linha-esmaecida" : undefined}>
+                            <td>
+                              <Link className="celula-dupla" href={`/documentos/${l.projetoId}`}>
+                                <strong>{l.cliente}</strong>
+                                {l.telefone ? (
+                                  <small className="com-icone">
+                                    <Phone size={12} aria-hidden /> {l.telefone}
+                                  </small>
+                                ) : (
+                                  <small className="sem-telefone">sem telefone</small>
+                                )}
+                              </Link>
+                            </td>
+                            <td>
+                              <Pendencias itens={l.tipos.map((t) => ({ rotulo: ROTULO_PEDIDO[t] ?? t }))} />
+                            </td>
+                            <td>
+                              <span className="celula-dupla">
+                                <span>{l.etapa}</span>
+                                {l.etapaDesde && <small>{naEtapa(diasEntre(l.etapaDesde, agora))}</small>}
+                              </span>
+                            </td>
+                            <td>
+                              {l.ultimaCobranca ? (
+                                <span className="celula-dupla">
+                                  <span>{haQuantoTempo(l.ultimaCobranca.quando, agora)}</span>
+                                  <small>
+                                    {[l.ultimaCobranca.por?.split(" ")[0], l.vezes > 1 ? `${l.vezes}ª vez` : null]
+                                      .filter(Boolean)
+                                      .join(" · ")}
+                                  </small>
+                                </span>
+                              ) : (
+                                <span className="fraco">nunca</span>
+                              )}
+                            </td>
+                            <td className="col-acao">
+                              {l.whatsapp ? (
+                                <BotaoCobrar
+                                  projetoId={l.projetoId}
+                                  link={linkWhatsapp(l.whatsapp, texto)}
+                                  rotulo={l.vezes > 0 ? "Lembrar" : "Cobrar"}
+                                />
+                              ) : (
+                                <details className="adicionar-telefone">
+                                  <summary className="botao secundario">
+                                    <Plus size={14} aria-hidden /> Telefone
+                                  </summary>
+                                  <form action={salvarTelefone.bind(null, l.clienteId)} className="form-telefone">
+                                    <label htmlFor={`tel-${l.projetoId}`}>WhatsApp de {l.cliente}</label>
+                                    <div>
+                                      <input
+                                        id={`tel-${l.projetoId}`}
+                                        name="telefone"
+                                        inputMode="tel"
+                                        placeholder="(79) 99999-1234"
+                                        required
+                                        minLength={10}
+                                        maxLength={20}
+                                      />
+                                      <button type="submit" className="botao">
+                                        Salvar
+                                      </button>
+                                    </div>
+                                  </form>
+                                </details>
+                              )}
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+                <Paginacao
+                  {...pagina}
+                  rotulo="clientes"
+                  href={(n) => endereco("/documentos/cobranca", { tipo }, { pagina: n })}
+                />
+              </>
+            )}
+
+            {linhas.length === 0 && <Vazio icone={<MessageCircle size={20} />} titulo="Ninguém deve esse documento" />}
+          </section>
+
+          <details className="como-ler como-ler-solto">
             <summary>
               <Info size={15} aria-hidden /> Como a fila funciona
             </summary>
@@ -107,92 +220,7 @@ export default async function Cobranca({ searchParams }: { searchParams: Promise
             </div>
           </details>
 
-          <div className="tabela-wrap">
-            <table className="tabela tabela-cobranca">
-              <thead>
-                <tr>
-                  <th>Cliente</th>
-                  <th>Falta mandar</th>
-                  <th>Etapa</th>
-                  <th>Última cobrança</th>
-                  <th></th>
-                </tr>
-              </thead>
-              <tbody>
-                {linhas.map((l) => {
-                  const recente =
-                    l.ultimaCobranca && agora.getTime() - l.ultimaCobranca.quando.getTime() < 2 * 86_400_000;
-                  const texto = mensagemDeCobranca({
-                    cliente: l.cliente,
-                    empresa: empresa?.nome ?? "nossa empresa",
-                    tipos: l.tipos,
-                    jaCobrado: l.vezes > 0,
-                  });
-                  return (
-                    <tr key={l.projetoId} className={recente ? "linha-esmaecida" : undefined}>
-                      <td className="forte">
-                        <Link href={`/documentos/${l.projetoId}`}>{l.cliente}</Link>
-                        <div className="fraco">{l.telefone ?? "sem telefone"}</div>
-                      </td>
-                      <td>
-                        {l.tipos.map((t) => (
-                          <span key={t} className="pilula sev-critico">
-                            {ROTULO_PEDIDO[t] ?? t}
-                          </span>
-                        ))}
-                      </td>
-                      <td className="fraco">
-                        {l.etapa}
-                        {l.etapaDesde && <div>{naEtapa(diasEntre(l.etapaDesde, agora))}</div>}
-                      </td>
-                      <td className="fraco">
-                        {l.ultimaCobranca ? (
-                          <>
-                            {haQuantoTempo(l.ultimaCobranca.quando, agora)}
-                            {l.ultimaCobranca.por && ` · ${l.ultimaCobranca.por.split(" ")[0]}`}
-                            {l.vezes > 1 && <div>{l.vezes}ª vez</div>}
-                          </>
-                        ) : (
-                          "nunca"
-                        )}
-                      </td>
-                      <td>
-                        {l.whatsapp ? (
-                          <BotaoCobrar
-                            projetoId={l.projetoId}
-                            link={linkWhatsapp(l.whatsapp, texto)}
-                            rotulo={l.vezes > 0 ? "Lembrar" : "Cobrar"}
-                          />
-                        ) : (
-                          <form action={salvarTelefone.bind(null, l.clienteId)} className="form-telefone">
-                            <input
-                              name="telefone"
-                              inputMode="tel"
-                              placeholder="(79) 99999-1234"
-                              aria-label={`Telefone de ${l.cliente}`}
-                              required
-                              minLength={10}
-                              maxLength={20}
-                            />
-                            <button type="submit" className="botao secundario">
-                              Salvar
-                            </button>
-                          </form>
-                        )}
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-
-          {linhas.length === 0 && (
-            <div className="pagina-corpo">
-              <Vazio icone={<MessageCircle size={20} />} titulo="Ninguém deve esse documento" />
-            </div>
-          )}
-        </>
+        </div>
       )}
     </main>
   );

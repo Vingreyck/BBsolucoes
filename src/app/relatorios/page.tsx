@@ -17,6 +17,7 @@ import {
 import { exigirGestaoWeb } from "@/os/acesso";
 
 import { Cabecalho, Vazio } from "../_ui";
+import { endereco, paginar, Paginacao } from "../_ui/paginacao";
 import { salvarPotencia } from "./actions";
 import { BotaoEnviar } from "./botao-enviar";
 
@@ -35,7 +36,7 @@ export const dynamic = "force-dynamic";
 export default async function Relatorios({
   searchParams,
 }: {
-  searchParams: Promise<{ mes?: string; filtro?: string }>;
+  searchParams: Promise<{ mes?: string; filtro?: string; pagina?: string }>;
 }) {
   const ator = await exigirGestaoWeb();
   const params = await searchParams;
@@ -71,6 +72,7 @@ export default async function Relatorios({
         Number(Boolean(a.enviadoEm)) - Number(Boolean(b.enviadoEm)) ||
         a.cliente.localeCompare(b.cliente),
     );
+  const pagina = paginar(visiveis, params.pagina);
 
   const meses = [ultimoMesFechado()];
   for (let i = 0; i < 5; i++) meses.push(mesAnterior(meses[meses.length - 1]));
@@ -187,7 +189,7 @@ export default async function Relatorios({
               </tr>
             </thead>
             <tbody>
-              {visiveis.map((l) => {
+              {pagina.itens.map((l) => {
                 const r = l.resumo;
                 const linkPdf = `${protocolo}://${host}/r/g/${l.token}`;
                 const numero = numeroWhatsapp(l.telefone);
@@ -280,6 +282,12 @@ export default async function Relatorios({
               })}
             </tbody>
           </table>
+          <Paginacao
+            {...pagina}
+            rotulo="relatórios"
+            ancora={null}
+            href={(n) => endereco("/relatorios", { mes, filtro }, { pagina: n })}
+          />
         </div>
       )}
     </main>

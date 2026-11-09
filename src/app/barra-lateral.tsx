@@ -18,7 +18,6 @@ import {
   Plus,
   RefreshCw,
   Sun,
-  SunMedium,
   Unlink,
   Users,
   Zap,
@@ -28,6 +27,8 @@ import {
 import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
 
+import { SimboloSelebi } from "./_ui/marca";
+import { iniciais } from "./formatar";
 import { sair } from "./login/actions";
 import { CHAVE_MENU } from "./menu";
 
@@ -104,11 +105,6 @@ function hrefAtivo(caminho: string, grupos: GrupoMenu[]): string | null {
   return melhor;
 }
 
-function iniciais(nome: string): string {
-  const partes = nome.trim().split(/\s+/);
-  return ((partes[0]?.[0] ?? "") + (partes.length > 1 ? partes[partes.length - 1][0] : "")).toUpperCase();
-}
-
 export function BarraLateral({
   grupos,
   usuario,
@@ -155,7 +151,7 @@ export function BarraLateral({
           <Menu size={20} />
         </button>
         <span className="marca-sistema">
-          <SunMedium size={18} aria-hidden /> Selebi
+          <SimboloSelebi tamanho={22} /> Selebi
         </span>
       </header>
 
@@ -164,9 +160,7 @@ export function BarraLateral({
       <aside className={`lateral${aberto ? " aberta" : ""}`} aria-label="Menu principal">
         <div className="lateral-topo">
           <a href="/" className="marca-sistema">
-            <span className="marca-selo" aria-hidden>
-              <SunMedium size={16} />
-            </span>
+            <SimboloSelebi tamanho={26} />
             Selebi
           </a>
           <button

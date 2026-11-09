@@ -7,6 +7,7 @@ import { db } from "@/db";
 import { alerta as alertaTable } from "@/db/schema";
 
 import { Cabecalho, Vazio } from "../_ui";
+import { endereco, paginar, Paginacao } from "../_ui/paginacao";
 import { kWp } from "../formatar";
 import { abrirOsDoGrupo, reconhecerAlertas, resolverAlertas } from "./actions";
 
@@ -48,8 +49,13 @@ function Ids({ lista }: { lista: string[] }) {
   );
 }
 
-export default async function Alertas() {
+/** Usinas por página: cada uma é um cartão com as suas ocorrências, então menos que numa tabela. */
+const USINAS_POR_PAGINA = 12;
+
+export default async function Alertas({ searchParams }: { searchParams: Promise<{ sev?: string; pagina?: string }> }) {
   const usuario = await exigirUsuario();
+  const { sev: sevPedida = "", pagina: paginaPedida } = await searchParams;
+  const sev = sevPedida in PESO ? sevPedida : "";
 
   const abertos = await db.query.alerta.findMany({
     where: and(eq(alertaTable.empresaId, usuario.empresaId), ne(alertaTable.status, "resolvido")),
@@ -72,6 +78,13 @@ export default async function Alertas() {
     const pb = Math.min(...b.map((x) => PESO[x.severidade]));
     return pa - pb || b.length - a.length;
   });
+
+  // A pior ocorrência decide a cor do cartão e o filtro em que a usina aparece.
+  const piorDe = (g: (typeof grupos)[number]) => g.reduce((p, a) => (PESO[a.severidade] < PESO[p.severidade] ? a : p)).severidade;
+  const contagem = { critico: 0, atencao: 0, info: 0 } as Record<string, number>;
+  for (const g of grupos) contagem[piorDe(g)]++;
+  const doFiltro = sev ? grupos.filter((g) => piorDe(g) === sev) : grupos;
+  const pagina = paginar(doFiltro, paginaPedida, USINAS_POR_PAGINA);
 
   return (
     <main>
@@ -103,8 +116,28 @@ export default async function Alertas() {
           </Vazio>
         </div>
       ) : (
-        <div className="lista-alertas">
-          {grupos.map((grupo) => {
+        <div className="pagina-corpo pilha lista-alertas" id="lista">
+          <nav className="filtros" aria-label="Gravidade">
+            {[
+              ["", "Todas", grupos.length],
+              ["critico", "Críticas", contagem.critico],
+              ["atencao", "Atenção", contagem.atencao],
+              ["info", "Informativas", contagem.info],
+            ].map(([valor, rotulo, n]) => (
+              <Link
+                key={valor}
+                href={endereco("/alertas", {}, { sev: valor as string })}
+                className={`filtro${sev === valor ? " ativo" : ""}${valor === "critico" ? " perigo" : ""}`}
+                aria-current={sev === valor ? "page" : undefined}
+              >
+                {rotulo} <span className="filtro-n">{n}</span>
+              </Link>
+            ))}
+          </nav>
+
+          {doFiltro.length === 0 && <Vazio icone={<BellOff size={20} />} titulo="Nenhuma usina com alerta dessa gravidade" />}
+
+          {pagina.itens.map((grupo) => {
             const primeiro = grupo[0];
             const pior = grupo.reduce((p, a) => (PESO[a.severidade] < PESO[p.severidade] ? a : p));
 
@@ -200,6 +233,12 @@ export default async function Alertas() {
               </section>
             );
           })}
+
+          <Paginacao
+            {...pagina}
+            rotulo="usinas com alerta"
+            href={(n) => endereco("/alertas", { sev }, { pagina: n })}
+          />
         </div>
       )}
     </main>

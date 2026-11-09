@@ -7,6 +7,7 @@ import { formatarInstante, formatarRelogio, relogioAgora } from "@/os/relogio";
 import { encerrada, numeroOs, PRIORIDADE_ROTULO, STATUS_ROTULO, TIPO_ROTULO, type TipoOs } from "@/os/tipos";
 
 import { Cabecalho, Vazio } from "../_ui";
+import { endereco, paginar, Paginacao } from "../_ui/paginacao";
 
 export const dynamic = "force-dynamic";
 
@@ -30,7 +31,7 @@ function iniciais(nome: string): string {
 export default async function ListaOs({
   searchParams,
 }: {
-  searchParams: Promise<{ aba?: string; tipo?: string; tecnico?: string; q?: string; ok?: string; erro?: string }>;
+  searchParams: Promise<{ aba?: string; tipo?: string; tecnico?: string; q?: string; ok?: string; erro?: string; pagina?: string }>;
 }) {
   const ator = await exigirAtorWeb();
   const p = await searchParams;
@@ -43,6 +44,7 @@ export default async function ListaOs({
     ator.gestao ? responsaveisPossiveis(ator.empresaId) : Promise.resolve([]),
   ]);
   const agora = relogioAgora();
+  const pagina = paginar(ordens, p.pagina);
 
   const quantos = (status: readonly string[] | null) =>
     status ? status.reduce((soma, s) => soma + (contagem[s] ?? 0), 0) : Object.values(contagem).reduce((a, b) => a + b, 0);
@@ -106,157 +108,168 @@ export default async function ListaOs({
         ))}
       </nav>
 
-      <form className="barra-filtros" method="get" action="/os">
-        <input type="hidden" name="aba" value={aba} />
-        <label className="campo-busca">
-          <Search size={15} aria-hidden />
-          <input type="search" name="q" defaultValue={p.q ?? ""} placeholder="Cliente, cidade, CPF ou nº da OS" aria-label="Buscar" />
-        </label>
-        <select name="tipo" defaultValue={tipo ?? ""} aria-label="Tipo">
-          <option value="">Todos os tipos</option>
-          {Object.entries(TIPO_ROTULO).map(([v, r]) => (
-            <option key={v} value={v}>
-              {r}
-            </option>
-          ))}
-        </select>
-        {ator.gestao && (
-          <select name="tecnico" defaultValue={p.tecnico ?? ""} aria-label="Responsável">
-            <option value="">Todos os responsáveis</option>
-            <option value="ninguem">Sem responsável</option>
-            {pessoas.map((u) => (
-              <option key={u.id} value={u.id}>
-                {u.nome}
-              </option>
-            ))}
-          </select>
-        )}
-        <button type="submit" className="botao secundario">
-          Filtrar
-        </button>
-        {filtrando && (
-          <Link href={`/os?aba=${aba}`} className="link-acao">
-            Limpar filtros
-          </Link>
-        )}
-      </form>
+      <div className="pagina-corpo pilha">
+        <section className="lista" id="lista" aria-label="Ordens de serviço">
+          <form className="lista-barra" method="get" action="/os">
+            <input type="hidden" name="aba" value={aba} />
+            <label className="campo-busca">
+              <Search size={15} aria-hidden />
+              <input type="search" name="q" defaultValue={p.q ?? ""} placeholder="Cliente, cidade, CPF ou nº da OS" aria-label="Buscar" />
+            </label>
+            <select name="tipo" defaultValue={tipo ?? ""} aria-label="Tipo">
+              <option value="">Todos os tipos</option>
+              {Object.entries(TIPO_ROTULO).map(([v, r]) => (
+                <option key={v} value={v}>
+                  {r}
+                </option>
+              ))}
+            </select>
+            {ator.gestao && (
+              <select name="tecnico" defaultValue={p.tecnico ?? ""} aria-label="Responsável">
+                <option value="">Todos os responsáveis</option>
+                <option value="ninguem">Sem responsável</option>
+                {pessoas.map((u) => (
+                  <option key={u.id} value={u.id}>
+                    {u.nome}
+                  </option>
+                ))}
+              </select>
+            )}
+            <button type="submit" className="botao secundario">
+              Filtrar
+            </button>
+            {filtrando && (
+              <Link href={`/os?aba=${aba}`} className="link-acao">
+                Limpar filtros
+              </Link>
+            )}
+          </form>
 
-      {ordens.length === 0 ? (
-        <div className="pagina-corpo">
-          <Vazio
-            icone={<ClipboardList size={20} />}
-            titulo={
-              filtrando
-                ? "Nenhuma OS com esses filtros"
-                : aba === "abertas"
-                  ? "Nenhuma OS em aberto"
-                  : `Nenhuma OS em “${ABAS[aba].rotulo}”`
-            }
-            acao={
-              ator.gestao && aba === "abertas" && !filtrando ? (
-                <Link href="/os/nova" className="botao">
-                  <Plus size={15} aria-hidden /> Nova OS
-                </Link>
-              ) : filtrando ? (
-                <Link href={`/os?aba=${aba}`} className="botao secundario">
-                  Limpar filtros
-                </Link>
-              ) : null
-            }
-          >
-            {ator.gestao && aba === "abertas" && !filtrando ? (
-              <>
-                Também dá para abrir pela tela do projeto ou a partir de um <Link href="/alertas">alerta de usina</Link>.
-              </>
-            ) : null}
-          </Vazio>
-        </div>
-      ) : (
-        <div className="tabela-wrap">
-          <table className="tabela tabela-os">
-            <thead>
-              <tr>
-                <th>Nº</th>
-                <th>Cliente</th>
-                <th>Tipo</th>
-                <th>Situação</th>
-                <th>Quando</th>
-                <th>Responsável</th>
-                <th>Checklist</th>
-                <th>Venda</th>
-              </tr>
-            </thead>
-            <tbody>
-              {ordens.map((o) => {
-                const q = quando(o, agora);
-                const obrigatorios = o.checklist.filter((i) => i.obrigatorio);
-                const feitos = obrigatorios.filter((i) => i.concluido).length;
-                const vencida = q.atrasado && !encerrada(o.status);
-                return (
-                  <tr key={o.id}>
-                    <td className="forte">
-                      <Link href={`/os/${o.id}`} className="numero-os">
-                        {numeroOs(o.numero)}
-                      </Link>
-                    </td>
-                    <td>
-                      <Link href={`/os/${o.id}`} className="celula-dupla">
-                        <strong>{o.cliente.nome}</strong>
-                        <small>{o.cliente.cidade ?? "—"}</small>
-                      </Link>
-                    </td>
-                    <td>
-                      {TIPO_ROTULO[o.tipo] ?? o.tipo}
-                      {(o.prioridade === "alta" || o.prioridade === "urgente") && (
-                        <>
-                          {" "}
-                          <span className={`pilula pr-${o.prioridade}`}>{PRIORIDADE_ROTULO[o.prioridade]}</span>
-                        </>
-                      )}
-                    </td>
-                    <td>
-                      <span className={`pilula st-${o.status}`}>{STATUS_ROTULO[o.status] ?? o.status}</span>
-                    </td>
-                    <td className={vencida ? "ruim" : ""}>
-                      {q.texto}
-                      {vencida ? " · atrasada" : ""}
-                    </td>
-                    <td>
-                      {o.responsavel ? (
-                        <span className="meta-pessoa">
-                          <span className="avatar-mini" aria-hidden>
-                            {iniciais(o.responsavel.nome)}
-                          </span>
-                          {o.responsavel.nome}
-                        </span>
-                      ) : (
-                        <span className="texto-perigo">sem responsável</span>
-                      )}
-                    </td>
-                    <td>
-                      {obrigatorios.length ? (
-                        <span className="mini-progresso" title={`${feitos} de ${obrigatorios.length} obrigatórios`}>
-                          <span className="progresso">
-                            <span style={{ width: `${Math.round((feitos / obrigatorios.length) * 100)}%` }} />
-                          </span>
-                          <small>
-                            {feitos}/{obrigatorios.length}
-                          </small>
-                        </span>
-                      ) : (
-                        <span className="fraco">—</span>
-                      )}
-                    </td>
-                    <td className={o.projeto ? "" : "fraco"}>
-                      {o.projeto ? <Link href={`/projeto/${o.projeto.id}`}>{o.projeto.titulo}</Link> : "—"}
-                    </td>
+          {ordens.length === 0 ? (
+            <div>
+              <Vazio
+                icone={<ClipboardList size={20} />}
+                titulo={
+                  filtrando
+                    ? "Nenhuma OS com esses filtros"
+                    : aba === "abertas"
+                      ? "Nenhuma OS em aberto"
+                      : `Nenhuma OS em “${ABAS[aba].rotulo}”`
+                }
+                acao={
+                  ator.gestao && aba === "abertas" && !filtrando ? (
+                    <Link href="/os/nova" className="botao">
+                      <Plus size={15} aria-hidden /> Nova OS
+                    </Link>
+                  ) : filtrando ? (
+                    <Link href={`/os?aba=${aba}`} className="botao secundario">
+                      Limpar filtros
+                    </Link>
+                  ) : null
+                }
+              >
+                {ator.gestao && aba === "abertas" && !filtrando ? (
+                  <>
+                    Também dá para abrir pela tela do projeto ou a partir de um <Link href="/alertas">alerta de usina</Link>.
+                  </>
+                ) : null}
+              </Vazio>
+            </div>
+          ) : (
+            <>
+            <div className="tabela-rolagem">
+              <table className="tabela tabela-os">
+                <thead>
+                  <tr>
+                    <th>Nº</th>
+                    <th>Cliente</th>
+                    <th>Tipo</th>
+                    <th>Situação</th>
+                    <th>Quando</th>
+                    <th>Responsável</th>
+                    <th>Checklist</th>
+                    <th>Venda</th>
                   </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
-      )}
+                </thead>
+                <tbody>
+                  {pagina.itens.map((o) => {
+                    const q = quando(o, agora);
+                    const obrigatorios = o.checklist.filter((i) => i.obrigatorio);
+                    const feitos = obrigatorios.filter((i) => i.concluido).length;
+                    const vencida = q.atrasado && !encerrada(o.status);
+                    return (
+                      <tr key={o.id}>
+                        <td className="forte">
+                          <Link href={`/os/${o.id}`} className="numero-os">
+                            {numeroOs(o.numero)}
+                          </Link>
+                        </td>
+                        <td>
+                          <Link href={`/os/${o.id}`} className="celula-dupla">
+                            <strong>{o.cliente.nome}</strong>
+                            <small>{o.cliente.cidade ?? "—"}</small>
+                          </Link>
+                        </td>
+                        <td>
+                          {TIPO_ROTULO[o.tipo] ?? o.tipo}
+                          {(o.prioridade === "alta" || o.prioridade === "urgente") && (
+                            <>
+                              {" "}
+                              <span className={`pilula pr-${o.prioridade}`}>{PRIORIDADE_ROTULO[o.prioridade]}</span>
+                            </>
+                          )}
+                        </td>
+                        <td>
+                          <span className={`pilula st-${o.status}`}>{STATUS_ROTULO[o.status] ?? o.status}</span>
+                        </td>
+                        <td className={vencida ? "ruim" : ""}>
+                          {q.texto}
+                          {vencida ? " · atrasada" : ""}
+                        </td>
+                        <td>
+                          {o.responsavel ? (
+                            <span className="meta-pessoa">
+                              <span className="avatar-mini" aria-hidden>
+                                {iniciais(o.responsavel.nome)}
+                              </span>
+                              {o.responsavel.nome}
+                            </span>
+                          ) : (
+                            <span className="texto-perigo">sem responsável</span>
+                          )}
+                        </td>
+                        <td>
+                          {obrigatorios.length ? (
+                            <span className="mini-progresso" title={`${feitos} de ${obrigatorios.length} obrigatórios`}>
+                              <span className="progresso">
+                                <span style={{ width: `${Math.round((feitos / obrigatorios.length) * 100)}%` }} />
+                              </span>
+                              <small>
+                                {feitos}/{obrigatorios.length}
+                              </small>
+                            </span>
+                          ) : (
+                            <span className="fraco">—</span>
+                          )}
+                        </td>
+                        <td className={o.projeto ? "" : "fraco"}>
+                          {o.projeto ? <Link href={`/projeto/${o.projeto.id}`}>{o.projeto.titulo}</Link> : "—"}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+            <Paginacao
+              {...pagina}
+              rotulo="ordens"
+              href={(n) => endereco("/os", { aba, tipo, tecnico: p.tecnico, q: p.q }, { pagina: n })}
+            />
+            </>
+          )}
+        </section>
+      </div>
     </main>
   );
 }

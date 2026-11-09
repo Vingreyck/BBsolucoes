@@ -1,20 +1,17 @@
-import { Fragment } from "react";
-
-import { and, asc, inArray, isNotNull } from "drizzle-orm";
+import { and, asc, eq, inArray, isNotNull } from "drizzle-orm";
+import { ChevronLeft, ChevronRight, Clock, Plus } from "lucide-react";
 
 import { exigirUsuario } from "@/auth/sessao";
 import { db, schema } from "@/db";
-import { etapa as etapaTable } from "@/db/schema";
 import { liberaOsDeInstalacao, tomDaFase, vigente, type FaseEnergisa } from "@/energisa/situacoes";
 import { ehGestaoWeb } from "@/os/acesso";
 import { numeroOs } from "@/os/tipos";
 
-import { Info, Plus } from "lucide-react";
-
-import { Cabecalho } from "../_ui";
+import { Ajuda, Cabecalho } from "../_ui";
 import { moverProjeto } from "../actions";
+import { iniciais, kWp, semAcento } from "../formatar";
 import { gerarOsInstalacao } from "./actions";
-import { kWp } from "../formatar";
+import { ColunaEsteira, QuadroEsteira } from "./quadro";
 
 /** Lê do banco a cada request — nada aqui é estático. */
 export const dynamic = "force-dynamic";
@@ -36,24 +33,33 @@ function diasDesde(data: Date): number {
 
 const TOM_ENERGISA: Record<string, string> = { ok: "sev-info", ruim: "sev-critico", espera: "sev-atencao", neutro: "" };
 
+const SITUACAO_ROTULO: Record<string, string> = { pausado: "pausado", cancelado: "cancelado" };
+
 export default async function Esteira() {
   const usuario = await exigirUsuario();
   const gestao = ehGestaoWeb(usuario.papel);
 
-  const etapas = await db.query.etapa.findMany({
-    orderBy: asc(etapaTable.ordem),
-  });
+  // Tudo pela empresa de quem está olhando: o quadro de uma empresa nunca
+  // pode mostrar etapa ou projeto de outra.
+  const [etapas, projetos, daEnergisa] = await Promise.all([
+    db.query.etapa.findMany({
+      where: eq(schema.etapa.empresaId, usuario.empresaId),
+      orderBy: asc(schema.etapa.ordem),
+    }),
+    db.query.projeto.findMany({
+      where: eq(schema.projeto.empresaId, usuario.empresaId),
+      with: { cliente: true, responsavel: true },
+    }),
+    /**
+     * A situação de cada projeto no portal da Energisa, lida pela extensão
+     * (`/energisa`). Na etapa 9, a aprovação libera o botão da OS de
+     * instalação; a OS que já existe aparece no lugar do botão.
+     */
+    db.query.energisaProjeto.findMany({
+      where: and(eq(schema.energisaProjeto.empresaId, usuario.empresaId), isNotNull(schema.energisaProjeto.projetoId)),
+    }),
+  ]);
 
-  const projetos = await db.query.projeto.findMany({
-    with: { cliente: true, responsavel: true },
-  });
-
-  /**
-   * A situação de cada projeto no portal da Energisa, lida pelo robô
-   * (`/energisa`). Na etapa 9, a aprovação libera o botão da OS de instalação;
-   * a OS de instalação que já existe aparece no lugar do botão.
-   */
-  const daEnergisa = await db.query.energisaProjeto.findMany({ where: isNotNull(schema.energisaProjeto.projetoId) });
   const entradasPorProjeto = new Map<string, typeof daEnergisa>();
   for (const en of daEnergisa) {
     const lista = entradasPorProjeto.get(en.projetoId!) ?? [];
@@ -70,6 +76,7 @@ export default async function Esteira() {
       .from(schema.ordemServico)
       .where(
         and(
+          eq(schema.ordemServico.empresaId, usuario.empresaId),
           inArray(schema.ordemServico.projetoId, [...energisa.keys()]),
           inArray(schema.ordemServico.tipo, ["instalacao"]),
           inArray(schema.ordemServico.status, ["aberta", "agendada", "em_deslocamento", "em_andamento", "aguardando_peca"]),
@@ -102,8 +109,16 @@ export default async function Esteira() {
    * transformaria o quadro num arquivo morto: quem abre a esteira quer ver o
    * que está na mão de alguém hoje.
    */
-  const abertos = projetos.filter((p) => p.situacao !== "concluido");
+  const abertos = projetos
+    .filter((p) => p.situacao !== "concluido")
+    // os mais antigos na etapa primeiro: são os que pedem alguém
+    .sort((a, b) => a.etapaDesde.getTime() - b.etapaDesde.getTime());
   const concluidos = projetos.length - abertos.length;
+
+  const nivelDe = (p: (typeof projetos)[number]) => {
+    const estourou = p.prazoEtapa !== null && p.prazoEtapa.getTime() < Date.now();
+    return estourou ? "critico" : diasDesde(p.etapaDesde) >= DIAS_ATENCAO ? "atencao" : "normal";
+  };
 
   const porEtapa = new Map<string, typeof projetos>();
   for (const p of abertos) {
@@ -112,20 +127,32 @@ export default async function Esteira() {
     porEtapa.set(p.etapaId, lista);
   }
 
-  const parados = projetos.filter(
-    (p) => diasDesde(p.etapaDesde) >= DIAS_ATENCAO && p.situacao === "em_andamento",
-  );
+  const parados = abertos.filter((p) => p.situacao === "em_andamento" && nivelDe(p) !== "normal").length;
+  const meus = abertos.filter((p) => p.responsavelId === usuario.id).length;
 
   return (
-    <main>
+    <main className="pagina-esteira">
       <Cabecalho
         titulo="Esteira de projetos"
         selos={
-          parados.length > 0 ? (
-            <span className="pilula sev-atencao">
-              {parados.length} parados há {DIAS_ATENCAO}+ dias
-            </span>
-          ) : undefined
+          <>
+            {parados > 0 && <span className="pilula sev-atencao">{parados} parados</span>}
+            <Ajuda rotulo="Como ler a esteira">
+              <p>
+                As 13 etapas do fluxo, confirmadas com o cliente. A <strong>Execução</strong> é a etapa que mais gera
+                retrabalho, e para onde o projeto volta quando a concessionária reprova — use a seta para trás.
+              </p>
+              <p>
+                <strong>Parado</strong> é o projeto há {DIAS_ATENCAO} dias ou mais na mesma etapa (relógio amarelo) ou
+                com o prazo da etapa estourado (vermelho). Em cada coluna, os mais antigos vêm primeiro.
+              </p>
+              <p>
+                Os dossiês vindos do Drive entraram com a etapa <strong>deduzida pelos documentos da pasta</strong>, não
+                informada por ninguém. Confira antes de cobrar alguém por isso. Os {concluidos} concluídos saem do
+                quadro; detalhe de cada um em <a href="/documentos">Dossiês</a>.
+              </p>
+            </Ajuda>
+          </>
         }
         meta={
           <>
@@ -140,133 +167,121 @@ export default async function Esteira() {
         }
       />
 
-      <details className="como-ler">
-        <summary>
-          <Info size={15} aria-hidden /> Como ler a esteira
-        </summary>
-        <div>
-          <p>
-            As 13 etapas do fluxo, confirmadas com o cliente. A <strong>Execução</strong> é a etapa que mais gera
-            retrabalho, e para onde o projeto volta quando a concessionária reprova — use a seta para trás.
-          </p>
-          <p>
-            Os dossiês vindos do Drive entraram com a etapa <strong>deduzida pelos documentos que existem na pasta</strong>,
-            não informada por ninguém — um dossiê sem a conta de luz foi parar em coleta de informações, um sem foto do
-            padrão em vistoria técnica. Confira antes de cobrar alguém por isso. Os {concluidos} concluídos são os que já
-            têm usina gerando e saem do quadro. Detalhe de cada um em <a href="/documentos">Dossiês</a>.
-          </p>
-        </div>
-      </details>
-
-      <div className="esteira">
+      <QuadroEsteira meuId={usuario.id} total={abertos.length} parados={parados} meus={meus}>
         {etapas.map((e) => {
           const lista = porEtapa.get(e.id) ?? [];
           return (
-            <Fragment key={e.id}>
-              <section className={lista.length ? "coluna" : "coluna vazia"}>
-                <div className="coluna-topo">
+            <ColunaEsteira
+              key={e.id}
+              cabecalho={
+                <header className="coluna-topo">
                   <span className="ordem">
                     {String(Math.round(e.ordem / 10)).padStart(2, "0")}
-                    {e.papelResponsavel
-                      ? ` · ${PAPEL_ROTULO[e.papelResponsavel] ?? e.papelResponsavel}`
-                      : ""}
+                    {e.papelResponsavel ? ` · ${PAPEL_ROTULO[e.papelResponsavel] ?? e.papelResponsavel}` : ""}
                     {e.prazoPadraoDias ? ` · ${e.prazoPadraoDias}d` : ""}
                   </span>
                   <div className="linha">
-                    <span className="nome">{e.nome}</span>
-                    <span className="qtd">{lista.length}</span>
+                    <h2 className="nome">{e.nome}</h2>
+                    <span className="qtd" aria-label={`${lista.length} projetos`}>
+                      {lista.length}
+                    </span>
                   </div>
-                  {e.descricao && <span className="desc">{e.descricao}</span>}
-                </div>
+                  {e.descricao && (
+                    <span className="desc" title={e.descricao}>
+                      {e.descricao}
+                    </span>
+                  )}
+                </header>
+              }
+            >
+              {lista.map((p) => {
+                const dias = diasDesde(p.etapaDesde);
+                const nivel = nivelDe(p);
+                const estourou = nivel === "critico";
+                const v = energisa.get(p.id);
+                const fase = v?.fase as FaseEnergisa | undefined;
+                const os = osInstalacao.get(p.id);
+                const meta = [kWp(p.potenciaKwp), p.cliente.cidade].filter(Boolean).join(" · ");
+                return (
+                  <article
+                    key={p.id}
+                    className="cartao-projeto"
+                    data-busca={semAcento(`${p.cliente.nome} ${p.cliente.cidade ?? ""} ${p.responsavel?.nome ?? ""}`)}
+                    data-nivel={nivel}
+                    data-dono={p.responsavelId ?? ""}
+                  >
+                    <a className="cartao-projeto-titulo" href={`/projeto/${p.id}`} title={p.cliente.nome}>
+                      {p.cliente.nome}
+                    </a>
+                    <span className="cartao-projeto-meta">
+                      {meta || "—"}
+                      {SITUACAO_ROTULO[p.situacao] && (
+                        <span className="pilula sev-info">{SITUACAO_ROTULO[p.situacao]}</span>
+                      )}
+                    </span>
 
-                {lista.length > 0 && (
-                  <div className="cartoes">
-                    {lista.map((p) => {
-                      const dias = diasDesde(p.etapaDesde);
-                      const estourou =
-                        p.prazoEtapa !== null && p.prazoEtapa.getTime() < Date.now();
-                      const nivel = estourou
-                        ? "critico"
-                        : dias >= DIAS_ATENCAO
-                          ? "atencao"
-                          : "normal";
-                      return (
-                        <article className={`cartao n-${nivel}`} key={p.id}>
-                          <a className="cliente" href={`/projeto/${p.id}`}>
-                            {p.cliente.nome}
-                          </a>
-                          <span className="meta">
-                            {kWp(p.potenciaKwp) ?? "—"}
-                            {p.cliente.cidade ? ` · ${p.cliente.cidade}` : ""}
-                          </span>
-                          <span className={`dias d-${nivel}`}>
-                            {dias === 0
-                              ? "hoje"
-                              : `${dias} ${dias === 1 ? "dia" : "dias"} nesta etapa`}
-                            {estourou ? " · prazo estourado" : ""}
-                          </span>
-                          {p.responsavel && (
-                            <span className="dono">{p.responsavel.nome}</span>
-                          )}
-                          {(() => {
-                            const v = energisa.get(p.id);
-                            if (!v) return null;
-                            const fase = v.fase as FaseEnergisa;
-                            const os = osInstalacao.get(p.id);
-                            return (
-                              <>
-                                <span
-                                  className={`pilula ${TOM_ENERGISA[tomDaFase(fase)]}`}
-                                  title={`Projeto ${v.numero} no portal da Energisa, desde ${v.situacaoDesde.toLocaleDateString("pt-BR")}`}
-                                >
-                                  Energisa: {v.descricaoSituacao ?? fase}
-                                </span>
-                                {e.slug === "aprovacao_concessionaria" &&
-                                  liberaOsDeInstalacao(fase) &&
-                                  (os ? (
-                                    <a className="link-acao" href={`/os/${os.id}`}>
-                                      {numeroOs(os.numero)} de instalação
-                                    </a>
-                                  ) : gestao ? (
-                                    <form action={gerarOsInstalacao.bind(null, p.id)}>
-                                      <button type="submit" className="botao botao-cartao">
-                                        Gerar OS de instalação
-                                      </button>
-                                    </form>
-                                  ) : null)}
-                              </>
-                            );
-                          })()}
-                          <div className="mover">
-                            <form action={moverProjeto.bind(null, p.id, "voltar")}>
-                              <button
-                                type="submit"
-                                title="Voltar uma etapa"
-                                aria-label={`Voltar ${p.cliente.nome} uma etapa`}
-                              >
-                                ←
+                    {v && fase && (
+                      <div className="cartao-projeto-extra">
+                        <span
+                          className={`pilula ${TOM_ENERGISA[tomDaFase(fase)]}`}
+                          title={`Projeto ${v.numero} no portal da Energisa, desde ${v.situacaoDesde.toLocaleDateString("pt-BR")}`}
+                        >
+                          Energisa: {v.descricaoSituacao ?? fase}
+                        </span>
+                        {e.slug === "aprovacao_concessionaria" &&
+                          liberaOsDeInstalacao(fase) &&
+                          (os ? (
+                            <a className="link-acao" href={`/os/${os.id}`}>
+                              {numeroOs(os.numero)} de instalação
+                            </a>
+                          ) : gestao ? (
+                            <form action={gerarOsInstalacao.bind(null, p.id)}>
+                              <button type="submit" className="botao botao-cartao">
+                                Gerar OS de instalação
                               </button>
                             </form>
-                            <form action={moverProjeto.bind(null, p.id, "avancar")}>
-                              <button
-                                type="submit"
-                                title="Avançar uma etapa"
-                                aria-label={`Avançar ${p.cliente.nome} uma etapa`}
-                              >
-                                →
-                              </button>
-                            </form>
-                          </div>
-                        </article>
-                      );
-                    })}
-                  </div>
-                )}
-              </section>
-            </Fragment>
+                          ) : null)}
+                      </div>
+                    )}
+
+                    <div className="cartao-projeto-rodape">
+                      <span
+                        className={`idade n-${nivel}`}
+                        title={`${dias} ${dias === 1 ? "dia" : "dias"} nesta etapa${estourou ? " · prazo estourado" : ""}`}
+                      >
+                        <Clock size={12} aria-hidden />
+                        {dias === 0 ? "hoje" : `${dias} d`}
+                        <span className="sr-only"> nesta etapa{estourou ? ", prazo estourado" : ""}</span>
+                      </span>
+                      <div className="mover">
+                        <form action={moverProjeto.bind(null, p.id, "voltar")}>
+                          <button type="submit" title="Voltar uma etapa" aria-label={`Voltar ${p.cliente.nome} uma etapa`}>
+                            <ChevronLeft size={15} aria-hidden />
+                          </button>
+                        </form>
+                        <form action={moverProjeto.bind(null, p.id, "avancar")}>
+                          <button type="submit" title="Avançar uma etapa" aria-label={`Avançar ${p.cliente.nome} uma etapa`}>
+                            <ChevronRight size={15} aria-hidden />
+                          </button>
+                        </form>
+                      </div>
+                      {p.responsavel ? (
+                        <span className="avatar-mini" title={p.responsavel.nome}>
+                          {iniciais(p.responsavel.nome)}
+                        </span>
+                      ) : (
+                        <span className="avatar-mini sem-dono" title="Sem responsável">
+                          ?
+                        </span>
+                      )}
+                    </div>
+                  </article>
+                );
+              })}
+            </ColunaEsteira>
           );
         })}
-      </div>
+      </QuadroEsteira>
     </main>
   );
 }

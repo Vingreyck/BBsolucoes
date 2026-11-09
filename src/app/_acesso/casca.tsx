@@ -1,4 +1,6 @@
-import { ClipboardCheck, KanbanSquare, ShieldCheck, Sun, SunMedium } from "lucide-react";
+import { ClipboardCheck, KanbanSquare, ShieldCheck, Sun } from "lucide-react";
+
+import { OrbitaDecorativa, SimboloSelebi } from "../_ui/marca";
 
 /**
  * A moldura das telas de quem ainda não entrou: login, pedido de acesso e troca
@@ -22,10 +24,9 @@ export function CascaAcesso({
   return (
     <main className="acesso">
       <aside className="acesso-marca">
+        <OrbitaDecorativa className="acesso-orbita" />
         <div className="acesso-marca-topo">
-          <span className="marca-selo" aria-hidden>
-            <SunMedium size={18} />
-          </span>
+          <SimboloSelebi tamanho={38} />
           <span className="acesso-marca-nome">Selebi</span>
         </div>
 

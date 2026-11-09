@@ -10,6 +10,7 @@ import { ROTULO_FASE, sugerirProjetos, tomDaFase, type FaseEnergisa } from "@/en
 import { exigirGestaoWeb } from "@/os/acesso";
 
 import { Cabecalho, Cartao, Vazio } from "../_ui";
+import { endereco, paginar, Paginacao } from "../_ui/paginacao";
 import { desvincular, vincular } from "./actions";
 import { Favorito } from "./favorito";
 
@@ -84,11 +85,8 @@ export default async function Energisa({ searchParams }: { searchParams: Promise
         : filtro === "esperando"
           ? esperando
           : linhas;
-  const totalPaginas = Math.max(1, Math.ceil(doFiltro.length / POR_PAGINA));
-  const pagina = Math.min(Math.max(1, Number.parseInt(paginaPedida, 10) || 1), totalPaginas);
-  const inicio = (pagina - 1) * POR_PAGINA;
-  const visiveis = doFiltro.slice(inicio, inicio + POR_PAGINA);
-  const linkPagina = (n: number) => `/energisa?ver=${filtro}&pagina=${n}`;
+  const pagina = paginar(doFiltro, paginaPedida, POR_PAGINA);
+  const visiveis = pagina.itens;
 
   const atualizadoHoje = ultima?.ultimaLeituraEm && haQuantoTempo(ultima.ultimaLeituraEm, agora) === "hoje";
   const deslogado = ultima?.estado === "desconectado";
@@ -295,23 +293,12 @@ export default async function Energisa({ searchParams }: { searchParams: Promise
               })}
             </tbody>
           </table>
-          {totalPaginas > 1 && (
-            <nav className="botoes-linha" aria-label="Páginas">
-              <span className="fraco">
-                {inicio + 1}–{inicio + visiveis.length} de {doFiltro.length}
-              </span>
-              {pagina > 1 && (
-                <Link href={linkPagina(pagina - 1)} className="botao secundario">
-                  Anteriores
-                </Link>
-              )}
-              {pagina < totalPaginas && (
-                <Link href={linkPagina(pagina + 1)} className="botao secundario">
-                  Próximas
-                </Link>
-              )}
-            </nav>
-          )}
+          <Paginacao
+            {...pagina}
+            rotulo="projetos"
+            ancora={null}
+            href={(n) => endereco("/energisa", { ver: filtro }, { pagina: n })}
+          />
         </div>
       )}
     </main>

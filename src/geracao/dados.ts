@@ -34,6 +34,16 @@ export async function geracaoDoMes(
   usinaIds?: string[],
 ): Promise<Map<string, DiaGerado[]>> {
   const { inicio, fim } = limitesDoMes(mes);
+  return geracaoNoPeriodo(empresaId, inicio, fim, usinaIds);
+}
+
+/** Geração por dia de cada usina entre `inicio` (inclusive) e `fim` (exclusive). */
+export async function geracaoNoPeriodo(
+  empresaId: string,
+  inicio: Date,
+  fim: Date,
+  usinaIds?: string[],
+): Promise<Map<string, DiaGerado[]>> {
   const l = schema.leitura;
   const linhas = await db
     .select({

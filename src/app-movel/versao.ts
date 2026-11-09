@@ -67,7 +67,7 @@ export function exigirVersaoMinima(req: Request): Response | null {
   const resposta = falha(
     426,
     "app_desatualizado",
-    "Esta versão do BBSolution está desatualizada. Atualize o aplicativo na loja para continuar — " +
+    "Esta versão do BB-Selebi está desatualizada. Atualize o aplicativo na loja para continuar — " +
       "o que você já fez neste celular fica guardado.",
   );
   if (loja) resposta.headers.set("x-app-loja", loja);

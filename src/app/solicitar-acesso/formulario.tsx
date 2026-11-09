@@ -42,7 +42,7 @@ export function FormularioPedido() {
         <ol>
           <li>Avise a sua coordenação que você pediu acesso.</li>
           <li>Quando for liberado, entre com o seu CPF (ou e-mail) e a senha que acabou de criar.</li>
-          <li>O mesmo acesso vale no aplicativo BBSolution, no celular.</li>
+          <li>O mesmo acesso vale no aplicativo BB-Selebi, no celular.</li>
         </ol>
         <a href="/login?pedido=enviado" className="botao-grande">
           Ir para o login
