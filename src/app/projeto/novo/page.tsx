@@ -71,7 +71,8 @@ export default async function NovoProjeto({
     const docs = docsPor.get(c.id) ?? 0;
     const origens = [...new Set(suas.flatMap(portaisDe))];
     // Drive: tem documentos importados ou a usina dele tem pasta no Drive.
-    if (docs > 0 || suas.some((u) => u.linkDrive)) origens.push("Drive");
+    // Só entra na busca quem está no Drive (os portais viram filtro, não entrada).
+    if (docs === 0 && !suas.some((u) => u.linkDrive)) continue;
     opcoes.push({
       chave: `c:${c.id}`,
       nome: c.nome,
@@ -80,17 +81,6 @@ export default async function NovoProjeto({
       docs,
       // Só conta como arquivada se todas as usinas dele estão.
       arquivada: suas.length > 0 && suas.every((u) => u.arquivadaEm),
-    });
-  }
-  // Usinas dos portais que ainda não têm dono também podem virar projeto (arquivadas inclusive: ficam marcadas).
-  for (const u of usinas.filter((x) => !x.clienteId)) {
-    opcoes.push({
-      chave: `u:${u.id}`,
-      nome: u.nome,
-      cidade: u.cidade,
-      origens: [...portaisDe(u), ...(u.linkDrive ? ["Drive"] : []), "Sem dono"],
-      docs: 0,
-      arquivada: !!u.arquivadaEm,
     });
   }
   opcoes.sort((a, b) => a.nome.localeCompare(b.nome, "pt-BR"));
@@ -114,7 +104,7 @@ export default async function NovoProjeto({
         <Cartao
           titulo="Cliente"
           icone={<UserRound size={16} />}
-          ajuda="Digite para buscar em tudo, ou filtre pelo portal (Growatt, Solis…) ou pelo Drive. Quem chegou agora para orçamento ainda não está: escreva o nome no campo de baixo."
+          ajuda="A busca mostra os clientes que já têm pasta no Drive. Digite o nome ou filtre pelo portal da usina (Growatt, Solis…). Quem chegou agora para orçamento ainda não está: escreva o nome no campo de baixo."
         >
           <div className="form-ficha">
             <div className="campo-escolher">

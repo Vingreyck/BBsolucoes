@@ -34,10 +34,7 @@ export function EscolherCliente({ opcoes }: { opcoes: Opcao[] }) {
   const origens = useMemo(() => {
     const conta = new Map<string, number>();
     for (const o of opcoes) for (const r of o.origens) conta.set(r, (conta.get(r) ?? 0) + 1);
-    const fixos = ["Drive", "Sem dono"];
-    const portais = [...conta.entries()].filter(([n]) => !fixos.includes(n)).sort((a, b) => b[1] - a[1]);
-    // Drive e Sem dono sempre aparecem, mesmo zerados: quem procura precisa saber que não há nenhum.
-    return [...portais, ...fixos.map((n) => [n, conta.get(n) ?? 0] as [string, number])];
+    return [...conta.entries()].sort((a, b) => b[1] - a[1]);
   }, [opcoes]);
 
   const filtradas = useMemo(() => {
