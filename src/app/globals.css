@@ -6119,6 +6119,145 @@ a.celula-dupla:hover strong {
   background: var(--line-soft);
 }
 
+/* ---- escolher cliente (novo projeto) ---------------------------------------- */
+
+.campo-escolher {
+  display: grid;
+  gap: 0.35rem;
+}
+.rotulo-campo {
+  font-size: 0.82rem;
+  font-weight: 600;
+}
+.escolher-cliente {
+  display: grid;
+  gap: 0.6rem;
+  font-weight: 400;
+}
+.busca-cliente {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0 0.7rem;
+  border: 1px solid var(--line);
+  border-radius: var(--raio-p);
+  background: var(--surface);
+  color: var(--ink-3);
+}
+.busca-cliente input {
+  flex: 1;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  padding: 0.6rem 0;
+  font: inherit;
+  color: var(--ink);
+}
+.busca-cliente:focus-within {
+  border-color: var(--accent);
+}
+.chips-origem {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+}
+.chips-origem button {
+  font: inherit;
+  font-size: 0.78rem;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.25rem 0.65rem;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--surface);
+  color: var(--ink);
+  cursor: pointer;
+}
+.chips-origem button span {
+  font-size: 0.68rem;
+  color: var(--ink-3);
+}
+.chips-origem button.ativo {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+.lista-clientes {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  max-height: 20rem;
+  overflow-y: auto;
+  border: 1px solid var(--line-soft);
+  border-radius: var(--raio-p);
+}
+.lista-clientes li + li {
+  border-top: 1px solid var(--line-soft);
+}
+.lista-clientes li button {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 0.55rem 0.75rem;
+  border: 0;
+  background: transparent;
+  font: inherit;
+  font-size: 0.86rem;
+  color: var(--ink);
+  text-align: left;
+  cursor: pointer;
+}
+.lista-clientes li button:hover,
+.lista-clientes li button:focus-visible {
+  background: var(--accent-soft);
+  outline: 0;
+}
+.lista-clientes .etiquetas {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 0.25rem;
+  flex-shrink: 0;
+}
+.lista-clientes .etq {
+  font-size: 0.68rem;
+  padding: 0.05rem 0.4rem;
+  border-radius: 4px;
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+.lista-clientes .etq-cinza {
+  background: var(--line-soft);
+  color: var(--ink-3);
+}
+.lista-clientes .etq-aviso {
+  background: transparent;
+  border: 1px solid var(--line);
+  color: var(--ink-2);
+}
+.lista-clientes .vazio-lista {
+  padding: 0.9rem;
+  font-size: 0.82rem;
+  color: var(--ink-3);
+}
+.escolhido {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 0.6rem 0.75rem;
+  border: 1px solid var(--accent);
+  border-radius: var(--raio-p);
+  background: var(--accent-soft);
+}
+.escolhido > div {
+  display: grid;
+  gap: 0.1rem;
+}
+
 /* ---- agenda --------------------------------------------------------------- */
 
 .grupo-segmentado {

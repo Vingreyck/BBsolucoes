@@ -13,6 +13,7 @@ import {
   projeto as projetoTable,
   projetoEvento,
   serialInstalado,
+  usina as usinaTable,
 } from "@/db/schema";
 import { reconciliarSeriais } from "@/collectors/reconciliar";
 
@@ -44,9 +45,10 @@ export async function criarProjeto(dados: FormData): Promise<void> {
   const usuario = await exigirUsuario();
 
   const clienteExistente = texto(dados, "clienteId");
+  const usinaEscolhida = texto(dados, "usinaId");
   const nomeNovo = texto(dados, "clienteNovo");
 
-  if (!clienteExistente && !nomeNovo) {
+  if (!clienteExistente && !usinaEscolhida && !nomeNovo) {
     redirect("/projeto/novo?erro=cliente");
   }
 
@@ -70,6 +72,33 @@ export async function criarProjeto(dados: FormData): Promise<void> {
       columns: { id: true },
     });
     if (!daEmpresa) redirect("/projeto/novo?erro=cliente");
+  }
+
+  // Usina do portal que ainda não tem dono: vira cliente (com o nome dela) e já fica ligada.
+  if (!clienteId && usinaEscolhida) {
+    const usina = await db.query.usina.findFirst({
+      where: and(eq(usinaTable.id, usinaEscolhida), eq(usinaTable.empresaId, usuario.empresaId)),
+      columns: { id: true, nome: true, cidade: true, clienteId: true },
+    });
+    if (!usina) redirect("/projeto/novo?erro=cliente");
+    if (usina.clienteId) {
+      clienteId = usina.clienteId;
+    } else {
+      const jaTem = await db.query.cliente.findFirst({
+        where: and(eq(clienteTable.empresaId, usuario.empresaId), eq(clienteTable.nome, usina.nome)),
+        columns: { id: true },
+      });
+      if (jaTem) {
+        clienteId = jaTem.id;
+      } else {
+        const [criado] = await db
+          .insert(clienteTable)
+          .values({ empresaId: usuario.empresaId, nome: usina.nome, cidade: usina.cidade })
+          .returning();
+        clienteId = criado.id;
+      }
+      await db.update(usinaTable).set({ clienteId }).where(eq(usinaTable.id, usina.id));
+    }
   }
 
   if (!clienteId && nomeNovo) {

@@ -1,12 +1,24 @@
-import { and, asc, eq } from "drizzle-orm";
+import { and, asc, eq, sql } from "drizzle-orm";
 import { Check, FileText, UserRound } from "lucide-react";
 
 import { exigirUsuario } from "@/auth/sessao";
-import { db } from "@/db";
+import { db, schema } from "@/db";
 import { cliente as clienteTable, etapa as etapaTable } from "@/db/schema";
 
 import { Cabecalho, Cartao } from "../../_ui";
 import { criarProjeto } from "../actions";
+import { EscolherCliente, type Opcao } from "./escolher-cliente";
+
+const PORTAL: Record<string, string> = {
+  growatt: "Growatt",
+  solis: "Solis",
+  foxess: "FoxESS",
+  hoymiles: "Hoymiles",
+  huawei: "Huawei",
+  solarportal_plus: "SolarPortal+",
+  nep: "NEP",
+  outro: "Outro",
+};
 
 export const dynamic = "force-dynamic";
 
@@ -25,16 +37,55 @@ export default async function NovoProjeto({
   const { erro } = await searchParams;
 
   // Da empresa de quem pede, como tudo: o sistema é multiempresa.
-  const [clientes, primeira] = await Promise.all([
+  const [clientes, usinas, docsPorCliente, primeira] = await Promise.all([
     db.query.cliente.findMany({
       where: eq(clienteTable.empresaId, usuario.empresaId),
+      columns: { id: true, nome: true, cidade: true },
       orderBy: asc(clienteTable.nome),
     }),
+    // Cada usina com o portal de onde ela vem: é daqui que sai "Growatt", "Solis"…
+    db.query.usina.findMany({
+      where: eq(schema.usina.empresaId, usuario.empresaId),
+      columns: { id: true, nome: true, cidade: true, clienteId: true, arquivadaEm: true },
+      with: { vinculosPortal: { with: { contaPortal: { columns: { fabricante: true } } } } },
+    }),
+    db
+      .select({ clienteId: schema.documento.clienteId, docs: sql<number>`count(*)::int` })
+      .from(schema.documento)
+      .where(eq(schema.documento.empresaId, usuario.empresaId))
+      .groupBy(schema.documento.clienteId),
     db.query.etapa.findFirst({
       where: and(eq(etapaTable.empresaId, usuario.empresaId), eq(etapaTable.ativa, true)),
       orderBy: asc(etapaTable.ordem),
     }),
   ]);
+
+  const docsPor = new Map(docsPorCliente.map((d) => [d.clienteId, d.docs]));
+  const portaisDe = (u: (typeof usinas)[number]) => [
+    ...new Set(u.vinculosPortal.map((v) => PORTAL[v.contaPortal?.fabricante ?? "outro"] ?? "Outro")),
+  ];
+
+  const opcoes: Opcao[] = [];
+  for (const c of clientes) {
+    const suas = usinas.filter((u) => u.clienteId === c.id);
+    const docs = docsPor.get(c.id) ?? 0;
+    const origens = [...new Set(suas.flatMap(portaisDe))];
+    if (docs > 0) origens.push("Drive");
+    opcoes.push({
+      chave: `c:${c.id}`,
+      nome: c.nome,
+      cidade: c.cidade,
+      origens,
+      docs,
+      // Só conta como arquivada se todas as usinas dele estão.
+      arquivada: suas.length > 0 && suas.every((u) => u.arquivadaEm),
+    });
+  }
+  // Usinas dos portais que ainda não têm dono também podem virar projeto.
+  for (const u of usinas.filter((x) => !x.clienteId && !x.arquivadaEm)) {
+    opcoes.push({ chave: `u:${u.id}`, nome: u.nome, cidade: u.cidade, origens: portaisDe(u), docs: 0, arquivada: false });
+  }
+  opcoes.sort((a, b) => a.nome.localeCompare(b.nome, "pt-BR"));
 
   return (
     <main>
@@ -55,21 +106,13 @@ export default async function NovoProjeto({
         <Cartao
           titulo="Cliente"
           icone={<UserRound size={16} />}
-          ajuda="Quem já tem usina instalada provavelmente está na lista — o cadastro veio dos portais dos fabricantes. Quem chegou agora para orçamento ainda não está: escreva o nome no campo de baixo."
+          ajuda="Digite para buscar em tudo, ou filtre pelo portal (Growatt, Solis…) ou pelo Drive. Quem chegou agora para orçamento ainda não está: escreva o nome no campo de baixo."
         >
           <div className="form-ficha">
-            <label>
-              Cliente já cadastrado
-              <select name="clienteId" defaultValue="">
-                <option value="">— escolher da lista ({clientes.length}) —</option>
-                {clientes.map((c) => (
-                  <option key={c.id} value={c.id}>
-                    {c.nome}
-                    {c.cidade ? ` · ${c.cidade}` : ""}
-                  </option>
-                ))}
-              </select>
-            </label>
+            <div className="campo-escolher">
+              <span className="rotulo-campo">Cliente já cadastrado</span>
+              <EscolherCliente opcoes={opcoes} />
+            </div>
 
             <p className="separador-ou">
               <span>ou um cliente novo</span>
