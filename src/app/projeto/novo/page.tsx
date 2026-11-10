@@ -46,7 +46,7 @@ export default async function NovoProjeto({
     // Cada usina com o portal de onde ela vem: é daqui que sai "Growatt", "Solis"…
     db.query.usina.findMany({
       where: eq(schema.usina.empresaId, usuario.empresaId),
-      columns: { id: true, nome: true, cidade: true, clienteId: true, arquivadaEm: true },
+      columns: { id: true, nome: true, cidade: true, clienteId: true, arquivadaEm: true, linkDrive: true },
       with: { vinculosPortal: { with: { contaPortal: { columns: { fabricante: true } } } } },
     }),
     db
@@ -70,7 +70,8 @@ export default async function NovoProjeto({
     const suas = usinas.filter((u) => u.clienteId === c.id);
     const docs = docsPor.get(c.id) ?? 0;
     const origens = [...new Set(suas.flatMap(portaisDe))];
-    if (docs > 0) origens.push("Drive");
+    // Drive: tem documentos importados ou a usina dele tem pasta no Drive.
+    if (docs > 0 || suas.some((u) => u.linkDrive)) origens.push("Drive");
     opcoes.push({
       chave: `c:${c.id}`,
       nome: c.nome,
@@ -81,9 +82,16 @@ export default async function NovoProjeto({
       arquivada: suas.length > 0 && suas.every((u) => u.arquivadaEm),
     });
   }
-  // Usinas dos portais que ainda não têm dono também podem virar projeto.
-  for (const u of usinas.filter((x) => !x.clienteId && !x.arquivadaEm)) {
-    opcoes.push({ chave: `u:${u.id}`, nome: u.nome, cidade: u.cidade, origens: portaisDe(u), docs: 0, arquivada: false });
+  // Usinas dos portais que ainda não têm dono também podem virar projeto (arquivadas inclusive: ficam marcadas).
+  for (const u of usinas.filter((x) => !x.clienteId)) {
+    opcoes.push({
+      chave: `u:${u.id}`,
+      nome: u.nome,
+      cidade: u.cidade,
+      origens: [...portaisDe(u), ...(u.linkDrive ? ["Drive"] : []), "Sem dono"],
+      docs: 0,
+      arquivada: !!u.arquivadaEm,
+    });
   }
   opcoes.sort((a, b) => a.nome.localeCompare(b.nome, "pt-BR"));
 

@@ -34,7 +34,10 @@ export function EscolherCliente({ opcoes }: { opcoes: Opcao[] }) {
   const origens = useMemo(() => {
     const conta = new Map<string, number>();
     for (const o of opcoes) for (const r of o.origens) conta.set(r, (conta.get(r) ?? 0) + 1);
-    return [...conta.entries()].sort((a, b) => b[1] - a[1]);
+    const fixos = ["Drive", "Sem dono"];
+    const portais = [...conta.entries()].filter(([n]) => !fixos.includes(n)).sort((a, b) => b[1] - a[1]);
+    // Drive e Sem dono sempre aparecem, mesmo zerados: quem procura precisa saber que não há nenhum.
+    return [...portais, ...fixos.map((n) => [n, conta.get(n) ?? 0] as [string, number])];
   }, [opcoes]);
 
   const filtradas = useMemo(() => {
@@ -68,19 +71,20 @@ export function EscolherCliente({ opcoes }: { opcoes: Opcao[] }) {
         </div>
       ) : (
         <>
-          <label className="busca-cliente">
+          <div className="busca-cliente">
             <Search size={15} aria-hidden />
             <input
-              type="search"
+              type="text"
               value={busca}
               onChange={(e) => {
                 setBusca(e.target.value);
                 setMostrarTudo(false);
               }}
               placeholder="Digite o nome, a cidade ou o portal…"
+              aria-label="Buscar cliente"
               autoComplete="off"
             />
-          </label>
+          </div>
 
           <div className="chips-origem" role="group" aria-label="Filtrar por origem">
             <button type="button" className={!origem ? "ativo" : ""} onClick={() => setOrigem("")}>
@@ -111,7 +115,6 @@ export function EscolherCliente({ opcoes }: { opcoes: Opcao[] }) {
                   </span>
                   <span className="etiquetas">
                     {o.arquivada && <span className="etq etq-cinza">usina arquivada</span>}
-                    {o.chave.startsWith("u:") && <span className="etq etq-aviso">sem dono</span>}
                     {o.origens.map((r) => (
                       <span key={r} className="etq">
                         {r}
