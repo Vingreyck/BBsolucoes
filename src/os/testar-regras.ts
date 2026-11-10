@@ -252,6 +252,8 @@ async function testarRetrace() {
   confere(liberaOsDeInstalacao("aprovado") && liberaOsDeInstalacao("obra") && !liberaOsDeInstalacao("analise"), "só aprovado (ou em obra) libera a OS de instalação");
 
   igual(acaoNaEsteira("conectada", "pedido_vistoria"), "avancar", "UC GD conectada no pedido de vistoria avança para monitoramento");
+  igual(acaoNaEsteira("vistoria_aprovada", "pedido_vistoria"), "avancar", "vistoria aprovada no pedido de vistoria já avança: a esteira não espera a ligação");
+  igual(acaoNaEsteira("vistoria_pendente", "pedido_vistoria"), null, "vistoria ainda pendente não mexe");
   igual(acaoNaEsteira("vistoria_reprovada", "pedido_vistoria"), "voltar", "vistoria reprovada volta para execução");
   igual(acaoNaEsteira("conectada", "execucao"), null, "fora do pedido de vistoria, a esteira não se mexe sozinha");
   igual(acaoNaEsteira("aprovado", "aprovacao_concessionaria"), null, "aprovação não move: libera o botão da OS");

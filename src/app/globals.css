@@ -8846,3 +8846,418 @@ button.botao-icone {
   padding: 0.3rem 0.7rem;
   font-size: 0.8rem;
 }
+
+/* ---- checklist da OS: respostas em botão, foto num clique ---------------- */
+
+/* o campo de arquivo do navegador, onde ainda aparecer, com a cara dos botões */
+input[type="file"] {
+  color: var(--ink-3);
+  font-size: 0.8rem;
+}
+
+input[type="file"]::file-selector-button {
+  margin-right: 0.6rem;
+  padding: 0.4rem 0.8rem;
+  border: 1px solid var(--line);
+  border-radius: var(--raio-p);
+  background: var(--surface);
+  color: var(--ink);
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background-color 0.15s var(--ease), border-color 0.15s var(--ease);
+}
+
+input[type="file"]::file-selector-button:hover {
+  border-color: color-mix(in srgb, var(--ink) 22%, var(--line));
+  background: var(--surface-2);
+}
+
+/* Sim / Não lado a lado; a escolha acende */
+.resposta-segmentada {
+  display: inline-flex;
+  gap: 3px;
+  padding: 3px;
+  border: 1px solid var(--line-soft);
+  border-radius: 10px;
+  background: var(--surface-2);
+}
+
+.resposta-segmentada label,
+.resposta-chips label,
+.resposta-marcar {
+  position: relative;
+  display: inline-flex;
+  cursor: pointer;
+}
+
+/* o rádio e a caixinha ficam no lugar, invisíveis: teclado e leitor de tela continuam usando */
+.resposta-segmentada input,
+.resposta-chips input,
+.resposta-marcar input {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  margin: 0;
+  cursor: pointer;
+}
+
+.resposta-segmentada span {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  min-width: 84px;
+  min-height: 34px;
+  justify-content: center;
+  padding: 0 0.9rem;
+  border-radius: 7px;
+  color: var(--ink-2);
+  font-size: 0.86rem;
+  font-weight: 600;
+  transition: background-color 0.15s var(--ease), color 0.15s var(--ease), box-shadow 0.15s var(--ease);
+}
+
+.resposta-segmentada span svg {
+  opacity: 0.55;
+}
+
+.resposta-segmentada label:hover span {
+  color: var(--ink);
+}
+
+.resposta-segmentada input[value="sim"]:checked + span {
+  background: var(--surface);
+  color: var(--ok);
+  box-shadow: 0 1px 2px rgba(17, 20, 24, 0.1), 0 0 0 1px color-mix(in srgb, var(--ok) 35%, transparent);
+}
+
+.resposta-segmentada input[value="nao"]:checked + span {
+  background: var(--surface);
+  color: var(--crit);
+  box-shadow: 0 1px 2px rgba(17, 20, 24, 0.1), 0 0 0 1px color-mix(in srgb, var(--crit) 35%, transparent);
+}
+
+.resposta-segmentada input:checked + span svg {
+  opacity: 1;
+}
+
+.resposta-segmentada input:focus-visible + span,
+.resposta-chips input:focus-visible + span,
+.resposta-marcar input:focus-visible + span {
+  outline: 2px solid var(--cobre);
+  outline-offset: 2px;
+}
+
+/* várias opções: etiquetas que acendem */
+.resposta-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+}
+
+.resposta-chips span {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  min-height: 32px;
+  padding: 0 0.8rem;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--surface);
+  color: var(--ink-2);
+  font-size: 0.84rem;
+  font-weight: 500;
+  transition: background-color 0.15s var(--ease), border-color 0.15s var(--ease), color 0.15s var(--ease);
+}
+
+.resposta-chips span svg {
+  display: none;
+}
+
+.resposta-chips label:hover span {
+  border-color: color-mix(in srgb, var(--ink) 22%, var(--line));
+  color: var(--ink);
+}
+
+.resposta-chips input:checked + span {
+  border-color: color-mix(in srgb, var(--accent) 50%, transparent);
+  background: var(--accent-soft);
+  color: var(--accent);
+  font-weight: 600;
+}
+
+.resposta-chips input:checked + span svg {
+  display: inline;
+}
+
+/* "Feito": um botão que acende verde */
+.resposta-marcar span {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  min-height: 36px;
+  padding: 0 1rem;
+  border: 1px dashed var(--line);
+  border-radius: 10px;
+  background: var(--surface);
+  color: var(--ink-2);
+  font-size: 0.86rem;
+  font-weight: 600;
+  transition: background-color 0.15s var(--ease), border-color 0.15s var(--ease), color 0.15s var(--ease);
+}
+
+.resposta-marcar:hover span {
+  border-color: color-mix(in srgb, var(--ok) 45%, var(--line));
+  color: var(--ink);
+}
+
+.resposta-marcar input:checked + span {
+  border-style: solid;
+  border-color: color-mix(in srgb, var(--ok) 45%, transparent);
+  background: var(--ok-soft);
+  color: var(--ok);
+}
+
+/* número com a unidade colada */
+.resposta-numero {
+  display: inline-flex;
+  align-items: stretch;
+  border: 1px solid var(--line);
+  border-radius: var(--raio-p);
+  background: var(--surface);
+  overflow: hidden;
+}
+
+.resposta-numero:focus-within {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-soft);
+}
+
+.resposta-numero input {
+  width: 8rem;
+  border: 0 !important;
+  border-radius: 0 !important;
+  box-shadow: none !important;
+  background: transparent !important;
+  font-variant-numeric: tabular-nums;
+}
+
+.resposta-numero span {
+  display: grid;
+  place-items: center;
+  padding: 0 0.7rem;
+  border-left: 1px solid var(--line-soft);
+  background: var(--surface-2);
+  color: var(--ink-3);
+  font-size: 0.8rem;
+  font-weight: 600;
+}
+
+/* o formulário da resposta: o campo, e embaixo observação + salvar numa linha */
+.form-resposta {
+  display: grid;
+  gap: 0.6rem;
+  margin: 0.25rem 0 0;
+  padding: 0;
+  border: 0;
+  background: none;
+}
+
+.form-resposta-linha {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.form-resposta-linha input {
+  flex: 1;
+  min-width: 0;
+  min-height: 36px;
+}
+
+.form-resposta textarea {
+  width: 100%;
+}
+
+.item-forms {
+  display: grid;
+  gap: 0.6rem;
+  margin-top: 0.7rem;
+  padding-top: 0.7rem;
+  border-top: 1px dashed var(--line-soft);
+}
+
+/* "Alterar resposta": um link-botão discreto, sem a setinha do navegador */
+.item-alterar > summary {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  list-style: none;
+  padding: 0.25rem 0.55rem;
+  border-radius: var(--raio-p);
+  color: var(--ink-2);
+  font-size: 0.8rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.item-alterar > summary::-webkit-details-marker {
+  display: none;
+}
+
+.item-alterar > summary:hover {
+  background: var(--surface-2);
+  color: var(--accent);
+}
+
+.item-alterar[open] > summary {
+  margin-bottom: 0.4rem;
+  color: var(--accent);
+}
+
+.item-acoes {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem 0.6rem;
+}
+
+.item-acoes form {
+  margin: 0;
+}
+
+.enviar-foto-botao {
+  cursor: pointer;
+}
+
+.enviar-foto-botao:has(input:focus-visible) {
+  outline: 2px solid var(--cobre);
+  outline-offset: 2px;
+}
+
+.girando {
+  animation: girar 0.9s linear infinite;
+}
+
+.item-camera {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  color: var(--ink-3);
+  font-size: 0.74rem;
+}
+
+/* a resposta já dada, em destaque discreto */
+.item-resposta {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.3rem;
+  margin: 0.45rem 0 0;
+  padding: 0.35rem 0.6rem;
+  border-radius: var(--raio-p);
+  background: var(--surface-2);
+  font-size: 0.86rem;
+}
+
+.fotos-contador {
+  padding: 0.05rem 0.45rem;
+  border-radius: 999px;
+  background: var(--surface-2);
+  color: var(--ink-3);
+  font-size: 0.72rem;
+  font-weight: 600;
+}
+
+.fotos-contador.falta {
+  background: var(--warn-soft);
+  color: var(--warn);
+}
+
+.fotos-item {
+  gap: 0.5rem;
+}
+
+.fotos-item img,
+.fotos-item video {
+  border: 1px solid var(--line-soft);
+  border-radius: 10px;
+}
+
+/* 17 itens, 17 "Salvar": todos discretos, e só o do item que a pessoa está
+   mexendo acende em cobre — uma ação principal à vista por vez */
+.form-resposta:focus-within .botao.secundario {
+  color: #fff;
+  background: linear-gradient(180deg, var(--acao-topo), var(--acao-base));
+  border-color: var(--acao-borda);
+}
+
+.resposta-numero {
+  justify-self: start;
+}
+
+.form-resposta .resposta-numero input {
+  width: 9rem !important;
+  flex: none;
+}
+
+/* ---- Início: aviso da Energisa ------------------------------------------- */
+
+.linha-icone.m-ok {
+  border-color: transparent;
+  background: var(--ok-soft);
+  color: var(--ok);
+}
+
+.painel-topo h2 {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+/* com cinco painéis em duas colunas, o último ocupa a linha inteira */
+.inicio-grade > :last-child:nth-child(odd) {
+  grid-column: 1 / -1;
+}
+
+/* ---- esteira: mensagem depois de gerar a OS, e o formulário na janelinha -- */
+
+.aviso-esteira {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+  max-width: none;
+}
+
+.aviso-esteira a {
+  margin-left: auto;
+  font-weight: 600;
+}
+
+.form-agendar-coluna {
+  display: grid;
+  gap: 0.85rem;
+}
+
+.form-agendar-coluna .entrada {
+  min-width: 0;
+}
+
+.form-agendar-coluna .entrada select,
+.form-agendar-coluna .entrada input {
+  width: 100%;
+  min-height: 38px;
+}
+
+.form-agendar-coluna .botao {
+  justify-self: end;
+}
+
+/* cartão que pede ação agora (aprovado pela Energisa, falta a OS): fio de marca à esquerda */
+.cartao-projeto.pede-acao {
+  border-color: color-mix(in srgb, var(--accent) 45%, var(--line-soft));
+  box-shadow:
+    inset 3px 0 0 var(--cobre),
+    var(--shadow);
+}

@@ -2,9 +2,11 @@ import { and, eq, inArray, isNull } from "drizzle-orm";
 
 import { db, schema } from "@/db";
 import { moverNaEsteira } from "@/projeto/esteira";
+import { avisarUsuario } from "@/push/avisos";
 
 import {
   acaoNaEsteira,
+  liberaOsDeInstalacao,
   normalizarItem,
   numeroDoProjeto,
   ROTULO_FASE,
@@ -31,7 +33,18 @@ export interface ResumoSincronizacao {
 }
 
 export async function sincronizar(empresaId: string, crus: Record<string, unknown>[]): Promise<ResumoSincronizacao> {
-  const itens = crus.map(normalizarItem).filter((i): i is ItemEnergisa => i !== null);
+  // Depois do recomeço (`npm run recomecar`), o que foi aberto no portal antes
+  // dele não volta: a lista do portal continua trazendo os antigos, e o Selebi
+  // passa a ignorá-los. Sem data de abertura, entra (não dá para saber).
+  const empresa = await db.query.empresa.findFirst({
+    where: eq(schema.empresa.id, empresaId),
+    columns: { recomecoEm: true },
+  });
+  const corte = empresa?.recomecoEm ?? null;
+  const itens = crus
+    .map(normalizarItem)
+    .filter((i): i is ItemEnergisa => i !== null)
+    .filter((i) => !corte || !i.dataAbertura || i.dataAbertura >= corte);
   const resumo: ResumoSincronizacao = { lidos: itens.length, novos: 0, mudaram: 0, vinculados: 0, movidos: [] };
   if (!itens.length) return resumo;
 
@@ -132,9 +145,17 @@ async function vincularPendentes(empresaId: string): Promise<number> {
 }
 
 /**
- * Para cada projeto do Selebi com linha na Energisa, a situação vigente que a
- * esteira ainda não viu: anota no projeto e, quando a regra manda
- * (`acaoNaEsteira`), move o cartão. Devolve os nomes dos clientes movidos.
+ * Para cada projeto do Selebi com linha na Energisa: anota a situação nova no
+ * projeto, move o cartão quando a regra manda (`acaoNaEsteira`) e avisa no
+ * celular quem cuida daquela etapa e o responsável pelo projeto. Devolve os
+ * nomes dos clientes movidos.
+ *
+ * **Avançar** é conferido em toda leitura, não só quando a situação muda: se
+ * a Energisa aprovou a vistoria antes de o projeto chegar ao "Pedido de
+ * vistoria", ele anda assim que chega — a leitura nunca se perde.
+ * **Voltar** (vistoria reprovada) só na hora em que a situação muda; senão a
+ * reprovação antiga, ainda na tela da Energisa, devolveria o projeto que a
+ * equipe acabou de corrigir e mandar de novo.
  */
 export async function reagirNaEsteira(empresaId: string): Promise<string[]> {
   const ligadas = await db.query.energisaProjeto.findMany({
@@ -149,19 +170,44 @@ export async function reagirNaEsteira(empresaId: string): Promise<string[]> {
   }
   if (!porProjeto.size) return [];
 
-  const projetos = await db.query.projeto.findMany({
-    where: inArray(schema.projeto.id, [...porProjeto.keys()]),
-    with: { etapa: { columns: { slug: true, nome: true } }, cliente: { columns: { nome: true } } },
-  });
+  const [projetos, equipe] = await Promise.all([
+    db.query.projeto.findMany({
+      where: inArray(schema.projeto.id, [...porProjeto.keys()]),
+      with: {
+        etapa: { columns: { slug: true, nome: true, papelResponsavel: true } },
+        cliente: { columns: { nome: true } },
+      },
+    }),
+    db.query.usuario.findMany({
+      where: and(eq(schema.usuario.empresaId, empresaId), eq(schema.usuario.ativo, true)),
+      columns: { id: true, papel: true },
+    }),
+  ]);
   const movidos: string[] = [];
+  const avisos: { para: Set<string>; titulo: string; corpo: string; projetoId: string }[] = [];
+
+  /** Quem recebe: o responsável pelo projeto e quem cuida da etapa em que ele estava. */
+  const destinatarios = (p: (typeof projetos)[number]) => {
+    const ids = new Set<string>();
+    if (p.responsavelId) ids.add(p.responsavelId);
+    for (const u of equipe) if (p.etapa.papelResponsavel && u.papel === p.etapa.papelResponsavel) ids.add(u.id);
+    return ids;
+  };
 
   for (const p of projetos) {
     const entradas = porProjeto.get(p.id)!.map((e) => ({ ...e, fase: e.fase as FaseEnergisa }));
     const v = vigente(entradas);
-    if (!v || !v.codigoSituacao || v.codigoSituacao === v.aplicadoCodigo) continue;
+    if (!v || !v.codigoSituacao) continue;
+    const mudou = v.codigoSituacao !== v.aplicadoCodigo;
+    // A primeira leitura de um projeto (nada aplicado ainda) não vira recado nem aviso.
+    const novidade = mudou && v.aplicadoCodigo !== null;
 
-    const acao = p.situacao === "em_andamento" ? acaoNaEsteira(v.fase, p.etapa.slug) : null;
-    let texto = `Energisa (projeto ${v.numero}): ${v.descricaoSituacao ?? ROTULO_FASE[v.fase]}.`;
+    const regra = p.situacao === "em_andamento" ? acaoNaEsteira(v.fase, p.etapa.slug) : null;
+    const acao = regra === "avancar" || (regra === "voltar" && mudou) ? regra : null;
+    if (!mudou && !acao) continue;
+
+    const situacao = v.descricaoSituacao ?? ROTULO_FASE[v.fase];
+    let texto = `Energisa (projeto ${v.numero}): ${situacao}.`;
     if (acao) {
       const nova = await moverNaEsteira({
         empresaId,
@@ -169,17 +215,42 @@ export async function reagirNaEsteira(empresaId: string): Promise<string[]> {
         direcao: acao,
         observacao:
           acao === "avancar"
-            ? `Automático: a Energisa conectou a UC GD (projeto ${v.numero}).`
+            ? `Automático: a Energisa aprovou o pedido de vistoria (projeto ${v.numero}, ${situacao}).`
             : `Automático: a Energisa reprovou a vistoria (projeto ${v.numero}) — corrigir e pedir de novo.`,
       });
       if (nova) {
         texto += ` O projeto foi para "${nova.nome}" automaticamente.`;
         movidos.push(p.cliente.nome);
+        avisos.push({
+          para: destinatarios(p),
+          projetoId: p.id,
+          titulo: acao === "avancar" ? `Vistoria aprovada: ${p.cliente.nome}` : `Vistoria reprovada: ${p.cliente.nome}`,
+          corpo:
+            acao === "avancar"
+              ? `A Energisa aceitou o pedido de vistoria (${situacao}). O projeto foi para ${nova.nome} sozinho.`
+              : `O projeto voltou para ${nova.nome}. Corrija e peça a vistoria de novo.`,
+        });
+      }
+    } else if (novidade && p.situacao === "em_andamento" && p.etapa.slug === "aprovacao_concessionaria") {
+      // Etapa 9: a aprovação não move sozinha (a obra precisa de técnico e dia), mas avisa quem cuida dela.
+      if (liberaOsDeInstalacao(v.fase)) {
+        avisos.push({
+          para: destinatarios(p),
+          projetoId: p.id,
+          titulo: `Energisa aprovou: ${p.cliente.nome}`,
+          corpo: "Gere a OS de instalação na esteira: escolha o técnico e o dia, e o projeto anda sozinho.",
+        });
+      } else if (v.fase === "indeferido") {
+        avisos.push({
+          para: destinatarios(p),
+          projetoId: p.id,
+          titulo: `Energisa indeferiu: ${p.cliente.nome}`,
+          corpo: "Veja o motivo no portal da Energisa e reenvie o projeto.",
+        });
       }
     }
-    // A primeira leitura de um projeto só vira recado quando faz algo; as
-    // seguintes, sempre que a situação muda.
-    if (acao || v.aplicadoCodigo !== null) {
+
+    if (acao || novidade) {
       await db.insert(schema.comentario).values({
         empresaId,
         entidade: "projeto",
@@ -188,10 +259,19 @@ export async function reagirNaEsteira(empresaId: string): Promise<string[]> {
         texto,
       });
     }
-    await db
-      .update(schema.energisaProjeto)
-      .set({ aplicadoCodigo: v.codigoSituacao })
-      .where(eq(schema.energisaProjeto.id, v.id));
+    if (mudou) {
+      await db
+        .update(schema.energisaProjeto)
+        .set({ aplicadoCodigo: v.codigoSituacao })
+        .where(eq(schema.energisaProjeto.id, v.id));
+    }
+  }
+
+  // O aviso vai depois de gravar tudo: é extra, e nunca atrasa nem derruba a leitura.
+  for (const a of avisos) {
+    for (const usuarioId of a.para) {
+      void avisarUsuario(usuarioId, { titulo: a.titulo, corpo: a.corpo, dados: { tipo: "projeto", projetoId: a.projetoId } });
+    }
   }
   return movidos;
 }

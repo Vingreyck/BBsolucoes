@@ -1,6 +1,6 @@
 import "dotenv/config";
 
-import { and, eq, inArray, isNull } from "drizzle-orm";
+import { and, eq, inArray, isNull, sql } from "drizzle-orm";
 
 import { db, schema } from "@/db";
 
@@ -48,6 +48,8 @@ async function main() {
           isNull(schema.alerta.ordemServicoId),
           // Só o que a nossa regra detectou pela geração; o alarme do portal tem código.
           isNull(schema.alerta.codigoFabricante),
+          // Usina arquivada no recomeço não gera OS.
+          sql`${schema.alerta.usinaId} in (select id from usina where arquivada_em is null)`,
         ),
       );
     const paradas = usinasParadas(alertas);
@@ -57,7 +59,7 @@ async function main() {
     }
 
     const usinas = await db.query.usina.findMany({
-      where: eq(schema.usina.empresaId, empresa.id),
+      where: and(eq(schema.usina.empresaId, empresa.id), isNull(schema.usina.arquivadaEm)),
       columns: { id: true, nome: true, clienteId: true },
     });
     if (paradas.length > usinas.length * FRACAO_MAXIMA_PARADA) {

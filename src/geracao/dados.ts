@@ -153,8 +153,9 @@ export interface LinhaRelatorio {
  * link do relatório (criado aqui na primeira vez que a lista abre).
  */
 export async function relatoriosDoMes(empresaId: string, mes: string): Promise<LinhaRelatorio[]> {
+  // Usina arquivada no recomeço não recebe mais relatório: segue coletando só para análise.
   const usinas = await db.query.usina.findMany({
-    where: and(eq(schema.usina.empresaId, empresaId), isNotNull(schema.usina.clienteId)),
+    where: and(eq(schema.usina.empresaId, empresaId), isNotNull(schema.usina.clienteId), isNull(schema.usina.arquivadaEm)),
     with: { cliente: { columns: { id: true, nome: true, telefone: true } } },
     columns: { id: true, nome: true, potenciaKwp: true },
   });

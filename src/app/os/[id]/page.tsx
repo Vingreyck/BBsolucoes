@@ -27,7 +27,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 
 import { ErroOs, exigirAtorWeb, podeExecutar } from "@/os/acesso";
-import { carregarOs, comentariosDaOs, responsaveisPossiveis, tempoEmCampo } from "@/os/consultas";
+import { carregarOs, comentariosDaOs, quemUsaOApp, tempoEmCampo } from "@/os/consultas";
 import {
   formatarDuracao,
   formatarInstante,
@@ -99,11 +99,16 @@ export default async function DetalheOs({
     throw e;
   }
 
-  const [comentarios, pessoas] = await Promise.all([
+  const [comentarios, daApp] = await Promise.all([
     comentariosDaOs(ator.empresaId, os.id),
     // Quem pode voltar na visita de volta também precisa da lista, mesmo sem ser gestão.
-    ator.gestao || os.checklist.some((i) => i.agendar) ? responsaveisPossiveis(ator.empresaId) : Promise.resolve([]),
+    ator.gestao || os.checklist.some((i) => i.agendar) ? quemUsaOApp(ator.empresaId) : Promise.resolve([]),
   ]);
+  // Quem já responde pela OS continua na lista, mesmo que tenha saído do app.
+  const pessoas: { id: string; nome: string; papel: string }[] = [...daApp];
+  if (os.responsavel && !pessoas.some((p) => p.id === os.responsavel!.id)) {
+    pessoas.push({ id: os.responsavel.id, nome: os.responsavel.nome, papel: "" });
+  }
 
   const fechada = encerrada(os.status);
   const executa = podeExecutar(ator, os);
@@ -220,11 +225,12 @@ export default async function DetalheOs({
       <input type="hidden" name="acao" value="atribuir" />
       <label>
         Quem atende
+        <small className="fraco">Só aparece quem já entrou no app BB-Selebi.</small>
         <select name="responsavelId" defaultValue={os.responsavel?.id ?? ""}>
           <option value="">Ninguém</option>
           {pessoas.map((u) => (
             <option key={u.id} value={u.id}>
-              {u.nome} ({PAPEL[u.papel] ?? u.papel})
+              {u.nome}{PAPEL[u.papel] ? ` (${PAPEL[u.papel]})` : ""}
             </option>
           ))}
         </select>
@@ -241,11 +247,11 @@ export default async function DetalheOs({
       {gestao && (
         <label className="entrada">
           <span className="entrada-rotulo">Quem vai</span>
-          <select name="responsavelId" defaultValue={os.responsavel?.id ?? ""}>
-            <option value="">Ninguém ainda</option>
+          <select name="responsavelId" defaultValue={os.responsavel?.id ?? ""} title="Só aparece quem já entrou no app BB-Selebi">
+            <option value="">{pessoas.length ? "Ninguém ainda" : "Ninguém entrou no app ainda"}</option>
             {pessoas.map((u) => (
               <option key={u.id} value={u.id}>
-                {u.nome} ({PAPEL[u.papel] ?? u.papel})
+                {u.nome}{PAPEL[u.papel] ? ` (${PAPEL[u.papel]})` : ""}
               </option>
             ))}
           </select>

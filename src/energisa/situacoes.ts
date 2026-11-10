@@ -112,21 +112,23 @@ export function vigente<T extends { fase: FaseEnergisa; dataAbertura: Date | nul
 }
 
 /**
- * O que a esteira faz sozinha quando a situação muda — só a partir da etapa
- * em que a mudança faz sentido, para nunca empurrar um projeto que está em
- * outro lugar por outro motivo:
+ * O que a esteira faz sozinha com a situação da Energisa — só na etapa em que
+ * ela faz sentido, para nunca empurrar um projeto que está em outro lugar por
+ * outro motivo:
  *
- * - **UC GD Conectada** com o projeto em "Pedido de vistoria" → avança para
- *   Monitoramento (a usina está ligada; não há o que fazer à mão);
+ * - **Vistoria aprovada** (ou ligação liberada, ou já a UC GD conectada) com o
+ *   projeto em "Pedido de vistoria" → avança para Monitoramento: o pedido foi
+ *   aceito, não há o que fazer à mão;
  * - **Vistoria reprovada** com o projeto em "Pedido de vistoria" → volta para
  *   Execução, que é para onde a esteira manda o retrabalho.
  *
- * A aprovação do projeto (etapa 9) não move nada: ela libera o botão "Gerar OS
- * de instalação", porque a obra precisa de data e de técnico.
+ * A aprovação do projeto (etapa 9) não move nada sozinha: ela libera o botão
+ * "Gerar OS de instalação", porque a obra precisa de técnico e de dia — é ao
+ * escolher os dois que o projeto anda.
  */
 export function acaoNaEsteira(fase: FaseEnergisa, etapaSlug: string): "avancar" | "voltar" | null {
   if (etapaSlug !== "pedido_vistoria") return null;
-  if (fase === "conectada") return "avancar";
+  if (fase === "vistoria_aprovada" || fase === "conectada") return "avancar";
   if (fase === "vistoria_reprovada") return "voltar";
   return null;
 }

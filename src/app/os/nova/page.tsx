@@ -14,7 +14,7 @@ import Link from "next/link";
 
 import { db, schema } from "@/db";
 import { exigirGestaoWeb } from "@/os/acesso";
-import { responsaveisPossiveis } from "@/os/consultas";
+import { quemUsaOApp } from "@/os/consultas";
 import { garantirModelos } from "@/os/modelos";
 import { PRIORIDADE_ROTULO, TIPO_ROTULO } from "@/os/tipos";
 
@@ -175,7 +175,7 @@ export default async function NovaOs({
   // ---- passo 2: os dados da OS --------------------------------------------
   await garantirModelos(empresaId);
   const [pessoas, modelos] = await Promise.all([
-    responsaveisPossiveis(empresaId),
+    quemUsaOApp(empresaId),
     db.query.modeloOs.findMany({
       where: eq(schema.modeloOs.empresaId, empresaId),
       columns: { tipo: true, nome: true, prazoHoras: true },

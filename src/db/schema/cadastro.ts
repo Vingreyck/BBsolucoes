@@ -42,6 +42,12 @@ export const empresa = pgTable(
      * tem acesso ao banco consegue rodar.
      */
     codigoAcessoHash: varchar("codigo_acesso_hash", { length: 64 }),
+    /**
+     * Quando a empresa recomeçou a operação do zero (`npm run recomecar`).
+     * O que veio antes foi apagado ou arquivado; a lista da Energisa ignora os
+     * projetos abertos no portal antes desta data, para eles não voltarem.
+     */
+    recomecoEm: timestamp("recomeco_em", { withTimezone: true }),
     criadoEm: timestamp("criado_em", { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [
@@ -275,6 +281,12 @@ export const usina = pgTable(
     /** Pasta do cliente no Drive, que hoje é onde os documentos moram. */
     linkDrive: text("link_drive"),
     observacoesVistoria: text("observacoes_vistoria"),
+    /**
+     * Usina do tempo de antes do recomeço: a coleta continua (a geração fica
+     * guardada para análise), mas ela sai da tela de usinas, dos alertas, da OS
+     * automática e do relatório mensal. Aparece só no filtro "Arquivadas".
+     */
+    arquivadaEm: timestamp("arquivada_em", { withTimezone: true }),
     criadoEm: timestamp("criado_em", { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [

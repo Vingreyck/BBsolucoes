@@ -1,4 +1,4 @@
-import { and, count, eq, isNull, ne } from "drizzle-orm";
+import { and, count, eq, isNull, ne, sql } from "drizzle-orm";
 import type { Metadata } from "next";
 import { Inter, Outfit } from "next/font/google";
 
@@ -39,7 +39,14 @@ async function alertasAbertos(empresaId: string): Promise<number> {
   const [linha] = await db
     .select({ n: count() })
     .from(schema.alerta)
-    .where(and(eq(schema.alerta.empresaId, empresaId), ne(schema.alerta.status, "resolvido")));
+    .where(
+      and(
+        eq(schema.alerta.empresaId, empresaId),
+        ne(schema.alerta.status, "resolvido"),
+        // usina arquivada no recomeço não entra na conta
+        sql`${schema.alerta.usinaId} in (select id from usina where arquivada_em is null)`,
+      ),
+    );
   return Number(linha?.n ?? 0);
 }
 

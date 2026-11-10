@@ -148,7 +148,7 @@ export default async function Usinas({
     });
   }
 
-  const linhas = usinas.map((u) => {
+  const todas = usinas.map((u) => {
     const serie = porUsina.get(u.id);
     const potencia = u.potenciaKwp ? Number(u.potenciaKwp) : null;
 
@@ -174,6 +174,16 @@ export default async function Usinas({
     };
   });
 
+  /**
+   * Recomeço: as usinas de antes ficam só para análise. Saem da lista, das
+   * contas e dos filtros, e aparecem só no filtro "Arquivadas" — seguem
+   * coletando, sem alerta, OS automática nem relatório.
+   */
+  const verArquivadas = filtro === "arquivadas";
+  const arquivadas = todas.filter((l) => l.usina.arquivadaEm);
+  const ativas = todas.filter((l) => !l.usina.arquivadaEm);
+  const linhas = verArquivadas ? arquivadas : ativas;
+
   const alvo = normalizar(busca.trim());
   const filtradas = linhas.filter((l) => {
     if (alvo) {
@@ -196,7 +206,7 @@ export default async function Usinas({
 
   // Contagem por portal, para os botões mostrarem quantas cada um tem.
   const porPortal = new Map<string, number>();
-  for (const l of linhas) {
+  for (const l of ativas) {
     if (l.portais.length === 0) {
       porPortal.set("sem_portal", (porPortal.get("sem_portal") ?? 0) + 1);
     }
@@ -206,18 +216,18 @@ export default async function Usinas({
   }
   const portaisOrdenados = [...porPortal].sort((a, b) => b[1] - a[1]);
 
-  const suspeitas = linhas.filter((l) => l.potenciaSuspeita).length;
-  const semEquipamento = linhas.filter((l) => l.semEquipamento).length;
-  const semSerie = linhas.filter((l) => l.semSerie).length;
-  const comProblema = linhas.filter((l) => l.situacao !== undefined).length;
-  const semComunicacao = linhas.filter(
+  const suspeitas = ativas.filter((l) => l.potenciaSuspeita).length;
+  const semEquipamento = ativas.filter((l) => l.semEquipamento).length;
+  const semSerie = ativas.filter((l) => l.semSerie).length;
+  const comProblema = ativas.filter((l) => l.situacao !== undefined).length;
+  const semComunicacao = ativas.filter(
     (l) => l.situacao?.tipo === "sem_comunicacao",
   ).length;
   const pagina = paginar(filtradas, paginaPedida);
   const atuais = { busca, filtro, portal };
   const potenciaTotal = filtradas.reduce((s, l) => s + (l.potencia ?? 0), 0);
 
-  const gerando = linhas.length - comProblema;
+  const gerando = ativas.length - comProblema;
   const pendenciasCadastro = suspeitas + semEquipamento;
 
   return (
@@ -227,7 +237,7 @@ export default async function Usinas({
         meta={
           <>
             <span>
-              {filtradas.length === linhas.length ? `${linhas.length} cadastradas` : `${filtradas.length} de ${linhas.length}`}
+              {filtradas.length === linhas.length ? `${linhas.length} ${verArquivadas ? "arquivadas" : "cadastradas"}` : `${filtradas.length} de ${linhas.length}`}
             </span>
             <span>{kWp(potenciaTotal)}</span>
           </>
@@ -270,6 +280,13 @@ export default async function Usinas({
       </section>
 
       <div className="pagina-corpo pilha">
+        {verArquivadas && (
+          <p className="aviso aviso-solto">
+            <strong>Usinas de antes do recomeço.</strong> Seguem coletando, só para análise da geração: não geram alerta,
+            OS automática nem relatório mensal, e não aparecem no resto do sistema.
+          </p>
+        )}
+
         {filtro === "potencia" && suspeitas > 0 && (
           <p className="aviso aviso-solto">
             A potência dessas usinas exigiria mais de {HORAS_IMPOSSIVEIS} horas de sol pleno num único dia para gerar o que
@@ -292,7 +309,7 @@ export default async function Usinas({
               rotulo="Portal"
               atual={portal}
               opcoes={[
-                { valor: "", rotulo: `Todos (${linhas.length})`, href: endereco("/usinas", atuais, { portal: null }) },
+                { valor: "", rotulo: `Todos (${ativas.length})`, href: endereco("/usinas", atuais, { portal: null }) },
                 ...portaisOrdenados.map(([p, n]) => ({
                   valor: p,
                   rotulo: `${p === "sem_portal" ? "Sem portal" : (PORTAL_ROTULO[p] ?? p)} (${n})`,
@@ -301,7 +318,7 @@ export default async function Usinas({
               ]}
             />
             <nav className="filtros" aria-label="Situação e cadastro">
-              <Filtro atual={filtro} valor="" atuais={atuais} n={linhas.length}>
+              <Filtro atual={filtro} valor="" atuais={atuais} n={ativas.length}>
                 Todas
               </Filtro>
               <Filtro atual={filtro} valor="problema" atuais={atuais} n={comProblema} perigo>
@@ -319,6 +336,11 @@ export default async function Usinas({
               <Filtro atual={filtro} valor="sem-serie" atuais={atuais} n={semSerie}>
                 Sem geração
               </Filtro>
+              {arquivadas.length > 0 && (
+                <Filtro atual={filtro} valor="arquivadas" atuais={atuais} n={arquivadas.length}>
+                  Arquivadas
+                </Filtro>
+              )}
             </nav>
           </div>
 

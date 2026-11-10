@@ -126,6 +126,8 @@ async function main() {
 
   const usinas = await db.query.usina.findMany({ with: { cliente: true } });
   const nomeDaUsina = new Map(usinas.map((u) => [u.id, u.nome]));
+  // Arquivada no recomeço: entra na conta do dia do parque, mas não vira alerta.
+  const arquivadas = new Set(usinas.filter((u) => u.arquivadaEm).map((u) => u.id));
 
   /**
    * A partir de quando cada usina pode ser cobrada: data de instalação mais a
@@ -230,6 +232,7 @@ async function main() {
       continue;
     }
     for (const [usinaId, base] of padrao) {
+      if (arquivadas.has(usinaId)) continue;
       const gerado = porUsina.get(usinaId)?.get(dia);
       if (gerado === undefined) continue;
       const esperado = base * fator;

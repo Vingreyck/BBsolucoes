@@ -49,10 +49,11 @@ export default async function Agenda({ searchParams }: { searchParams: Promise<{
   const dias = Array.from({ length: 7 }, (_, i) => new Date(segunda.getTime() + i * 86_400_000));
   const { marcadas, aAgendar, pessoas } = await agendaDaSemana(ator, segunda);
 
-  // Linhas: quem tem OS na semana, mais os técnicos (mesmo sem nada marcado —
-  // a linha vazia mostra quem está livre), mais "sem responsável".
+  // Linhas: quem usa o app (mesmo sem nada marcado — a linha vazia mostra quem
+  // está livre e é onde dá para soltar uma OS), quem tem OS na semana, e
+  // "sem responsável".
   const linhas = new Map<string, string>();
-  for (const p of pessoas) if (p.papel === "tecnico") linhas.set(p.id, p.nome);
+  for (const p of pessoas) linhas.set(p.id, p.nome);
   for (const o of marcadas) if (o.responsavel) linhas.set(o.responsavel.id, o.responsavel.nome);
   if (!ator.gestao) linhas.set(ator.id, ator.nome);
   const ordenadas = [...linhas.entries()].sort((a, b) => a[1].localeCompare(b[1]));

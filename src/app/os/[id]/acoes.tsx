@@ -1,15 +1,19 @@
 "use client";
 
-import { MoreHorizontal, X } from "lucide-react";
+import { MoreHorizontal } from "lucide-react";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 
+import { Dialogo } from "../../_ui/dialogo";
+
+export { BotaoDialogo } from "../../_ui/dialogo";
+
 /**
- * As ações da OS que abrem numa janelinha.
+ * As ações da OS que não são o próximo passo.
  *
  * A tela da OS tinha nove "sanfonas" abertas e fechadas uma embaixo da outra
  * (concluir, pausar, cancelar, agendar…). Agora o próximo passo fica à vista,
  * no cartão "Agora", e o resto mora aqui: o que é secundário ou perigoso fica
- * num menu "Mais", e cada um abre o próprio formulário por cima da tela. É a
+ * num menu "Mais", e cada um abre o próprio formulário numa janelinha. É a
  * divulgação progressiva: tudo a um clique, nada no caminho.
  *
  * Os formulários continuam sendo do servidor: chegam prontos como `conteudo`.
@@ -25,80 +29,6 @@ export interface AcaoDoMenu {
   titulo: string;
   descricao?: ReactNode;
   conteudo: ReactNode;
-}
-
-function Dialogo({
-  titulo,
-  descricao,
-  icone,
-  fechar,
-  children,
-}: {
-  titulo: string;
-  descricao?: ReactNode;
-  icone?: ReactNode;
-  fechar: () => void;
-  children: ReactNode;
-}) {
-  useEffect(() => {
-    const aoTeclar = (e: KeyboardEvent) => e.key === "Escape" && fechar();
-    window.addEventListener("keydown", aoTeclar);
-    return () => window.removeEventListener("keydown", aoTeclar);
-  }, [fechar]);
-
-  return (
-    <div className="dialogo-fundo" onClick={fechar}>
-      <div className="dialogo dialogo-largo" role="dialog" aria-modal="true" aria-label={titulo} onClick={(e) => e.stopPropagation()}>
-        <header className="dialogo-topo">
-          {icone && (
-            <span className="dialogo-icone" aria-hidden>
-              {icone}
-            </span>
-          )}
-          <div>
-            <h2>{titulo}</h2>
-            {descricao && <p className="dialogo-sub">{descricao}</p>}
-          </div>
-          <button type="button" className="botao-icone" onClick={fechar} aria-label="Fechar">
-            <X size={16} aria-hidden />
-          </button>
-        </header>
-        <div className="dialogo-corpo">{children}</div>
-      </div>
-    </div>
-  );
-}
-
-/** Um botão que abre um formulário na janelinha. */
-export function BotaoDialogo({
-  rotulo,
-  icone,
-  classe = "botao secundario",
-  titulo,
-  descricao,
-  children,
-}: {
-  rotulo: ReactNode;
-  icone?: ReactNode;
-  classe?: string;
-  titulo: string;
-  descricao?: ReactNode;
-  children: ReactNode;
-}) {
-  const [aberto, setAberto] = useState(false);
-  return (
-    <>
-      <button type="button" className={classe} onClick={() => setAberto(true)}>
-        {icone}
-        {rotulo}
-      </button>
-      {aberto && (
-        <Dialogo titulo={titulo} descricao={descricao} icone={icone} fechar={() => setAberto(false)}>
-          {children}
-        </Dialogo>
-      )}
-    </>
-  );
 }
 
 /** "Mais": a lista curta do que não é o próximo passo. */

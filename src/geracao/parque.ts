@@ -1,4 +1,4 @@
-import { eq, max } from "drizzle-orm";
+import { and, eq, isNull, max } from "drizzle-orm";
 
 import { db, schema } from "@/db";
 
@@ -70,8 +70,9 @@ export async function geracaoDoParque(empresaId: string, quantosDias = 30): Prom
   if (ja && ja.chave === chave && Date.now() - ja.quando < GUARDAR_MS) return ja.valor;
 
   const [usinas, [coleta]] = await Promise.all([
+    // Só as usinas ativas: as arquivadas no recomeço ficam fora do Início.
     db.query.usina.findMany({
-      where: eq(schema.usina.empresaId, empresaId),
+      where: and(eq(schema.usina.empresaId, empresaId), isNull(schema.usina.arquivadaEm)),
       columns: { id: true, potenciaKwp: true },
     }),
     db

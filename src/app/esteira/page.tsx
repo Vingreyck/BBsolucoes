@@ -1,13 +1,16 @@
 import { and, asc, eq, inArray, isNotNull } from "drizzle-orm";
-import { ChevronLeft, ChevronRight, Clock, Plus } from "lucide-react";
+import { CheckCircle2, ChevronLeft, ChevronRight, Clock, Plus, Wrench } from "lucide-react";
+import Link from "next/link";
 
 import { exigirUsuario } from "@/auth/sessao";
 import { db, schema } from "@/db";
 import { liberaOsDeInstalacao, tomDaFase, vigente, type FaseEnergisa } from "@/energisa/situacoes";
 import { ehGestaoWeb } from "@/os/acesso";
+import { quemUsaOApp } from "@/os/consultas";
 import { numeroOs } from "@/os/tipos";
 
 import { Ajuda, Cabecalho } from "../_ui";
+import { BotaoDialogo } from "../_ui/dialogo";
 import { moverProjeto } from "../actions";
 import { iniciais, kWp, semAcento } from "../formatar";
 import { gerarOsInstalacao } from "./actions";
@@ -35,8 +38,13 @@ const TOM_ENERGISA: Record<string, string> = { ok: "sev-info", ruim: "sev-critic
 
 const SITUACAO_ROTULO: Record<string, string> = { pausado: "pausado", cancelado: "cancelado" };
 
-export default async function Esteira() {
+export default async function Esteira({
+  searchParams,
+}: {
+  searchParams: Promise<{ ok?: string; erro?: string; os?: string }>;
+}) {
   const usuario = await exigirUsuario();
+  const { ok, erro, os: osFeita } = await searchParams;
   const gestao = ehGestaoWeb(usuario.papel);
 
   // Tudo pela empresa de quem está olhando: o quadro de uma empresa nunca
@@ -129,6 +137,8 @@ export default async function Esteira() {
 
   const parados = abertos.filter((p) => p.situacao === "em_andamento" && nivelDe(p) !== "normal").length;
   const meus = abertos.filter((p) => p.responsavelId === usuario.id).length;
+  // Quem pode receber a OS de instalação: só quem usa o app (a OS chega pelo celular).
+  const tecnicos = gestao && energisa.size ? await quemUsaOApp(usuario.empresaId) : [];
 
   return (
     <main className="pagina-esteira">
@@ -167,6 +177,18 @@ export default async function Esteira() {
         }
       />
 
+      {ok && (
+        <p className="aviso ok aviso-esteira" role="status">
+          <CheckCircle2 size={16} aria-hidden /> <span>{ok}</span>
+          {osFeita && <Link href={`/os/${osFeita}`}>Abrir a OS</Link>}
+        </p>
+      )}
+      {erro && (
+        <p className="aviso erro aviso-esteira" role="alert">
+          {erro}
+        </p>
+      )}
+
       <QuadroEsteira
         etapas={etapas.map((e) => ({
           id: e.id,
@@ -180,7 +202,13 @@ export default async function Esteira() {
         meus={meus}
       >
         {etapas.map((e) => {
-          const lista = porEtapa.get(e.id) ?? [];
+          // Quem pede ação vem primeiro na coluna: na etapa 9, o aprovado pela
+          // Energisa que ainda espera a OS de instalação. O resto, do mais antigo.
+          const pedeAcao = (p: (typeof abertos)[number]) => {
+            const v = energisa.get(p.id);
+            return Boolean(v) && e.slug === "aprovacao_concessionaria" && liberaOsDeInstalacao(v!.fase as FaseEnergisa) && !osInstalacao.has(p.id);
+          };
+          const lista = [...(porEtapa.get(e.id) ?? [])].sort((a, b) => Number(pedeAcao(b)) - Number(pedeAcao(a)));
           return (
             <ColunaEsteira
               key={e.id}
@@ -217,7 +245,7 @@ export default async function Esteira() {
                 return (
                   <article
                     key={p.id}
-                    className="cartao-projeto"
+                    className={`cartao-projeto${pedeAcao(p) ? " pede-acao" : ""}`}
                     data-busca={semAcento(`${p.cliente.nome} ${p.cliente.cidade ?? ""} ${p.responsavel?.nome ?? ""}`)}
                     data-nivel={nivel}
                     data-dono={p.responsavelId ?? ""}
@@ -247,11 +275,38 @@ export default async function Esteira() {
                               {numeroOs(os.numero)} de instalação
                             </a>
                           ) : gestao ? (
-                            <form action={gerarOsInstalacao.bind(null, p.id)}>
-                              <button type="submit" className="botao botao-cartao">
-                                Gerar OS de instalação
-                              </button>
-                            </form>
+                            <BotaoDialogo
+                              key={`${p.id}|${ok ?? ""}|${erro ?? ""}`}
+                              rotulo="Gerar OS de instalação"
+                              icone={<Wrench size={14} aria-hidden />}
+                              classe="botao botao-cartao"
+                              titulo="Gerar OS de instalação"
+                              descricao={`${p.cliente.nome} · a Energisa aprovou o projeto ${v.numero}. Escolha quem instala e quando: a OS nasce agendada, o técnico recebe o aviso no celular e o projeto vai para Execução.`}
+                            >
+                              <form action={gerarOsInstalacao.bind(null, p.id)} className="form-agendar form-agendar-coluna">
+                                <label className="entrada">
+                                  <span className="entrada-rotulo">Técnico</span>
+                                  <select name="responsavelId" required defaultValue="">
+                                    <option value="" disabled>
+                                      {tecnicos.length ? "Escolha quem instala…" : "Ninguém entrou no app ainda"}
+                                    </option>
+                                    {tecnicos.map((t) => (
+                                      <option key={t.id} value={t.id}>
+                                        {t.nome}
+                                      </option>
+                                    ))}
+                                  </select>
+                                  <small className="entrada-ajuda">Só aparece quem já entrou no app BB-Selebi.</small>
+                                </label>
+                                <label className="entrada">
+                                  <span className="entrada-rotulo">Dia e hora</span>
+                                  <input type="datetime-local" name="agendadaPara" required />
+                                </label>
+                                <button type="submit" className="botao">
+                                  <Wrench size={15} aria-hidden /> Gerar OS e agendar
+                                </button>
+                              </form>
+                            </BotaoDialogo>
                           ) : null)}
                       </div>
                     )}

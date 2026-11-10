@@ -1,3 +1,5 @@
+import { Check, Pencil, Smartphone, Undo2, X } from "lucide-react";
+
 import type { OsCompleta } from "@/os/consultas";
 import { detalheDoEvento, textoDaResposta } from "@/os/formatar";
 import { faltaNoItem } from "@/os/regras-item";
@@ -6,11 +8,11 @@ import { EVENTO_ROTULO, ORIGEM_EVENTO_ROTULO } from "@/os/tipos";
 
 import {
   acaoOsAction,
-  anexarAction,
   marcarVisitaDeVoltaAction,
   removerAnexoAction,
   responderItemAction,
 } from "../actions";
+import { EnviarFoto } from "./enviar-foto";
 
 /*
  * Peças da tela de detalhe da OS. Tudo componente de servidor e formulário
@@ -69,29 +71,39 @@ function CampoResposta({ item }: { item: Item }) {
   switch (item.tipoResposta) {
     case "check":
       return (
-        <label className="linha-check">
-          <input type="checkbox" name="valor" value="sim" defaultChecked={v === true} /> Feito
+        <label className="resposta-marcar">
+          <input type="checkbox" name="valor" value="sim" defaultChecked={v === true} />
+          <span>
+            <Check size={15} aria-hidden /> Feito
+          </span>
         </label>
       );
     case "sim_nao":
       return (
-        <div className="linha-radios">
+        <div className="resposta-segmentada" role="radiogroup" aria-label={item.descricao}>
           <label>
-            <input type="radio" name="valor" value="sim" defaultChecked={v === true} required /> Sim
+            <input type="radio" name="valor" value="sim" defaultChecked={v === true} required />
+            <span>
+              <Check size={15} aria-hidden /> Sim
+            </span>
           </label>
           <label>
-            <input type="radio" name="valor" value="nao" defaultChecked={v === false} /> Não
+            <input type="radio" name="valor" value="nao" defaultChecked={v === false} />
+            <span>
+              <X size={15} aria-hidden /> Não
+            </span>
           </label>
         </div>
       );
     case "numero":
       return (
-        <label className="linha-numero">
+        <label className="resposta-numero">
           <input
             type="text"
             inputMode="decimal"
             name="valor"
             defaultValue={typeof v === "number" ? String(v).replace(".", ",") : ""}
+            placeholder="0"
             required
           />
           {item.unidade && <span>{item.unidade}</span>}
@@ -100,6 +112,18 @@ function CampoResposta({ item }: { item: Item }) {
     case "texto":
       return <textarea name="valor" rows={2} defaultValue={typeof v === "string" ? v : ""} required maxLength={2000} />;
     case "escolha":
+      // Poucas opções viram botões (vê tudo de uma vez); muitas ficam na lista.
+      if ((item.opcoes ?? []).length <= 6)
+        return (
+          <div className="resposta-chips" role="radiogroup" aria-label={item.descricao}>
+            {(item.opcoes ?? []).map((o, i) => (
+              <label key={o}>
+                <input type="radio" name="valor" value={o} defaultChecked={v === o} required={i === 0} />
+                <span>{o}</span>
+              </label>
+            ))}
+          </div>
+        );
       return (
         <select name="valor" defaultValue={typeof v === "string" ? v : ""} required>
           <option value="" disabled>
@@ -114,10 +138,13 @@ function CampoResposta({ item }: { item: Item }) {
       );
     case "multipla":
       return (
-        <div className="linha-radios">
+        <div className="resposta-chips" role="group" aria-label={item.descricao}>
           {(item.opcoes ?? []).map((o) => (
             <label key={o}>
-              <input type="checkbox" name="valor" value={o} defaultChecked={Array.isArray(v) && v.includes(o)} /> {o}
+              <input type="checkbox" name="valor" value={o} defaultChecked={Array.isArray(v) && v.includes(o)} />
+              <span>
+                <Check size={13} aria-hidden /> {o}
+              </span>
             </label>
           ))}
         </div>
@@ -232,62 +259,73 @@ export function ItemChecklist({
 
       {podeResponder && (
         <div className="item-forms">
-          {(item.tipoResposta !== "foto" || item.exigeObservacao !== "nao") && (
-            <details open={!respondido && item.obrigatorio}>
-              <summary>{respondido ? "Mudar resposta" : "Responder"}</summary>
-              <form action={responderItemAction.bind(null, osId, item.id)} className="form-resposta">
-                <input type="hidden" name="tipoResposta" value={item.tipoResposta} />
-                <CampoResposta item={item} />
-                <input
-                  type="text"
-                  name="observacao"
-                  defaultValue={item.observacao ?? ""}
-                  placeholder={dicaObservacao}
-                  required={item.exigeObservacao === "sempre"}
-                  maxLength={2000}
-                />
-                <button type="submit" className="botao secundario">
-                  Salvar
+          {(item.tipoResposta !== "foto" || item.exigeObservacao !== "nao") &&
+            (respondido ? (
+              <details className="item-alterar">
+                <summary>
+                  <Pencil size={13} aria-hidden /> Alterar resposta
+                </summary>
+                <FormResposta osId={osId} item={item} dica={dicaObservacao} />
+              </details>
+            ) : (
+              <FormResposta osId={osId} item={item} dica={dicaObservacao} />
+            ))}
+          <div className="item-acoes">
+            <EnviarFoto
+              osId={osId}
+              itemId={item.id}
+              aceitaVideo={item.aceitaVideo}
+              texto={item.aceitaVideo ? "Adicionar foto ou vídeo" : fotos ? "Adicionar outra foto" : "Adicionar foto"}
+            />
+            {item.permiteAgendar && (
+              <form action={marcarVisitaDeVoltaAction.bind(null, osId, item.id)} className="form-mini">
+                <input type="hidden" name="agendar" value={item.agendar ? "nao" : "sim"} />
+                <button
+                  type="submit"
+                  className="botao secundario"
+                  title={
+                    item.agendar
+                      ? "O item volta a ser cobrado nesta visita."
+                      : "Conta como feito agora; a conclusão abre uma OS só com os itens deixados."
+                  }
+                >
+                  <Undo2 size={14} aria-hidden /> {item.agendar ? "Fazer nesta visita" : "Deixar para a visita de volta"}
                 </button>
               </form>
-            </details>
-          )}
-          <form action={anexarAction.bind(null, osId)} className="form-foto">
-            <input type="hidden" name="itemId" value={item.id} />
-            <input
-              type="file"
-              name="arquivo"
-              accept={item.aceitaVideo ? "image/jpeg,image/png,video/mp4,video/quicktime" : "image/jpeg,image/png"}
-              capture="environment"
-              multiple
-              required
-            />
-            <button type="submit" className="botao secundario">
-              {item.aceitaVideo ? "Enviar foto ou vídeo" : "Enviar foto"}
-            </button>
-          </form>
-          {item.permiteAgendar && (
-            <form action={marcarVisitaDeVoltaAction.bind(null, osId, item.id)} className="form-mini">
-              <input type="hidden" name="agendar" value={item.agendar ? "nao" : "sim"} />
-              <button
-                type="submit"
-                className="botao secundario"
-                title={
-                  item.agendar
-                    ? "O item volta a ser cobrado nesta visita."
-                    : "Conta como feito agora; a conclusão abre uma OS só com os itens deixados."
-                }
-              >
-                {item.agendar ? "Fazer nesta visita" : "Deixar para a visita de volta"}
-              </button>
-            </form>
-          )}
-          {item.apenasCamera && (
-            <p className="nota">No app, este item só aceita foto tirada na hora, pela câmera.</p>
-          )}
+            )}
+            {item.apenasCamera && (
+              <span className="item-camera">
+                <Smartphone size={13} aria-hidden /> No app, só foto tirada na hora
+              </span>
+            )}
+          </div>
         </div>
       )}
     </li>
+  );
+}
+
+/** A resposta do item: o campo do tipo certo, a observação e o salvar. */
+function FormResposta({ osId, item, dica }: { osId: string; item: Item; dica: string }) {
+  return (
+    <form action={responderItemAction.bind(null, osId, item.id)} className="form-resposta">
+      <input type="hidden" name="tipoResposta" value={item.tipoResposta} />
+      {item.tipoResposta !== "foto" && <CampoResposta item={item} />}
+      <div className="form-resposta-linha">
+        <input
+          type="text"
+          name="observacao"
+          defaultValue={item.observacao ?? ""}
+          placeholder={dica}
+          aria-label={dica}
+          required={item.exigeObservacao === "sempre"}
+          maxLength={2000}
+        />
+        <button type="submit" className="botao secundario">
+          Salvar
+        </button>
+      </div>
+    </form>
   );
 }
 

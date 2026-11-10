@@ -1,4 +1,4 @@
-import { and, desc, eq, ne } from "drizzle-orm";
+import { and, desc, eq, ne, sql } from "drizzle-orm";
 import { BellOff, Repeat, Sun } from "lucide-react";
 import Link from "next/link";
 
@@ -58,7 +58,12 @@ export default async function Alertas({ searchParams }: { searchParams: Promise<
   const sev = sevPedida in PESO ? sevPedida : "";
 
   const abertos = await db.query.alerta.findMany({
-    where: and(eq(alertaTable.empresaId, usuario.empresaId), ne(alertaTable.status, "resolvido")),
+    where: and(
+      eq(alertaTable.empresaId, usuario.empresaId),
+      ne(alertaTable.status, "resolvido"),
+      // usina arquivada no recomeço não aparece aqui
+      sql`${alertaTable.usinaId} in (select id from usina where arquivada_em is null)`,
+    ),
     with: { usina: { with: { cliente: true } } },
     orderBy: desc(alertaTable.abertoEm),
   });

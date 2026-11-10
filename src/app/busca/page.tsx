@@ -1,4 +1,4 @@
-import { and, asc, eq, inArray, or, sql, type SQL, type SQLWrapper } from "drizzle-orm";
+import { and, asc, eq, inArray, isNull, or, sql, type SQL, type SQLWrapper } from "drizzle-orm";
 import { ClipboardList, KanbanSquare, Search, Sun, UserRound } from "lucide-react";
 
 import { exigirUsuario } from "@/auth/sessao";
@@ -96,6 +96,7 @@ export default async function Busca({ searchParams }: { searchParams: Promise<{ 
     db.query.usina.findMany({
       where: and(
         eq(schema.usina.empresaId, empresa),
+        isNull(schema.usina.arquivadaEm),
         or(sql`${semAcento(schema.usina.nome)} like ${padrao}`, sql`${semAcento(schema.usina.cidade)} like ${padrao}`),
       ),
       columns: { id: true, nome: true, cidade: true, potenciaKwp: true, status: true },

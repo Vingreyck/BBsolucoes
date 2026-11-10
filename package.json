@@ -39,6 +39,7 @@
     "backup:abrir": "tsx src/db/abrir-backup.ts",
     "backup:testar": "tsx src/db/testar-restauracao.ts",
     "migrar": "tsx src/db/migrar.ts",
+    "recomecar": "tsx src/db/recomecar.ts",
     "empresa:codigo": "tsx src/empresa/definir-codigo.ts",
     "usuario:aprovar": "tsx src/auth/aprovar-cli.ts",
     "demo:revisao": "tsx src/empresa/preparar-demonstracao.ts",

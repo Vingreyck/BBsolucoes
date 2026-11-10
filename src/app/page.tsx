@@ -1,19 +1,23 @@
-import { and, asc, count, desc, eq, ne, sum } from "drizzle-orm";
+import { and, asc, count, desc, eq, isNull, ne, sql, sum } from "drizzle-orm";
 import {
   AlarmClock,
   AlertOctagon,
   AlertTriangle,
   ArrowRight,
   CalendarDays,
+  CheckCircle2,
   Hourglass,
   Info,
   PlugZap,
   Sun,
   UserX,
+  Wrench,
+  XCircle,
 } from "lucide-react";
 
 import { exigirUsuario } from "@/auth/sessao";
 import { db, schema } from "@/db";
+import { novidadesDaEnergisa } from "@/energisa/novidades";
 import { geracaoDoParque, type GeracaoDoParque } from "@/geracao/parque";
 import { atorDaWeb } from "@/os/acesso";
 import { listarOs, type OsDaLista } from "@/os/consultas";
@@ -77,7 +81,7 @@ export default async function Inicio() {
   const ator = atorDaWeb(usuario);
   const agora = relogioAgora();
 
-  const [ordens, etapas, projetos, alertas, [usinas], geracao] = await Promise.all([
+  const [ordens, etapas, projetos, alertas, [usinas], geracao, energisa] = await Promise.all([
     temOs ? listarOs(ator, { aba: "abertas" }) : Promise.resolve([] as OsDaLista[]),
     db.query.etapa.findMany({ where: eq(schema.etapa.empresaId, usuario.empresaId), orderBy: asc(schema.etapa.ordem) }),
     db.query.projeto.findMany({
@@ -86,15 +90,21 @@ export default async function Inicio() {
       with: { cliente: { columns: { nome: true, cidade: true } } },
     }),
     db.query.alerta.findMany({
-      where: and(eq(schema.alerta.empresaId, usuario.empresaId), ne(schema.alerta.status, "resolvido")),
+      where: and(
+        eq(schema.alerta.empresaId, usuario.empresaId),
+        ne(schema.alerta.status, "resolvido"),
+        // usina arquivada no recomeço fica fora do Início
+        sql`${schema.alerta.usinaId} in (select id from usina where arquivada_em is null)`,
+      ),
       with: { usina: { columns: { id: true, nome: true, cidade: true } } },
       orderBy: desc(schema.alerta.abertoEm),
     }),
     db
       .select({ n: count(), potencia: sum(schema.usina.potenciaKwp) })
       .from(schema.usina)
-      .where(eq(schema.usina.empresaId, usuario.empresaId)),
+      .where(and(eq(schema.usina.empresaId, usuario.empresaId), isNull(schema.usina.arquivadaEm))),
     geracaoDoParque(usuario.empresaId),
+    novidadesDaEnergisa(usuario.empresaId),
   ]);
 
   const atrasadas = ordens.filter((o) => atrasada(o, agora));
@@ -318,6 +328,51 @@ export default async function Inicio() {
             </ul>
           )}
         </Painel>
+
+        {energisa.temEnergisa && (
+          <Painel
+            titulo={
+              <>
+                Energisa
+                {energisa.esperandoOs > 0 && (
+                  <span className="pilula sev-atencao">
+                    {energisa.esperandoOs} {energisa.esperandoOs === 1 ? "aprovado esperando OS" : "aprovados esperando OS"}
+                  </span>
+                )}
+              </>
+            }
+            href="/esteira"
+            link="Abrir esteira"
+          >
+            {energisa.novidades.length === 0 ? (
+              <p className="painel-vazio">Nenhuma mudança na Energisa nos últimos 7 dias.</p>
+            ) : (
+              <ul className="lista-limpa">
+                {energisa.novidades.slice(0, 6).map((n) => {
+                  const ruim = n.fase === "indeferido" || n.fase === "vistoria_reprovada";
+                  return (
+                    <li key={n.projetoId}>
+                      <a href={n.precisaOs ? "/esteira" : `/projeto/${n.projetoId}`} className="linha-alerta">
+                        <span className={`linha-icone ${n.precisaOs ? "m-sem-dono" : ruim ? "m-atrasada" : "m-ok"}`} aria-hidden>
+                          {n.precisaOs ? <Wrench size={15} /> : ruim ? <XCircle size={15} /> : <CheckCircle2 size={15} />}
+                        </span>
+                        <span className="linha-os-corpo">
+                          <strong>{n.cliente}</strong>
+                          <small>
+                            {n.situacao} · {n.precisaOs ? "falta gerar a OS de instalação" : `agora em ${n.etapa}`}
+                          </small>
+                        </span>
+                        <span className="linha-quando">
+                          {n.precisaOs ? "gerar OS" : diasDesde(n.desde) === 0 ? "hoje" : `há ${diasDesde(n.desde)} d`}
+                        </span>
+                      </a>
+                    </li>
+                  );
+                })}
+              </ul>
+            )}
+          </Painel>
+        )}
       </div>
 
       {temOs && semResponsavel.length > 0 && (
@@ -486,7 +541,7 @@ function Painel({
   link,
   children,
 }: {
-  titulo: string;
+  titulo: React.ReactNode;
   href: string;
   link: string;
   children: React.ReactNode;

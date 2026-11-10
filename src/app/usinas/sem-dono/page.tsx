@@ -31,7 +31,7 @@ export default async function SemDono({ searchParams }: { searchParams: Promise<
   const usuario = await exigirUsuario();
 
   const orfas = await db.query.usina.findMany({
-    where: sql`${schema.usina.empresaId} = ${usuario.empresaId} and ${schema.usina.clienteId} is null`,
+    where: sql`${schema.usina.empresaId} = ${usuario.empresaId} and ${schema.usina.clienteId} is null and ${schema.usina.arquivadaEm} is null`,
     orderBy: asc(schema.usina.nome),
     with: {
       vinculosPortal: { with: { contaPortal: { columns: { fabricante: true } } } },

@@ -267,6 +267,32 @@ export async function vistoriaDoProjeto(empresaId: string, projetoId: string) {
 }
 
 /** Quem pode ser responsável por uma OS: técnicos primeiro. */
+/**
+ * Quem pode receber OS: quem já entrou no app BB-Selebi.
+ *
+ * A OS chega ao técnico pelo celular (aviso, rota, checklist, fotos). Escolher
+ * alguém que nunca abriu o app é mandar trabalho para ninguém — por isso a
+ * lista de "quem vai" mostra só quem tem sessão do app ou celular cadastrado
+ * para aviso. A sessão do app dura muito (ninguém digita senha em cima de
+ * telhado), então quem usa o app aparece aqui.
+ */
+export async function quemUsaOApp(empresaId: string) {
+  const linhas = await db
+    .selectDistinct({ id: schema.usuario.id, nome: schema.usuario.nome, papel: schema.usuario.papel })
+    .from(schema.usuario)
+    .leftJoin(schema.sessao, and(eq(schema.sessao.usuarioId, schema.usuario.id), eq(schema.sessao.origem, "app")))
+    .leftJoin(schema.aparelhoPush, eq(schema.aparelhoPush.usuarioId, schema.usuario.id))
+    .where(
+      and(
+        eq(schema.usuario.empresaId, empresaId),
+        eq(schema.usuario.ativo, true),
+        or(sql`${schema.sessao.id} is not null`, sql`${schema.aparelhoPush.id} is not null`),
+      ),
+    );
+  const peso: Record<string, number> = { tecnico: 0, vendedor: 1, engenheiro: 2, adm: 3 };
+  return linhas.sort((a, b) => (peso[a.papel] ?? 9) - (peso[b.papel] ?? 9) || a.nome.localeCompare(b.nome));
+}
+
 export async function responsaveisPossiveis(empresaId: string) {
   const usuarios = await db.query.usuario.findMany({
     where: and(
@@ -310,7 +336,7 @@ export async function agendaDaSemana(ator: Ator, segunda: Date) {
       with: colunas,
       orderBy: desc(schema.ordemServico.numero),
     }),
-    ator.gestao ? responsaveisPossiveis(ator.empresaId) : Promise.resolve([]),
+    ator.gestao ? quemUsaOApp(ator.empresaId) : Promise.resolve([]),
   ]);
 
   aAgendar.sort(
