@@ -6,7 +6,7 @@
 # imagem só, com tudo dentro, custa algumas centenas de megabytes num disco de
 # 40 GB e evita duas imagens que saem de sincronia sem ninguém perceber.
 
-FROM node:22-slim
+FROM node:25-slim
 
 # `pg_dump` da versão **16**, e não o do Debian.
 #
