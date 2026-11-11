@@ -1,21 +1,79 @@
-# Atualizações automáticas: o GitHub abre um pedido por semana com o que ficou
-# desatualizado, e avisa de falha de segurança. Foi a falta disto que deixou o
-# Next.js com falhas críticas por semanas sem ninguém saber.
+# Dependabot: vigia as bibliotecas e as imagens Docker do Selebi.
+#
+# Duas coisas diferentes acontecem aqui:
+#
+# 1. ALERTA + CORREÇÃO DE SEGURANÇA (ligados nas configurações do repositório,
+#    não neste arquivo). Saiu uma falha conhecida numa biblioteca que o site usa:
+#    chega o alerta e o Dependabot abre a correção na hora, sem esperar nada.
+#    Ele trabalha no RAMO PADRÃO do repositório — que precisa ser o ramo que vai
+#    para a VM, senão vigia um projeto parado.
+#
+# 2. ATUALIZAÇÃO DE ROTINA (este arquivo). Toda segunda de manhã, propõe as
+#    versões novas, uma por pedido. Com uma espera de propósito ("cooldown"):
+#    os vermes de npm de 2025 e 2026 publicavam versão infectada e eram tirados
+#    do ar em horas ou dias. Esperar 7 dias antes de propor uma versão nova
+#    deixa esse tempo para a comunidade descobrir; versão maior espera 30.
+#    A espera não vale para correção de segurança, que chega na hora.
+#
+# Sem "groups" de propósito: um grupo com "*" faz o pedido levar junto
+# bibliotecas que ainda estão dentro da espera (a espera é contada por grupo,
+# não por biblioteca).
+
 version: 2
 updates:
   - package-ecosystem: npm
     directory: /
     schedule:
       interval: weekly
+      day: monday
+      time: "07:00"
+      timezone: America/Maceio
+    cooldown:
+      default-days: 7
+      semver-major-days: 30
     open-pull-requests-limit: 5
-    groups:
-      menores:
-        update-types: [minor, patch]
+    labels: [dependencias]
+    commit-message:
+      prefix: "deps"
+
+  # A imagem base do site e do coletor (Dockerfile: node:22-slim).
   - package-ecosystem: docker
     directory: /
     schedule:
-      interval: monthly
+      interval: weekly
+      day: monday
+      time: "07:00"
+      timezone: America/Maceio
+    cooldown:
+      default-days: 7
+    labels: [dependencias]
+    commit-message:
+      prefix: "deps"
+
+  # As imagens do docker-compose.yml: postgres:16 e caddy:2-alpine.
+  - package-ecosystem: docker-compose
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+      time: "07:00"
+      timezone: America/Maceio
+    cooldown:
+      default-days: 7
+    labels: [dependencias]
+    commit-message:
+      prefix: "deps"
+
+  # As ações do GitHub usadas no .github/workflows/ci.yml, fixadas por commit.
   - package-ecosystem: github-actions
     directory: /
     schedule:
-      interval: monthly
+      interval: weekly
+      day: monday
+      time: "07:00"
+      timezone: America/Maceio
+    cooldown:
+      default-days: 7
+    labels: [dependencias]
+    commit-message:
+      prefix: "deps"

@@ -84,13 +84,28 @@ if [[ "${1:-}" != "--continuar" ]]; then
   fi
 fi
 
+# O segundo fator só liga com a APP_ENCRYPTION_KEY no .env (ela cifra o segredo de
+# cada pessoa). Sem ela o site sobe do mesmo jeito, só que SEM 2FA — avisa aqui
+# para não descobrir semanas depois.
+if ! grep -qE '^APP_ENCRYPTION_KEY=.{16,}' .env; then
+  echo "AVISO: APP_ENCRYPTION_KEY não está no .env — o segundo fator (Google Authenticator) vai ficar DESLIGADO." >&2
+  echo "       Gere uma, ponha no .env e rode 'docker compose up -d site' (veja .env.example). Não troque depois." >&2
+fi
+
 echo "== 3/8 Guardando as imagens atuais como :anterior"
 for s in "${SERVICOS[@]}"; do
   docker image inspect "bbsolucoes-${s}:latest" >/dev/null 2>&1 && docker tag "bbsolucoes-${s}:latest" "bbsolucoes-${s}:anterior" || true
 done
 
 echo "== 4/8 Construindo"
-docker compose build "${SERVICOS[@]}"
+# `--pull`: busca a versão mais nova da imagem base (node:22-slim) em vez de
+# reaproveitar a que está no cache da VM desde o primeiro deploy. É assim que as
+# correções de segurança do Debian e do Node chegam ao site.
+docker compose build --pull "${SERVICOS[@]}"
+# O mesmo para o banco e o HTTPS (postgres:16 e caddy:2-alpine): a etiqueta
+# fica na mesma versão maior, só entram as correções. O `up` abaixo troca o
+# container se a imagem mudou.
+docker compose pull db caddy
 
 echo "== 5/8 Migrações"
 docker compose run --rm --no-deps -T site npm run migrar

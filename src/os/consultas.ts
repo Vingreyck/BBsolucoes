@@ -13,6 +13,7 @@ import {
   type SQLWrapper,
 } from "drizzle-orm";
 
+import { ehUuid } from "@/app-movel/http";
 import { db, schema } from "@/db";
 
 import { ErroOs, podeVer, type Ator } from "./acesso";
@@ -154,6 +155,9 @@ export type OsDaLista = Awaited<ReturnType<typeof listarOs>>[number];
 
 /** A OS inteira, para a tela de detalhe e o relatório. */
 export async function carregarOs(ator: Ator, id: string) {
+  // Id que não tem cara de id nem vai ao banco: o Postgres recusaria com um erro
+  // que vira "500" na tela e alarme falso no Sentry. É "não encontrada", só isso.
+  if (!ehUuid(id)) throw new ErroOs("nao_encontrada", "Ordem de serviço não encontrada.", 404);
   const os = await buscarCompleta(and(eq(schema.ordemServico.id, id), eq(schema.ordemServico.empresaId, ator.empresaId)));
   if (!os || !podeVer(ator, os)) throw new ErroOs("nao_encontrada", "Ordem de serviço não encontrada.", 404);
   return os;

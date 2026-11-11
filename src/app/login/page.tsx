@@ -20,6 +20,10 @@ const MENSAGENS: Record<string, { texto: string; tom: "erro" | "aviso" }> = {
     tom: "aviso",
   },
   desativada: { texto: "Essa conta está desativada. Fale com o administrador.", tom: "erro" },
+  mfa_expirou: {
+    texto: "O código demorou demais ou errou vezes demais. Entre de novo com a senha.",
+    tom: "aviso",
+  },
 };
 
 export default async function Login({

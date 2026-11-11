@@ -1,5 +1,5 @@
 import { asc, eq } from "drizzle-orm";
-import { Info, Power, RotateCcw, Search, SearchX, UserPlus } from "lucide-react";
+import { Info, Power, RotateCcw, Search, SearchX, ShieldOff, UserPlus } from "lucide-react";
 import { redirect } from "next/navigation";
 
 import { formatarCpf, ocultarCpf } from "@/auth/cpf";
@@ -11,7 +11,7 @@ import { endereco, paginar, Paginacao } from "../../_ui/paginacao";
 import { iniciais, semAcento } from "../../formatar";
 import { NovaConta, Reiniciar, SeletorPapel } from "./formularios";
 import { OPCOES_PAPEL } from "./papeis";
-import { alternarAtivo, aprovarPedido, recusarPedido } from "./actions";
+import { alternarAtivo, aprovarPedido, recusarPedido, redefinirDoisFatores } from "./actions";
 
 export const dynamic = "force-dynamic";
 
@@ -200,6 +200,7 @@ export default async function Usuarios({
                       <th scope="col">Papel</th>
                       <th scope="col">Situação</th>
                       <th scope="col">Senha</th>
+                      <th scope="col">2FA</th>
                       <th scope="col" className="col-acao">
                         <span className="sr-only">Ações</span>
                       </th>
@@ -253,9 +254,35 @@ export default async function Usuarios({
                               <span className="fraco">própria</span>
                             )}
                           </td>
+                          <td>
+                            {u.mfaAtivadoEm ? (
+                              <span
+                                className="status-ok"
+                                title={`Aplicativo cadastrado em ${u.mfaAtivadoEm.toLocaleDateString("pt-BR", { timeZone: "America/Maceio" })}`}
+                              >
+                                <span aria-hidden /> ligado
+                              </span>
+                            ) : (
+                              <span className="pilula sev-atencao" title="Ainda não cadastrou o aplicativo: faz isso no próximo login">
+                                falta cadastrar
+                              </span>
+                            )}
+                          </td>
                           <td className="col-acao">
                             <span className="acoes-linha">
                               {u.ativo && <Reiniciar usuarioId={u.id} nome={u.nome} />}
+                              {!eu && u.mfaAtivadoEm && (
+                                <form action={redefinirDoisFatores.bind(null, u.id)}>
+                                  <button
+                                    type="submit"
+                                    className="botao-icone"
+                                    title={`Redefinir o 2FA de ${u.nome} (perdeu o celular). Ela entra de novo e cadastra o aplicativo.`}
+                                    aria-label={`Redefinir o 2FA de ${u.nome}`}
+                                  >
+                                    <ShieldOff size={15} aria-hidden />
+                                  </button>
+                                </form>
+                              )}
                               {podeAlternar && (
                                 <form action={alternarAtivo.bind(null, u.id)}>
                                   <button

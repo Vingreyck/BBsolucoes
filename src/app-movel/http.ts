@@ -42,6 +42,39 @@ export function muitasTentativas(segundos: number): Response {
 }
 
 /**
+ * O corpo da requisição como texto, lido só até o teto — ou null se passar.
+ *
+ * O teto vale de verdade: a leitura para no byte em que ele é ultrapassado. A
+ * versão anterior confiava no `content-length`, e quem manda o corpo em pedaços
+ * (sem declarar tamanho) fazia o servidor ler tudo para a memória antes de
+ * recusar — numa rota que nem pede login, é um jeito barato de derrubá-lo.
+ */
+export async function lerCorpo(req: Request, limiteBytes: number): Promise<string | null> {
+  const declarado = Number(req.headers.get("content-length") ?? 0);
+  if (declarado > limiteBytes) return null;
+  if (!req.body) return "";
+
+  const leitor = req.body.getReader();
+  const pedacos: Uint8Array[] = [];
+  let total = 0;
+  try {
+    for (;;) {
+      const { done, value } = await leitor.read();
+      if (done) break;
+      total += value.byteLength;
+      if (total > limiteBytes) {
+        await leitor.cancel().catch(() => undefined);
+        return null;
+      }
+      pedacos.push(value);
+    }
+  } catch {
+    return null;
+  }
+  return new TextDecoder().decode(Buffer.concat(pedacos));
+}
+
+/**
  * Corpo JSON da requisição, ou null se não for um objeto JSON.
  *
  * Tem teto de tamanho: nenhum formulário do app passa de alguns kilobytes, e
@@ -51,16 +84,8 @@ export async function lerJson(
   req: Request,
   limiteBytes = 16_384,
 ): Promise<Record<string, unknown> | null> {
-  const declarado = Number(req.headers.get("content-length") ?? 0);
-  if (declarado > limiteBytes) return null;
-
-  let bruto: string;
-  try {
-    bruto = await req.text();
-  } catch {
-    return null;
-  }
-  if (bruto.length > limiteBytes) return null;
+  const bruto = await lerCorpo(req, limiteBytes);
+  if (bruto === null) return null;
 
   try {
     const dados: unknown = JSON.parse(bruto);

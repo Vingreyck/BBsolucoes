@@ -2,11 +2,12 @@ import { exigirVersaoMinima } from "@/app-movel/versao";
 import { and, eq } from "drizzle-orm";
 
 import { cpfValido, normalizarCpf } from "@/auth/cpf";
-import { conferirSenha, HASH_FANTASMA } from "@/auth/senha";
-import { criarSessaoApp, encerrarSessaoApp } from "@/auth/sessao-app";
+import { HASH_FANTASMA, verificarSenha } from "@/auth/senha";
+import { abrirDesafio, DESAFIO_MINUTOS, dispositivoConhecido, mfaAtivoNoApp } from "@/auth/mfa";
+import { encerrarSessaoApp } from "@/auth/sessao-app";
 import { db } from "@/db";
 import { usuario as usuarioTable } from "@/db/schema";
-import { perfilDoUsuario } from "@/app-movel/autenticacao";
+import { respostaDeEntrada } from "@/app-movel/entrada";
 import {
   ehUuid,
   falha,
@@ -19,6 +20,7 @@ import {
 } from "@/app-movel/http";
 import { consumir, MINUTO, zerar } from "@/app-movel/limitador";
 import { ehPapelApp } from "@/app-movel/permissoes";
+import { registrarSeguranca } from "@/sistema/seguranca";
 
 const PAPEL_ROTULO: Record<string, string> = { vendedor: "vendas", estoque: "estoque" };
 
@@ -39,7 +41,10 @@ export async function POST(req: Request) {
   if (velho) return velho;
   const ip = ipDe(req);
   const porIp = consumir(`login:${ip}`, 30, 15 * MINUTO);
-  if (!porIp.ok) return muitasTentativas(porIp.tenteEmSegundos);
+  if (!porIp.ok) {
+    registrarSeguranca("login_bloqueado", { origem: "app", ip });
+    return muitasTentativas(porIp.tenteEmSegundos);
+  }
 
   const corpo = await lerJson(req);
   const empresaId = texto(corpo?.empresaId, 64);
@@ -53,16 +58,27 @@ export async function POST(req: Request) {
 
   const chaveCpf = `login:${empresaId}:${cpf}`;
   const porCpf = consumir(chaveCpf, 8, 15 * MINUTO);
-  if (!porCpf.ok) return muitasTentativas(porCpf.tenteEmSegundos);
+  if (!porCpf.ok) {
+    registrarSeguranca("login_bloqueado", { origem: "app", ip, quem: cpf });
+    return muitasTentativas(porCpf.tenteEmSegundos);
+  }
 
   const encontrado = await db.query.usuario.findFirst({
     where: and(eq(usuarioTable.empresaId, empresaId), eq(usuarioTable.cpf, cpf)),
     with: { empresa: { columns: { id: true, nome: true, ativa: true } } },
   });
 
-  const confere = await conferirSenha(senha, encontrado?.senhaHash ?? HASH_FANTASMA);
+  const { confere, novoHash } = await verificarSenha(senha, encontrado?.senhaHash ?? HASH_FANTASMA);
   if (!encontrado || !confere) {
+    registrarSeguranca("login_falhou", { origem: "app", ip, quem: cpf });
     return falha(401, "credenciais", "CPF ou senha não conferem.");
+  }
+
+  // Hash de custo antigo: regrava com o de hoje, na única hora em que o
+  // servidor vê a senha (ver `@/auth/senha`).
+  if (novoHash) {
+    await db.update(usuarioTable).set({ senhaHash: novoHash }).where(eq(usuarioTable.id, encontrado.id));
+    registrarSeguranca("senha_regravada", { origem: "app", ip, usuarioId: encontrado.id });
   }
 
   if (!encontrado.aprovadoEm) {
@@ -88,23 +104,36 @@ export async function POST(req: Request) {
   }
 
   zerar(chaveCpf);
-  const { token, expiraEm } = await criarSessaoApp(encontrado.id, dispositivo);
 
-  return json({
-    token,
-    expiraEm: expiraEm.toISOString(),
-    usuario: perfilDoUsuario({
-      id: encontrado.id,
-      nome: encontrado.nome,
-      cpf: encontrado.cpf,
-      email: encontrado.email,
-      papel: encontrado.papel,
-      empresaId: encontrado.empresa.id,
-      empresaNome: encontrado.empresa.nome,
-      deveTrocarSenha: encontrado.deveTrocarSenha,
-      sessaoId: "",
-    }),
-  });
+  /**
+   * Segundo fator no app — só com `MFA_APP=1`, que fica desligado até a versão
+   * do app com a tela do código estar na loja (senão os técnicos ficariam sem
+   * entrar). Ligado: aparelho que o app já provou (`dispositivoToken`, 30 dias)
+   * entra direto; qualquer outro recebe um desafio e termina em
+   * `POST /sessao/mfa`. Quem ainda não cadastrou o aplicativo recebe a chave.
+   */
+  let mfaValidaAte: Date | undefined;
+  if (mfaAtivoNoApp()) {
+    const conhecido = await dispositivoConhecido(encontrado.id, texto(corpo?.dispositivoToken, 100) || undefined);
+    if (conhecido) {
+      mfaValidaAte = conhecido.expiraEm;
+    } else {
+      const { token, cadastro } = await abrirDesafio({ usuarioId: encontrado.id, origem: "app", dispositivo });
+      registrarSeguranca("mfa_pedido", { origem: "app", ip, usuarioId: encontrado.id });
+      return falha(403, "mfa_necessaria", "Digite o código do aplicativo autenticador.", {
+        desafio: token,
+        cadastro,
+        expiraEmMinutos: DESAFIO_MINUTOS,
+      });
+    }
+  }
+
+  registrarSeguranca("login_ok", { origem: "app", ip, usuarioId: encontrado.id });
+  return respostaDeEntrada(
+    { ...encontrado, papel: encontrado.papel, cpf: encontrado.cpf, empresa: encontrado.empresa },
+    dispositivo,
+    mfaValidaAte,
+  );
 }
 
 /** Sair. Não exige sessão válida: sair de uma sessão vencida também é sair. */

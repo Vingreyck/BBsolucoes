@@ -18,7 +18,9 @@ Thumbs.db
 probe-*.json
 
 # Exportacoes dos portais: contem dado real de cliente. Repo publico.
-dados/
+# Com a barra na frente: so a pasta `dados` da raiz. Sem ela, a regra pegava
+# tambem `src/app/os/acompanhamento/dados/`, e essa rota nunca foi para o git.
+/dados/
 *.xlsx
 *.csv
 *.xls

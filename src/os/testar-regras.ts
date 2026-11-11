@@ -56,7 +56,23 @@ import {
 import { montarAssertiva, montarMensagem } from "../push/fcm";
 import { montarCorpoApns, montarJwtApns, tokenMorto } from "../push/apns";
 import { quandoLegivel, textoDoAviso } from "../push/texto";
-import { generateKeyPairSync, verify } from "node:crypto";
+import { generateKeyPairSync, randomBytes, scryptSync, verify } from "node:crypto";
+import { conferirSenha, custoDoHash, gerarHash, gerarSenhaProvisoria, HASH_FANTASMA, verificarSenha } from "../auth/senha";
+import { tipoDoDocumento } from "../documentos/conteudo";
+import { mfaAtivo, mfaAtivoNoApp, rotuloDoDispositivo } from "../auth/mfa";
+import {
+  abrirSegredo,
+  base32Codificar,
+  base32Decodificar,
+  cifrarSegredo,
+  codigoDoPasso,
+  enderecoOtpauth,
+  novoSegredo,
+  passoDe,
+  podeCifrarSegredo,
+  verificarCodigo,
+} from "../auth/totp";
+import { mascarar } from "../sistema/seguranca";
 import { readFileSync } from "node:fs";
 
 let falhas = 0;
@@ -511,7 +527,152 @@ async function testarRetrace() {
   confere(JSON.parse(Buffer.from(corpo, "base64url").toString()).exp === 1_700_003_600, "JWT vale 1 hora");
 }
 
-testarRetrace().then(() => {
-  console.log(falhas === 0 ? `✓ ${total} conferências, nenhuma falha.` : `✗ ${falhas} de ${total} falharam.`);
-  process.exit(falhas === 0 ? 0 : 1);
-});
+// --- Segurança: documento pelo conteúdo, e o que vai para o log ------------------------
+{
+  const bytes = (inicio: number[] | string, tamanho = 64) => {
+    const b = new Uint8Array(tamanho);
+    b.set(typeof inicio === "string" ? [...Buffer.from(inicio, "latin1")] : inicio);
+    return b;
+  };
+  igual(tipoDoDocumento(bytes("%PDF-1.7\n"))?.extensao, ".pdf", "PDF reconhecido pelo cabeçalho");
+  igual(tipoDoDocumento(bytes("\n\n  %PDF-1.4"))?.extensao, ".pdf", "PDF com lixo antes do cabeçalho ainda é PDF");
+  igual(tipoDoDocumento(bytes([0xff, 0xd8, 0xff, 0xe0]))?.mime, "image/jpeg", "JPEG pela assinatura");
+  igual(tipoDoDocumento(bytes([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]))?.mime, "image/png", "PNG pela assinatura");
+  igual(tipoDoDocumento(bytes("RIFF\0\0\0\0WEBPVP8 "))?.mime, "image/webp", "WebP pela assinatura");
+  igual(tipoDoDocumento(bytes("\0\0\0\x18ftypheic"))?.mime, "image/heic", "HEIC do iPhone pela marca");
+  igual(tipoDoDocumento(bytes("PK\x03\x04....[Content_Types].xml....word/document.xml", 128))?.extensao, ".docx", "Word novo: ZIP com word/");
+  igual(tipoDoDocumento(bytes("PK\x03\x04....[Content_Types].xml....xl/workbook.xml", 128))?.extensao, ".xlsx", "Excel novo: ZIP com xl/");
+  confere(tipoDoDocumento(bytes("PK\x03\x04....qualquer/coisa.txt", 128)) === null, "ZIP comum não é documento");
+  const ole = [0xd0, 0xcf, 0x11, 0xe0, 0xa1, 0xb1, 0x1a, 0xe1];
+  igual(tipoDoDocumento(bytes(ole), "application/vnd.ms-excel planilha.xls")?.extensao, ".xls", "Office antigo: a dica desempata para Excel");
+  igual(tipoDoDocumento(bytes(ole), "application/msword")?.extensao, ".doc", "Office antigo sem dica de Excel: Word");
+  confere(tipoDoDocumento(bytes("<!doctype html><script>alert(1)</script>"), "application/pdf contrato.pdf") === null, "HTML declarado como PDF é recusado");
+  confere(tipoDoDocumento(bytes('<svg xmlns="http://www.w3.org/2000/svg" onload="x()">')) === null, "SVG é recusado");
+  confere(tipoDoDocumento(bytes("MZ\x90\0\x03")) === null, "executável é recusado");
+  confere(tipoDoDocumento(new Uint8Array(4)) === null, "arquivo de 4 bytes é recusado");
+
+  igual(mascarar("Vinicius.Lima@gmail.com"), "V***@gmail.com", "e-mail no log: primeira letra e domínio");
+  igual(mascarar("123.456.789-09"), "CPF final 09", "CPF no log: só os dois últimos dígitos");
+  igual(mascarar("12345678909"), "CPF final 09", "CPF sem pontuação: igual");
+  confere(!mascarar("a@b.com\nlinha forjada").includes("\n"), "identificador com quebra de linha não forja linha de log");
+
+  const provisoria = gerarSenhaProvisoria();
+  confere(provisoria.length === 10 && /^[a-km-zA-HJ-NP-Z2-9]+$/.test(provisoria) && !/[01lIO]/.test(provisoria), "senha provisória: 10 caracteres, sem 0/O/1/l/I");
+}
+
+/** O segundo fator: os vetores de teste da própria RFC, a janela de tempo, o código que só vale uma vez e o segredo cifrado. */
+{
+  // RFC 4648 §10: base32("foobar") = MZXW6YTBOI======
+  igual(base32Codificar(Buffer.from("foobar")), "MZXW6YTBOI", "Base32: 'foobar' (sem o preenchimento)");
+  igual(base32Decodificar("mzxw 6ytb-oi")?.toString(), "foobar", "Base32 aceita minúsculas, espaço e hífen (digitado à mão)");
+  confere(base32Decodificar("MZXW1") === null && base32Decodificar("") === null, "Base32 recusa letra fora do alfabeto e texto vazio");
+
+  // RFC 6238, apêndice B (SHA-1, segredo "12345678901234567890"): os códigos de 8 dígitos terminam nos de 6.
+  const rfc = Buffer.from("12345678901234567890");
+  igual(base32Codificar(rfc), "GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ", "segredo da RFC em Base32");
+  const vetores: [number, string][] = [
+    [59, "287082"],
+    [1111111109, "081804"],
+    [1111111111, "050471"],
+    [1234567890, "005924"],
+    [2000000000, "279037"],
+    [20000000000, "353130"],
+  ];
+  for (const [segundos, esperado] of vetores) {
+    igual(codigoDoPasso(rfc, passoDe(segundos * 1000)), esperado, `TOTP da RFC no instante ${segundos}`);
+  }
+
+  const segredo = novoSegredo();
+  confere(/^[A-Z2-7]{32}$/.test(segredo), "segredo novo: 32 letras Base32 (160 bits)");
+  const t0 = 1_900_000_000_000;
+  const buf = base32Decodificar(segredo)!;
+  const doPasso = (p: number) => codigoDoPasso(buf, p);
+  const agora = passoDe(t0);
+  igual(verificarCodigo(segredo, doPasso(agora), null, t0), agora, "código do passo atual confere");
+  igual(verificarCodigo(segredo, doPasso(agora - 1), null, t0), agora - 1, "código do passo anterior confere (relógio do celular atrasado)");
+  igual(verificarCodigo(segredo, doPasso(agora + 1), null, t0), agora + 1, "código do passo seguinte confere (relógio adiantado)");
+  confere(verificarCodigo(segredo, doPasso(agora - 2), null, t0) === null, "código de 2 passos atrás (60 s+) não confere");
+  confere(verificarCodigo(segredo, doPasso(agora + 2), null, t0) === null, "código de 2 passos à frente não confere");
+  confere(verificarCodigo(segredo, doPasso(agora), agora, t0) === null, "o mesmo código não entra duas vezes (replay)");
+  confere(verificarCodigo(segredo, doPasso(agora), agora - 1, t0) === agora, "código mais novo que o último aceito passa");
+  confere(verificarCodigo(segredo, doPasso(agora - 1), agora, t0) === null, "código mais velho que o último aceito não passa");
+  igual(verificarCodigo(segredo, `${doPasso(agora).slice(0, 3)} ${doPasso(agora).slice(3)}`, null, t0), agora, "aceita '123 456', como o aplicativo mostra");
+  confere(verificarCodigo(segredo, "12345", null, t0) === null && verificarCodigo(segredo, "1234567", null, t0) === null, "5 ou 7 dígitos: recusado");
+  confere(verificarCodigo(segredo, "abcdef", null, t0) === null && verificarCodigo(segredo, "", null, t0) === null, "letras ou vazio: recusado");
+  confere(verificarCodigo("não é base32!", "123456", null, t0) === null, "segredo ilegível: recusado");
+
+  const uri = enderecoOtpauth("GEZDGNBVGY3TQOJQ", "ana@empresa.com.br");
+  confere(uri.startsWith("otpauth://totp/Selebi%3Aana%40empresa.com.br?") && uri.includes("secret=GEZDGNBVGY3TQOJQ") && uri.includes("issuer=Selebi") && uri.includes("digits=6") && uri.includes("period=30"), "endereço otpauth do QR");
+
+  // O segredo guardado no banco: cifrado, amarrado ao dono.
+  const chaveAntes = process.env.APP_ENCRYPTION_KEY;
+  process.env.APP_ENCRYPTION_KEY = "chave-so-de-teste-com-mais-de-16";
+  confere(podeCifrarSegredo(), "com APP_ENCRYPTION_KEY, o segredo pode ser cifrado");
+  const guardado = cifrarSegredo(segredo, "usuario-a");
+  confere(!guardado.includes(segredo) && guardado.startsWith("v1."), "o texto guardado não contém o segredo");
+  igual(abrirSegredo(guardado, "usuario-a"), segredo, "abre com a chave e o dono certos");
+  confere(abrirSegredo(guardado, "usuario-b") === null, "segredo de um usuário colado na linha de outro não abre");
+  confere(abrirSegredo(guardado.slice(0, -2) + "AA", "usuario-a") === null, "texto cifrado adulterado não abre");
+  confere(cifrarSegredo(segredo, "usuario-a") !== guardado, "cada cifra usa um IV novo");
+  process.env.APP_ENCRYPTION_KEY = "outra-chave-de-teste-com-16+";
+  confere(abrirSegredo(guardado, "usuario-a") === null, "com a chave trocada o segredo não abre (e o painel oferece redefinir)");
+  delete process.env.APP_ENCRYPTION_KEY;
+  confere(!podeCifrarSegredo() && !mfaAtivo(), "sem APP_ENCRYPTION_KEY o 2FA fica desligado (e avisa), em vez de trancar todo mundo");
+  process.env.APP_ENCRYPTION_KEY = "chave-so-de-teste-com-mais-de-16";
+  confere(mfaAtivo(), "com a chave, o 2FA do navegador liga");
+  process.env.MFA_MODO = "desligado";
+  confere(!mfaAtivo(), "MFA_MODO=desligado desliga de propósito");
+  delete process.env.MFA_MODO;
+  confere(!mfaAtivoNoApp(), "no app, o 2FA só liga com MFA_APP=1");
+  process.env.MFA_APP = "1";
+  confere(mfaAtivoNoApp(), "MFA_APP=1 liga o 2FA no app");
+  delete process.env.MFA_APP;
+  if (chaveAntes === undefined) delete process.env.APP_ENCRYPTION_KEY;
+  else process.env.APP_ENCRYPTION_KEY = chaveAntes;
+
+  igual(rotuloDoDispositivo("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0 Safari/537.36 Edg/125.0"), "Edge · Windows", "rótulo do aparelho: Edge no Windows");
+  igual(rotuloDoDispositivo("Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1"), "Safari · iPhone", "rótulo do aparelho: Safari no iPhone");
+  igual(rotuloDoDispositivo(null), "Navegador · sistema desconhecido", "rótulo sem User-Agent");
+}
+
+/** O hash de senha: custo novo, formato antigo aceito e regravado, e o tempo igual para conta que não existe. */
+async function testarSenha(): Promise<void> {
+  const ATUAL = { N: 2 ** 15, r: 8, p: 3 };
+  const hash = await gerarHash("Telhado-Norte-42");
+  igual(hash.split("$").length, 6, "hash novo: scrypt$N$r$p$salt$chave");
+  igual(JSON.stringify(custoDoHash(hash)), JSON.stringify(ATUAL), "hash novo com o custo de hoje (N=2^15, r=8, p=3)");
+  const certa = await verificarSenha("Telhado-Norte-42", hash);
+  confere(certa.confere && certa.novoHash === null, "senha certa confere, e hash atual não é regravado");
+  confere(!(await verificarSenha("telhado-norte-42", hash)).confere, "senha errada não confere");
+  confere(await conferirSenha("Telhado-Norte-42", hash), "conferirSenha continua valendo para quem só quer sim/não");
+
+  // Uma conta de antes desta mudança: `scrypt$salt$chave`, custo padrão do Node.
+  const sal = randomBytes(16);
+  const antigo = `scrypt$${sal.toString("base64")}$${scryptSync("Telhado-Norte-42", sal, 64).toString("base64")}`;
+  igual(JSON.stringify(custoDoHash(antigo)), JSON.stringify({ N: 2 ** 14, r: 8, p: 1 }), "hash antigo é lido como N=2^14, p=1");
+  const migrada = await verificarSenha("Telhado-Norte-42", antigo);
+  confere(migrada.confere && migrada.novoHash !== null, "hash antigo: a senha confere e vem um hash novo para gravar");
+  igual(JSON.stringify(custoDoHash(migrada.novoHash ?? "")), JSON.stringify(ATUAL), "o hash regravado tem o custo de hoje");
+  confere(await conferirSenha("Telhado-Norte-42", migrada.novoHash ?? ""), "a mesma senha confere contra o hash regravado");
+  const erradaNoAntigo = await verificarSenha("outra-senha", antigo);
+  confere(!erradaNoAntigo.confere && erradaNoAntigo.novoHash === null, "hash antigo com senha errada: não confere e nada é regravado");
+
+  // A conta que não existe: o hash falso tem de ser lido e custar o mesmo que um de verdade.
+  igual(JSON.stringify(custoDoHash(HASH_FANTASMA)), JSON.stringify(ATUAL), "hash fantasma é legível e tem o custo de hoje");
+  const antes = performance.now();
+  const fantasma = await verificarSenha("qualquer-coisa", HASH_FANTASMA);
+  const gastou = performance.now() - antes;
+  confere(!fantasma.confere && fantasma.novoHash === null, "hash fantasma nunca confere");
+  confere(gastou > 30, `conta inexistente gasta o tempo do scrypt (${Math.round(gastou)} ms), e não 0 ms`);
+
+  confere(!(await conferirSenha("x", "scrypt$lixo$lixo")), "hash corrompido não confere");
+  confere(!(await conferirSenha("x", "scrypt$1073741824$8$1$AAAAAAAAAAAAAAAAAAAAAA==$" + Buffer.alloc(64).toString("base64"))), "custo absurdo gravado no banco é recusado, não executado");
+  confere(!(await conferirSenha("a".repeat(5000), hash)), "senha de 5.000 caracteres é recusada");
+}
+
+testarRetrace()
+  .then(testarSenha)
+  .then(() => {
+    console.log(falhas === 0 ? `✓ ${total} conferências, nenhuma falha.` : `✗ ${falhas} de ${total} falharam.`);
+    process.exit(falhas === 0 ? 0 : 1);
+  });

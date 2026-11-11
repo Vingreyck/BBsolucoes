@@ -1,6 +1,7 @@
 import { sql } from "drizzle-orm";
 import {
   type AnyPgColumn,
+  bigint,
   boolean,
   index,
   integer,
@@ -99,6 +100,14 @@ export const usuario = pgTable(
     aprovadoPorId: uuid("aprovado_por_id").references((): AnyPgColumn => usuario.id, {
       onDelete: "set null",
     }),
+    /**
+     * O segredo do Google Authenticator, **cifrado** (ver `@/auth/totp`). Nulo =
+     * ainda não cadastrou o aplicativo: no próximo login é levada a fazer isso.
+     */
+    mfaSegredo: text("mfa_segredo"),
+    mfaAtivadoEm: timestamp("mfa_ativado_em", { withTimezone: true }),
+    /** Último período de 30 s cujo código foi aceito: o mesmo código não entra duas vezes. */
+    mfaUltimoPasso: bigint("mfa_ultimo_passo", { mode: "number" }),
     criadoEm: timestamp("criado_em", { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [
@@ -139,9 +148,69 @@ export const sessao = pgTable(
     /** "Xiaomi Redmi Note 12 · Android 14" — para a pessoa reconhecer a sessão. */
     dispositivo: text("dispositivo"),
     ultimoUsoEm: timestamp("ultimo_uso_em", { withTimezone: true }),
+    /**
+     * Até quando o segundo fator desta sessão vale. A sessão nunca passa disso:
+     * é o que faz o código ser pedido de novo a cada 30 dias. Nulo = sessão de
+     * antes do 2FA, que deixa de valer assim que ele é ligado.
+     */
+    mfaValidaAte: timestamp("mfa_valida_ate", { withTimezone: true }),
     criadoEm: timestamp("criado_em", { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [index("sessao_usuario_idx").on(t.usuarioId)],
+);
+
+/**
+ * Aparelho que já provou o segundo fator.
+ *
+ * No navegador é um cookie (`bb_disp_<início do id>`, um por pessoa, para o
+ * computador do escritório servir a várias); no app, um token que o app guarda.
+ * Aqui fica só o SHA-256 dele. Vale 30 dias a partir da **última vez que a
+ * pessoa digitou o código** — não renova sozinho. Passou disso, ou é outro
+ * aparelho, o código é pedido de novo.
+ */
+export const dispositivoConfiavel = pgTable(
+  "dispositivo_confiavel",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    usuarioId: uuid("usuario_id")
+      .notNull()
+      .references(() => usuario.id, { onDelete: "cascade" }),
+    tokenHash: varchar("token_hash", { length: 64 }).notNull(),
+    origem: varchar("origem", { length: 10 }).notNull().default("web"),
+    rotulo: text("rotulo"),
+    mfaEm: timestamp("mfa_em", { withTimezone: true }).notNull().defaultNow(),
+    expiraEm: timestamp("expira_em", { withTimezone: true }).notNull(),
+    ultimoUsoEm: timestamp("ultimo_uso_em", { withTimezone: true }),
+    criadoEm: timestamp("criado_em", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    uniqueIndex("dispositivo_confiavel_token_uq").on(t.tokenHash),
+    index("dispositivo_confiavel_usuario_idx").on(t.usuarioId),
+  ],
+);
+
+/**
+ * O meio do caminho do login: a senha conferiu, falta o código.
+ *
+ * Dura 10 minutos e aceita 5 tentativas. No primeiro cadastro do aplicativo
+ * leva também o segredo novo (cifrado), que só passa a valer — e vai para
+ * `usuario.mfa_segredo` — quando o primeiro código sair certo.
+ */
+export const mfaDesafio = pgTable(
+  "mfa_desafio",
+  {
+    id: varchar("id", { length: 64 }).primaryKey(),
+    usuarioId: uuid("usuario_id")
+      .notNull()
+      .references(() => usuario.id, { onDelete: "cascade" }),
+    origem: varchar("origem", { length: 10 }).notNull().default("web"),
+    segredoPendente: text("segredo_pendente"),
+    dispositivo: text("dispositivo"),
+    tentativas: integer("tentativas").notNull().default(0),
+    expiraEm: timestamp("expira_em", { withTimezone: true }).notNull(),
+    criadoEm: timestamp("criado_em", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index("mfa_desafio_usuario_idx").on(t.usuarioId)],
 );
 
 /**

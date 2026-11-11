@@ -44,7 +44,14 @@ export function iniciais(nome: string): string {
   return ((partes[0]?.[0] ?? "") + (partes.length > 1 ? partes[partes.length - 1][0] : "")).toUpperCase();
 }
 
-const escapar = (t: string) => t.replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`);
+/**
+ * Texto que vai para dentro do mapa passa por aqui.
+ *
+ * O Leaflet escreve o texto do balão e do ícone como HTML. Nome de técnico é
+ * digitado pela própria pessoa no pedido de acesso: sem isto, um nome com
+ * `<img onerror=…>` rodaria código no navegador de quem abre o "Em campo".
+ */
+export const escapar = (t: string) => t.replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`);
 
 /** O técnico no mapa: as iniciais num círculo da cor da situação; pulsa quando está ao vivo. */
 export function iconeTecnico(L: L, nome: string, tom: Tom, aoVivo: boolean, selecionado = false): Leaflet.DivIcon {
@@ -101,7 +108,7 @@ export function desenharTrilha(L: L, camada: Leaflet.LayerGroup, trilha: TrilhaD
       fillColor: m.tipo === "concluida" ? "#2c6e49" : m.tipo === "iniciada" ? "#a8521f" : "#ffffff",
       fillOpacity: 1,
     })
-      .bindTooltip(`${m.titulo} · ${hora}${m.precisao ? ` (±${m.precisao} m)` : ""}`)
+      .bindTooltip(escapar(`${m.titulo} · ${hora}${m.precisao ? ` (±${m.precisao} m)` : ""}`))
       .addTo(camada);
     todos.push([m.latitude, m.longitude]);
   }

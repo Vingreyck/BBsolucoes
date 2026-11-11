@@ -29,6 +29,24 @@ const numero = (d: FormData, campo: string) => {
   return Number.isFinite(n) ? String(n) : null;
 };
 
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/**
+ * "Este projeto, e só se for da empresa de quem pede."
+ *
+ * O id do projeto chega pela tela, e o que vem da tela é palpite do navegador.
+ * Sem a empresa no filtro, quem soubesse o id de um projeto de outra empresa
+ * alteraria os dados dele — o sistema é multiempresa desde a primeira migração.
+ * Id que nem tem cara de id vira um filtro que não acha nada, em vez de erro
+ * do banco.
+ */
+function doProjetoDaEmpresa(projetoId: string, empresaId: string) {
+  return and(
+    eq(projetoTable.id, UUID.test(projetoId) ? projetoId : "00000000-0000-0000-0000-000000000000"),
+    eq(projetoTable.empresaId, empresaId),
+  );
+}
+
 /**
  * Cria um projeto na primeira etapa da esteira.
  *
@@ -170,7 +188,7 @@ export async function salvarInformacoes(
   projetoId: string,
   dados: FormData,
 ): Promise<void> {
-  await exigirUsuario();
+  const usuario = await exigirUsuario();
   await db
     .update(projetoTable)
     .set({
@@ -179,7 +197,7 @@ export async function salvarInformacoes(
       observacoes: texto(dados, "observacoes"),
       atualizadoEm: new Date(),
     })
-    .where(eq(projetoTable.id, projetoId));
+    .where(doProjetoDaEmpresa(projetoId, usuario.empresaId));
   revalidatePath(`/projeto/${projetoId}`);
 }
 
@@ -204,7 +222,7 @@ export async function salvarVistoria(
       vistoriaObservacoes: texto(dados, "vistoriaObservacoes"),
       atualizadoEm: new Date(),
     })
-    .where(eq(projetoTable.id, projetoId));
+    .where(doProjetoDaEmpresa(projetoId, usuario.empresaId));
   revalidatePath(`/projeto/${projetoId}`);
 }
 
@@ -213,7 +231,7 @@ export async function salvarProjetoTecnico(
   projetoId: string,
   dados: FormData,
 ): Promise<void> {
-  await exigirUsuario();
+  const usuario = await exigirUsuario();
   await db
     .update(projetoTable)
     .set({
@@ -223,7 +241,7 @@ export async function salvarProjetoTecnico(
       valor: numero(dados, "valor"),
       atualizadoEm: new Date(),
     })
-    .where(eq(projetoTable.id, projetoId));
+    .where(doProjetoDaEmpresa(projetoId, usuario.empresaId));
   revalidatePath(`/projeto/${projetoId}`);
 }
 
@@ -239,6 +257,12 @@ export async function comentar(projetoId: string, dados: FormData): Promise<void
   if (!conteudo) {
     redirect(`/projeto/${projetoId}`);
   }
+  // O id vem da tela: sem conferir, um comentário entraria no projeto de outra empresa.
+  const projeto = await db.query.projeto.findFirst({
+    where: doProjetoDaEmpresa(projetoId, usuario.empresaId),
+    columns: { id: true },
+  });
+  if (!projeto) redirect("/esteira");
   await db.insert(comentario).values({
     empresaId: usuario.empresaId,
     entidade: "projeto",

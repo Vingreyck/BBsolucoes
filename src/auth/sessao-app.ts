@@ -3,6 +3,7 @@ import { createHash, randomBytes } from "node:crypto";
 import { and, eq, gt, lt, ne } from "drizzle-orm";
 
 import { ehPapelApp, type PapelApp } from "@/app-movel/permissoes";
+import { mfaAtivoNoApp } from "@/auth/mfa";
 import { db } from "@/db";
 import {
   empresa as empresaTable,
@@ -33,13 +34,19 @@ function digerir(token: string): string {
   return createHash("sha256").update(token).digest("hex");
 }
 
+/**
+ * `mfaValidaAte`: até quando o código do autenticador vale para esta sessão
+ * (só com o 2FA ligado no app). A sessão **nunca passa disso**, nem renovando.
+ */
 export async function criarSessaoApp(
   usuarioId: string,
   dispositivo: string | null,
+  mfaValidaAte?: Date,
 ): Promise<{ token: string; expiraEm: Date }> {
   const token = randomBytes(32).toString("base64url");
   const agora = new Date();
-  const expiraEm = new Date(agora.getTime() + DURACAO_DIAS * DIA);
+  const limite = agora.getTime() + DURACAO_DIAS * DIA;
+  const expiraEm = new Date(mfaValidaAte ? Math.min(limite, mfaValidaAte.getTime()) : limite);
 
   await db.insert(sessaoTable).values({
     id: digerir(token),
@@ -48,6 +55,7 @@ export async function criarSessaoApp(
     origem: "app",
     dispositivo,
     ultimoUsoEm: agora,
+    mfaValidaAte: mfaValidaAte ?? null,
   });
 
   // Aproveita a escrita para limpar o que já venceu, sem cron só para isso.
@@ -105,6 +113,7 @@ export async function autenticarApp(req: Request): Promise<UsuarioApp | null> {
       empresaAtiva: empresaTable.ativa,
       expiraEm: sessaoTable.expiraEm,
       ultimoUsoEm: sessaoTable.ultimoUsoEm,
+      mfaValidaAte: sessaoTable.mfaValidaAte,
     })
     .from(sessaoTable)
     .innerJoin(usuarioTable, eq(usuarioTable.id, sessaoTable.usuarioId))
@@ -121,12 +130,19 @@ export async function autenticarApp(req: Request): Promise<UsuarioApp | null> {
   if (!linha) return null;
   if (!linha.ativo || !linha.aprovadoEm || !linha.empresaAtiva) return null;
   if (!linha.cpf || !ehPapelApp(linha.papel)) return null;
+  // 2FA ligado no app: sessão sem código válido não vale — nem a de antes dele, nem a dos 30 dias vencidos.
+  if (mfaAtivoNoApp() && (!linha.mfaValidaAte || linha.mfaValidaAte <= agora)) return null;
 
   const falta = linha.expiraEm.getTime() - agora.getTime();
   if (falta < RENOVAR_QUANDO_FALTAR_DIAS * DIA) {
+    // A renovação desliza, mas nunca além de onde o código vale.
+    const novaValidade = agora.getTime() + DURACAO_DIAS * DIA;
     await db
       .update(sessaoTable)
-      .set({ expiraEm: new Date(agora.getTime() + DURACAO_DIAS * DIA), ultimoUsoEm: agora })
+      .set({
+        expiraEm: new Date(linha.mfaValidaAte ? Math.min(novaValidade, linha.mfaValidaAte.getTime()) : novaValidade),
+        ultimoUsoEm: agora,
+      })
       .where(eq(sessaoTable.id, id));
   } else if (!linha.ultimoUsoEm || agora.getTime() - linha.ultimoUsoEm.getTime() > HORA) {
     await db.update(sessaoTable).set({ ultimoUsoEm: agora }).where(eq(sessaoTable.id, id));

@@ -1,5 +1,6 @@
 import { and, eq } from "drizzle-orm";
 
+import { ehUuid } from "@/app-movel/http";
 import { exigirAcessoDocumentos } from "@/auth/permissao";
 import { db, schema } from "@/db";
 import { baixarArquivo, driveConfigurado, idDoLink } from "@/documentos/drive";
@@ -23,6 +24,8 @@ export async function GET(
   const acesso = await exigirAcessoDocumentos();
   const usuario = acesso.usuario;
   const { id } = await params;
+  // Id malformado é "não encontrado", e não erro do banco (que viraria 500).
+  if (!ehUuid(id)) return new Response("Documento não encontrado.", { status: 404 });
 
   const documento = await db.query.documento.findFirst({
     where: and(

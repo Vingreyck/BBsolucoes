@@ -4132,6 +4132,84 @@ body {
   border: 1px solid color-mix(in srgb, var(--warn) 25%, transparent);
 }
 
+/* ---- segundo fator (código do aplicativo autenticador) ---- */
+
+.mfa-passos {
+  margin: 0 0 1.25rem;
+  padding-left: 1.2rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  font-size: 0.86rem;
+  line-height: 1.45;
+  color: var(--ink-2);
+}
+
+.mfa-qr-caixa {
+  display: flex;
+  justify-content: center;
+  margin: 0.7rem 0 0.4rem;
+}
+
+.mfa-qr {
+  width: 11.5rem;
+  height: 11.5rem;
+  border-radius: 8px;
+  border: 1px solid var(--line);
+}
+
+.mfa-manual {
+  font-size: 0.8rem;
+}
+
+.mfa-manual summary {
+  cursor: pointer;
+  color: var(--ink-3);
+}
+
+.mfa-manual code {
+  display: inline-block;
+  margin-top: 0.3rem;
+  padding: 0.15rem 0.4rem;
+  border-radius: 6px;
+  background: var(--surface-2);
+  font-size: 0.82rem;
+  letter-spacing: 0.04em;
+  user-select: all;
+}
+
+.acesso-form .entrada input[name="codigo"] {
+  font-size: 1.35rem;
+  letter-spacing: 0.3em;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+
+.mfa-confiar {
+  display: flex;
+  gap: 0.6rem;
+  align-items: flex-start;
+  font-size: 0.82rem;
+  line-height: 1.4;
+  color: var(--ink-2);
+  cursor: pointer;
+}
+
+.mfa-confiar input {
+  margin-top: 0.15rem;
+  flex-shrink: 0;
+}
+
+.link-botao {
+  padding: 0;
+  border: 0;
+  background: none;
+  font: inherit;
+  color: inherit;
+  text-decoration: underline;
+  cursor: pointer;
+}
+
 .acesso-ajuda {
   margin-top: 1.25rem;
   font-size: 0.85rem;

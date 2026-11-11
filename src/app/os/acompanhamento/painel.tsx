@@ -13,6 +13,7 @@ import {
   carregarLeaflet,
   criarMapa,
   desenharTrilha,
+  escapar,
   iconeTecnico,
   linkMaps,
   metros,
@@ -179,7 +180,7 @@ export default function PainelCampo({ inicial }: { inicial: TecnicoEmCampo[] }) 
         existente.setIcon(icone);
       } else {
         const novo = L.marker(ponto, { icon: icone, riseOnHover: true })
-          .bindTooltip(`${t.tecnico?.nome ?? "Sem técnico"} · ${numero(t.numero)}`, { direction: "top", offset: [0, -18] })
+          .bindTooltip(escapar(`${t.tecnico?.nome ?? "Sem técnico"} · ${numero(t.numero)}`), { direction: "top", offset: [0, -18] })
           .on("click", () => setSelecionado(t.ordemId))
           .addTo(m);
         marcadores.current.set(t.ordemId, novo);

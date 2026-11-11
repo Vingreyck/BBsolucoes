@@ -3,8 +3,10 @@ import { relations } from "drizzle-orm";
 import {
   cliente,
   contaPortal,
+  dispositivoConfiavel,
   empresa,
   equipamento,
+  mfaDesafio,
   unidadeConsumidora,
   usina,
   usuario,
@@ -47,6 +49,14 @@ export const usuarioRelations = relations(usuario, ({ one, many }) => ({
   ordensResponsavel: many(ordemServico),
   ordensAbertas: many(ordemServico, { relationName: "osAbertaPor" }),
   comentarios: many(comentario),
+}));
+
+export const dispositivoConfiavelRelations = relations(dispositivoConfiavel, ({ one }) => ({
+  usuario: one(usuario, { fields: [dispositivoConfiavel.usuarioId], references: [usuario.id] }),
+}));
+
+export const mfaDesafioRelations = relations(mfaDesafio, ({ one }) => ({
+  usuario: one(usuario, { fields: [mfaDesafio.usuarioId], references: [usuario.id] }),
 }));
 
 export const clienteRelations = relations(cliente, ({ one, many }) => ({

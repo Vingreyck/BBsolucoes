@@ -2,6 +2,8 @@ import { usuarioAtual } from "@/auth/sessao";
 import { atorDaWeb, ErroOs } from "@/os/acesso";
 import { abrirAnexo } from "@/os/anexos";
 
+const ABRE_NO_NAVEGADOR = new Set(["image/jpeg", "image/png", "video/mp4", "video/quicktime", "application/pdf"]);
+
 /**
  * A foto de uma OS, vinda do Drive pelo próprio Selebi.
  *
@@ -15,10 +17,15 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
   const { id } = await params;
   try {
     const arquivo = await abrirAnexo(atorDaWeb(usuario), id);
+    // Só abre dentro do navegador o que é foto, vídeo ou PDF. Qualquer outro
+    // tipo (um anexo antigo sem tipo gravado, cujo tipo viria do Drive) é
+    // entregue como arquivo para baixar: um HTML ou SVG aberto aqui rodaria
+    // com a sessão de quem clicou.
+    const abreNoNavegador = ABRE_NO_NAVEGADOR.has(arquivo.tipo);
     return new Response(arquivo.corpo, {
       headers: {
-        "content-type": arquivo.tipo,
-        "content-disposition": `inline; filename="${encodeURIComponent(arquivo.nome)}"`,
+        "content-type": abreNoNavegador ? arquivo.tipo : "application/octet-stream",
+        "content-disposition": `${abreNoNavegador ? "inline" : "attachment"}; filename="${encodeURIComponent(arquivo.nome)}"`,
         "cache-control": "private, max-age=3600",
         "x-content-type-options": "nosniff",
       },

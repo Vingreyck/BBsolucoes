@@ -1,6 +1,7 @@
 import { and, count, eq, isNull, ne, sql } from "drizzle-orm";
 import type { Metadata } from "next";
 import { Inter, Outfit } from "next/font/google";
+import { headers } from "next/headers";
 
 import { podeVerDocumentos } from "@/auth/permissao";
 import { usuarioAtual } from "@/auth/sessao";
@@ -133,12 +134,17 @@ export default async function RootLayout({
       : []),
   ];
 
+  // O número da vez, sorteado no `middleware.ts`: sem ele a política de conteúdo
+  // barraria o script abaixo, como barra qualquer script escrito no HTML.
+  const nonce = (await headers()).get("x-nonce") ?? undefined;
+
   return (
     <html lang="pt-BR" className={fontes} suppressHydrationWarning>
       <head>
         {/* Antes de pintar: aplica o menu recolhido, se a pessoa deixou assim. Sem isto
             a tela abriria com o menu largo e encolheria logo depois, piscando. */}
         <script
+          nonce={nonce}
           dangerouslySetInnerHTML={{
             __html: `try{if(localStorage.getItem("${CHAVE_MENU}")==="recolhido")document.documentElement.dataset.menu="recolhido"}catch(e){}`,
           }}

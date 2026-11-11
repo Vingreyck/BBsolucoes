@@ -17,6 +17,7 @@ import {
 import Link from "next/link";
 import { notFound } from "next/navigation";
 
+import { ehUuid } from "@/app-movel/http";
 import { podeVerDocumentos } from "@/auth/permissao";
 import { exigirUsuario } from "@/auth/sessao";
 import { atorDaWeb } from "@/os/acesso";
@@ -86,6 +87,8 @@ export default async function DetalheProjeto({
   const ator = atorDaWeb(usuario);
   const { id } = await params;
   const { serial: aviso } = await searchParams;
+  // O que vem no endereço é palpite de quem digita: id malformado é 404, não erro.
+  if (!ehUuid(id)) notFound();
 
   // Da empresa de quem pede: sem isto, um id de projeto de outra empresa
   // abriria aqui — o sistema é multiempresa desde a primeira migration.
@@ -108,7 +111,11 @@ export default async function DetalheProjeto({
       orderBy: desc(eventoTable.ocorridoEm),
     }),
     db.query.comentario.findMany({
-      where: and(eq(comentarioTable.entidade, "projeto"), eq(comentarioTable.entidadeId, id)),
+      where: and(
+        eq(comentarioTable.empresaId, usuario.empresaId),
+        eq(comentarioTable.entidade, "projeto"),
+        eq(comentarioTable.entidadeId, id),
+      ),
       with: { autor: true },
       orderBy: asc(comentarioTable.criadoEm),
     }),

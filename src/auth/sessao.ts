@@ -8,6 +8,7 @@ import { db } from "@/db";
 import { sessao as sessaoTable, usuario as usuarioTable } from "@/db/schema";
 
 import { COOKIE_SESSAO } from "./constantes";
+import { mfaAtivo } from "./mfa";
 
 export { COOKIE_SESSAO };
 
@@ -19,15 +20,23 @@ function digerir(token: string): string {
   return createHash("sha256").update(token).digest("hex");
 }
 
-export async function criarSessao(usuarioId: string): Promise<void> {
+/**
+ * `mfaValidaAte`: até quando o código do aplicativo autenticador vale para esta
+ * sessão. A sessão **nunca passa disso**: é o que faz o código voltar a ser pedido
+ * ao fim de 30 dias (ou das 12 horas, para quem não confiou no aparelho). Sem ele,
+ * a sessão é de antes do 2FA e só vale enquanto ele estiver desligado.
+ */
+export async function criarSessao(usuarioId: string, opcoes: { mfaValidaAte?: Date } = {}): Promise<void> {
   const token = randomBytes(32).toString("base64url");
-  const expiraEm = new Date(Date.now() + DURACAO_DIAS * 86_400_000);
+  const limite = Date.now() + DURACAO_DIAS * 86_400_000;
+  const expiraEm = new Date(opcoes.mfaValidaAte ? Math.min(limite, opcoes.mfaValidaAte.getTime()) : limite);
 
   await db.insert(sessaoTable).values({
     id: digerir(token),
     usuarioId,
     expiraEm,
     origem: "web",
+    mfaValidaAte: opcoes.mfaValidaAte ?? null,
   });
 
   const jar = await cookies();
@@ -72,6 +81,7 @@ export async function usuarioAtual(): Promise<UsuarioSessao | null> {
       deveTrocarSenha: usuarioTable.deveTrocarSenha,
       ativo: usuarioTable.ativo,
       aprovadoEm: usuarioTable.aprovadoEm,
+      mfaValidaAte: sessaoTable.mfaValidaAte,
     })
     .from(sessaoTable)
     .innerJoin(usuarioTable, eq(usuarioTable.id, sessaoTable.usuarioId))
@@ -90,6 +100,11 @@ export async function usuarioAtual(): Promise<UsuarioSessao | null> {
   // Cadastro do app ainda não aprovado também não passa, mesmo que um dia tenha
   // sessão — é a segunda tranca, além do `ativo`.
   if (!usuario || !usuario.ativo || !usuario.aprovadoEm) return null;
+
+  // Segundo fator ligado: sessão sem código válido não vale — nem a de antes de
+  // ele existir (ligar o 2FA deixa todo mundo entrar de novo, uma vez) nem a que
+  // passou dos 30 dias.
+  if (mfaAtivo() && (!usuario.mfaValidaAte || usuario.mfaValidaAte.getTime() <= Date.now())) return null;
 
   return {
     id: usuario.id,

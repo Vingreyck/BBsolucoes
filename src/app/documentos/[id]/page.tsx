@@ -11,6 +11,7 @@ import {
 import Link from "next/link";
 import { notFound } from "next/navigation";
 
+import { ehUuid } from "@/app-movel/http";
 import { exigirAcessoDocumentos } from "@/auth/permissao";
 import { db, schema } from "@/db";
 import { linkWhatsapp, mensagemDeCobranca } from "@/documentos/cobranca";
@@ -70,6 +71,8 @@ export default async function Dossie({
   const acesso = await exigirAcessoDocumentos();
   const usuario = acesso.usuario;
   const { id } = await params;
+  // O que vem no endereço é palpite de quem digita: id malformado é 404, não erro.
+  if (!ehUuid(id)) notFound();
 
   const projeto = await db.query.projeto.findFirst({
     where: and(

@@ -9,6 +9,30 @@
 # contrato de 166 pessoas atrás dele.
 
 {$DOMINIO} {
+	# Teto para o corpo de cada pedido, por caminho — inclusive o que vem "em
+	# pedaços", sem dizer o tamanho. Quem ainda não entrou consegue mandar pedido
+	# para qualquer endereço; sem isto, poderia fazer o site carregar dezenas de
+	# megabytes na memória antes de ele conferir a sessão.
+	#
+	# Só três lugares recebem arquivo: o dossiê (`/documentos/…`, até 60 MB), a
+	# tela da OS (`/os/…`) e o envio de foto e vídeo do app. A lista da Energisa
+	# é texto, mas pode ter milhares de linhas. Todo o resto é formulário, e
+	# formulário não passa de alguns kilobytes.
+	#
+	# Tela nova com envio de arquivo precisa entrar aqui, senão o envio volta 413.
+	@envioDeArquivo path /documentos/* /os/* /api/app/v1/ordens/*
+	@listaDaEnergisa path /energisa/* /api/energisa/*
+	@formularios not path /documentos/* /os/* /api/app/v1/ordens/* /energisa/* /api/energisa/*
+	request_body @envioDeArquivo {
+		max_size 70MB
+	}
+	request_body @listaDaEnergisa {
+		max_size 8MB
+	}
+	request_body @formularios {
+		max_size 2MB
+	}
+
 	reverse_proxy site:3000
 
 	# Comprime só uma lista fechada de tipos, e nunca `text/*` inteiro: o mapa
@@ -39,9 +63,28 @@
 		# Ninguém embute o Selebi num iframe de outro site.
 		X-Frame-Options "DENY"
 		Referrer-Policy "strict-origin-when-cross-origin"
-		# Não anuncia qual servidor é.
+		# O que o navegador pode ligar numa página do Selebi: nada. O site não usa
+		# localização (quem manda o GPS é o app), câmera (a foto vem do seletor de
+		# arquivo), microfone, pagamento nem portas do computador — então ficam
+		# desligados mesmo que um script estranho peça. Se um dia uma tela do site
+		# precisar de um deles, é aqui que se libera.
+		Permissions-Policy "geolocation=(), camera=(), microphone=(), payment=(), usb=(), serial=(), bluetooth=(), hid=(), midi=(), accelerometer=(), gyroscope=(), magnetometer=(), display-capture=(), browsing-topics=()"
+		# Não anuncia qual servidor é, nem o que há atrás dele.
 		-Server
+		-Via
+		-X-Powered-By
 	}
+
+	# Uma aba aberta a partir do Selebi (o WhatsApp, o Maps) não ganha controle
+	# sobre a aba do Selebi, nem uma página de fora que abra o Selebi.
+	#
+	# Menos em `/energisa/importar`: essa tela é aberta pelo favorito "Enviar ao
+	# Selebi" a partir do portal da Energisa, e recebe a lista da janela que a
+	# abriu. Com este cabeçalho o navegador cortaria essa ligação e o favorito
+	# pararia de funcionar. A tela confere por conta própria que a mensagem veio
+	# do portal da Energisa (`importador.tsx`).
+	@foraDoFavorito not path /energisa/importar /energisa/importar/*
+	header @foraDoFavorito Cross-Origin-Opener-Policy "same-origin"
 
 	log {
 		output file /data/acesso.log {

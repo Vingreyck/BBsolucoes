@@ -2,6 +2,7 @@ import { randomBytes } from "node:crypto";
 
 import { and, asc, eq, like } from "drizzle-orm";
 
+import { ehUuid } from "@/app-movel/http";
 import { db, schema } from "@/db";
 import {
   baixarArquivo,
@@ -472,6 +473,8 @@ export async function removerAnexo(ator: Ator, osId: string, anexoId: string): P
 
 /** O arquivo de um anexo, para quem pode ver a OS. */
 export async function abrirAnexo(ator: Ator, anexoId: string) {
+  // Id malformado é "não encontrado", e não erro do banco.
+  if (!ehUuid(anexoId)) throw new ErroOs("nao_encontrado", "Anexo não encontrado.", 404);
   const anexo = await db.query.osAnexo.findFirst({
     where: and(eq(schema.osAnexo.id, anexoId), eq(schema.osAnexo.empresaId, ator.empresaId)),
     with: { ordemServico: { columns: { responsavelId: true } } },

@@ -9,13 +9,26 @@ on:
     branches: [main, feat/base-do-sistema]
   pull_request:
 
+# O token que o GitHub entrega ao job só lê o código. Sem isto ele podia, por
+# padrão, escrever no repositório: um passo comprometido (uma ação de terceiros
+# trocada, uma dependência infectada no npm ci) sairia com poder de publicar
+# código. Apontado pelo CodeQL em 11/11/2026.
+permissions:
+  contents: read
+
 jobs:
   conferir:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      # As ações vão fixadas pelo commit, e não pela etiqueta: etiqueta pode ser
+      # movida por quem invadir o repositório da ação (tj-actions em 2025,
+      # trivy-action em 2026). O Dependabot atualiza o commit e o comentário.
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          # O token não fica gravado no disco do job depois do checkout.
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version: 22
           cache: npm

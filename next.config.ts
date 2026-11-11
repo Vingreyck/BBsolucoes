@@ -18,6 +18,12 @@ const nextConfig: NextConfig = {
   serverExternalPackages: ["@react-pdf/renderer"],
 
   /**
+   * Sem o cabeçalho `X-Powered-By: Next.js`. Dizer de graça qual é o framework
+   * poupa trabalho de quem varre a internet atrás de versões com falha.
+   */
+  poweredByHeader: false,
+
+  /**
    * Quem comprime é o Caddy, na frente. Comprimir aqui também seria trabalho
    * dobrado e seguraria o fluxo ao vivo do mapa "Em campo" (SSE) num buffer.
    */

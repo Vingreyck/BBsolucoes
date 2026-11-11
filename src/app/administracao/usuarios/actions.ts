@@ -4,9 +4,11 @@ import { and, eq, isNull } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 
+import { redefinirMfa } from "@/auth/mfa";
 import { gerarHash, gerarSenhaProvisoria } from "@/auth/senha";
 import { exigirUsuario } from "@/auth/sessao";
 import { db, schema } from "@/db";
+import { registrarSeguranca } from "@/sistema/seguranca";
 
 /**
  * Contas nominais, uma por pessoa.
@@ -193,6 +195,28 @@ export async function recusarPedido(dados: FormData): Promise<void> {
 
   revalidatePath("/administracao/usuarios");
   revalidatePath("/", "layout");
+}
+
+/**
+ * Perdeu o celular, trocou de aparelho ou o aplicativo autenticador sumiu: apaga o
+ * segundo fator da pessoa. Ela perde todas as sessões e os aparelhos conhecidos, e
+ * no próximo login cadastra o aplicativo de novo.
+ *
+ * O adm não redefine o **próprio**: se alguém roubasse a sessão dele, este botão
+ * seria o jeito de trocar o celular dele pelo do atacante. Para si, o caminho é
+ * pedir a outro administrador, ou o terminal da VM (`npm run mfa:redefinir`).
+ */
+export async function redefinirDoisFatores(usuarioId: string): Promise<void> {
+  const adm = await exigirAdm();
+  if (usuarioId === adm.id) return;
+  const alvo = await db.query.usuario.findFirst({
+    where: and(eq(schema.usuario.id, usuarioId), eq(schema.usuario.empresaId, adm.empresaId)),
+    columns: { id: true },
+  });
+  if (!alvo) return;
+  await redefinirMfa(alvo.id);
+  registrarSeguranca("mfa_redefinido", { origem: "web", ip: "painel", usuarioId: alvo.id, detalhe: `por ${adm.id}` });
+  revalidatePath("/administracao/usuarios");
 }
 
 /** Troca o papel de quem já tem conta. O próprio adm não troca o seu: não se tranca para fora. */

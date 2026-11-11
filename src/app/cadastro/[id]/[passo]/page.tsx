@@ -1,6 +1,7 @@
 import { and, eq } from "drizzle-orm";
 import { notFound } from "next/navigation";
 
+import { ehUuid } from "@/app-movel/http";
 import { exigirUsuario } from "@/auth/sessao";
 import { db } from "@/db";
 import { usina as usinaTable } from "@/db/schema";
@@ -26,7 +27,8 @@ export default async function CadastroPasso({
   const { id, passo } = await params;
 
   const numero = Number(passo);
-  if (!passoPorNumero(numero) || numero < 2) notFound();
+  // Passo que não existe ou id malformado: 404, e não erro do banco.
+  if (!passoPorNumero(numero) || numero < 2 || !ehUuid(id)) notFound();
 
   // Da empresa de quem pede: o id vem da URL.
   const usina = await db.query.usina.findFirst({

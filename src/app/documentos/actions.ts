@@ -8,6 +8,7 @@ import { db, schema } from "@/db";
 import { driveConfigurado, enviarArquivo } from "@/documentos/drive";
 import { limparNome, pastaDoCliente } from "@/documentos/pastas";
 import { numeroWhatsapp } from "@/documentos/cobranca";
+import { tipoDoDocumento } from "@/documentos/conteudo";
 import { filaDeCobranca } from "@/documentos/fila-cobranca";
 
 /**
@@ -22,19 +23,6 @@ import { filaDeCobranca } from "@/documentos/fila-cobranca";
  * padrão `TIPO - CLIENTE.pdf`. **Sem comprimir** — decisão explícita do dono, e
  * a certa: comprimir PDF escaneado é degradar um papel que pode virar prova.
  */
-
-/** Extensão permitida. Papel é PDF, imagem ou documento — não executável. */
-const TIPOS_ACEITOS = new Set([
-  "application/pdf",
-  "image/jpeg",
-  "image/png",
-  "image/heic",
-  "image/webp",
-  "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-  "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-  "application/msword",
-  "application/vnd.ms-excel",
-]);
 
 /** 60 MB. O maior memorial escaneado do Drive da BB tem 30. */
 const TAMANHO_MAXIMO = 60 * 1024 * 1024;
@@ -96,9 +84,16 @@ export async function enviarDocumento(
     const mb = Math.round(arquivo.size / 1024 / 1024);
     return { erro: `O arquivo tem ${mb} MB e o limite é 60 MB.` };
   }
-  if (!TIPOS_ACEITOS.has(arquivo.type)) {
+  /**
+   * O tipo vale pelo conteúdo. O `arquivo.type` é o que o navegador declarou, e
+   * quem declara é quem envia: é o conteúdo que diz se isto é um PDF ou uma
+   * página disfarçada (ver `@/documentos/conteudo`).
+   */
+  const conteudo = new Uint8Array(await arquivo.arrayBuffer());
+  const real = tipoDoDocumento(conteudo, `${arquivo.type} ${arquivo.name}`);
+  if (!real) {
     return {
-      erro: `Tipo de arquivo não aceito (${arquivo.type || "desconhecido"}). Use PDF, imagem ou documento do Office.`,
+      erro: "Este arquivo não é um PDF, uma imagem (JPEG, PNG, HEIC, WebP) nem um documento do Word ou do Excel. Confira o arquivo e envie de novo.",
     };
   }
   if (!schema.tipoDocumento.enumValues.includes(tipo)) {
@@ -126,17 +121,17 @@ export async function enviarDocumento(
     // A pasta que o cliente já tem no Drive, ou uma nova sob CLIENTES <ano>.
     const pastaId = await pastaDoCliente(usuario.empresaId, projeto.cliente);
 
-    const ponto = arquivo.name.lastIndexOf(".");
-    const extensao = ponto < 0 ? "" : arquivo.name.slice(ponto);
+    // A extensão sai do tipo reconhecido, e não do nome que veio do computador
+    // de quem enviou: `contrato.pdf.html` não vira um `.html` no Drive.
     const nomeFinal = `${ROTULO_ARQUIVO[tipo] ?? tipo.toUpperCase()} - ${limparNome(
       projeto.cliente.nome,
-    ).toUpperCase()}${assinado ? " ASSINADO" : ""}${extensao}`;
+    ).toUpperCase()}${assinado ? " ASSINADO" : ""}${real.extensao}`;
 
     const enviado = await enviarArquivo({
       nome: nomeFinal,
-      mimeType: arquivo.type,
+      mimeType: real.mime,
       pastaId,
-      conteudo: await arquivo.arrayBuffer(),
+      conteudo,
     });
 
     /**

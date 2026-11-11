@@ -42,6 +42,7 @@
     "recomecar": "tsx src/db/recomecar.ts",
     "empresa:codigo": "tsx src/empresa/definir-codigo.ts",
     "usuario:aprovar": "tsx src/auth/aprovar-cli.ts",
+    "mfa:redefinir": "tsx src/auth/mfa-cli.ts",
     "demo:revisao": "tsx src/empresa/preparar-demonstracao.ts",
     "testar:app": "tsx src/app-movel/testar-fluxo.ts",
     "testar:os": "tsx src/os/testar-os.ts",
@@ -58,8 +59,9 @@
     "exceljs": "^4.4.0",
     "leaflet": "^1.9.4",
     "lucide-react": "^1.49.0",
-    "next": "^15.5.28",
+    "next": "^15.5.29",
     "postgres": "^3.4.5",
+    "qrcode-generator": "2.0.4",
     "react": "^19.1.0",
     "react-dom": "^19.1.0"
   },

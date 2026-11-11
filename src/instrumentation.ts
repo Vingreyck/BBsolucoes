@@ -9,6 +9,9 @@ export async function register() {
   if (process.env.NEXT_RUNTIME === "nodejs") {
     const { iniciarEnvioDeAnexos } = await import("./os/anexos");
     iniciarEnvioDeAnexos();
+    // Avisa já no começo se o segundo fator está desligado por falta da chave.
+    const { mfaAtivo } = await import("./auth/mfa");
+    mfaAtivo();
   }
 }
 
