@@ -11,6 +11,7 @@ import { ehGestaoWeb } from "@/os/acesso";
 import { BarraLateral, type GrupoMenu } from "./barra-lateral";
 import { BarraSuperior } from "./barra-superior";
 import { CHAVE_MENU } from "./menu";
+import { SCRIPT_TEMA } from "./tema";
 import "./globals.css";
 
 /**
@@ -65,10 +66,18 @@ export default async function RootLayout({
 }: Readonly<{ children: React.ReactNode }>) {
   const usuario = await usuarioAtual();
 
-  // Sem sessão não há menu: login e páginas públicas ficam limpas.
+  // O número da vez, sorteado no `middleware.ts`: sem ele a política de conteúdo
+  // barraria os scripts abaixo, como barra qualquer script escrito no HTML.
+  const nonce = (await headers()).get("x-nonce") ?? undefined;
+
+  // Sem sessão não há menu: login e páginas públicas ficam limpas. O tema
+  // (claro/escuro) vale aqui também, para a tela de entrada abrir como a pessoa deixou.
   if (!usuario) {
     return (
-      <html lang="pt-BR" className={fontes}>
+      <html lang="pt-BR" className={fontes} suppressHydrationWarning>
+        <head>
+          <script nonce={nonce} dangerouslySetInnerHTML={{ __html: SCRIPT_TEMA }} />
+        </head>
         <body>{children}</body>
       </html>
     );
@@ -134,13 +143,11 @@ export default async function RootLayout({
       : []),
   ];
 
-  // O número da vez, sorteado no `middleware.ts`: sem ele a política de conteúdo
-  // barraria o script abaixo, como barra qualquer script escrito no HTML.
-  const nonce = (await headers()).get("x-nonce") ?? undefined;
-
   return (
     <html lang="pt-BR" className={fontes} suppressHydrationWarning>
       <head>
+        {/* Antes de pintar: aplica o tema claro/escuro (a escolha guardada ou o do sistema). */}
+        <script nonce={nonce} dangerouslySetInnerHTML={{ __html: SCRIPT_TEMA }} />
         {/* Antes de pintar: aplica o menu recolhido, se a pessoa deixou assim. Sem isto
             a tela abriria com o menu largo e encolheria logo depois, piscando. */}
         <script

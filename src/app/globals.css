@@ -60,7 +60,7 @@
 }
 
 @media (prefers-color-scheme: dark) {
-  :root {
+  :root:not([data-tema]) {
     --bg: #0c0f13;
     --surface: #13171d;
     --surface-2: #181d24;
@@ -89,6 +89,45 @@
     --lateral-bg-2: #0a0c0f;
     --lateral-linha: #1b1f26;
   }
+}
+
+/* a mesma paleta quando o tema escuro foi escolhido (botão do menu) ou já é o do sistema */
+:root[data-tema="escuro"] {
+  --bg: #0c0f13;
+  --surface: #13171d;
+  --surface-2: #181d24;
+  --surface-3: #1f252e;
+  --ink: #e9ecf0;
+  --ink-2: #a8b0ba;
+  --ink-3: #808994;
+  --line: #2a313b;
+  --line-soft: #1f252d;
+  --accent: #ec8c4e;
+  --accent-forte: #f6a673;
+  --accent-soft: rgba(236, 140, 78, 0.13);
+  --acao-borda: #c9561a;
+  --energia: #e8894b;
+  --energia-forte: #ffc247;
+  --ok: #4ade80;
+  --ok-soft: rgba(74, 222, 128, 0.12);
+  --warn: #facc15;
+  --warn-soft: rgba(250, 204, 21, 0.12);
+  --crit: #f87171;
+  --crit-soft: rgba(248, 113, 113, 0.12);
+  /* o fio de luz no alto de cada superfície é o que a separa do fundo */
+  --shadow: inset 0 1px 0 rgba(255, 255, 255, 0.035), 0 1px 2px rgba(0, 0, 0, 0.5);
+  --shadow-alta: inset 0 1px 0 rgba(255, 255, 255, 0.05), 0 16px 36px -8px rgba(0, 0, 0, 0.65);
+  --lateral-bg: #0e1115;
+  --lateral-bg-2: #0a0c0f;
+  --lateral-linha: #1b1f26;
+}
+
+:root[data-tema="claro"] {
+  color-scheme: light;
+}
+
+:root[data-tema="escuro"] {
+  color-scheme: dark;
 }
 
 * {
@@ -1751,9 +1790,14 @@ body {
   --data: #2f5f8a;
 }
 @media (prefers-color-scheme: dark) {
-  :root {
+  :root:not([data-tema]) {
     --data: #7fb0dc;
   }
+}
+
+/* a mesma paleta quando o tema escuro foi escolhido (botão do menu) ou já é o do sistema */
+:root[data-tema="escuro"] {
+  --data: #7fb0dc;
 }
 
 
@@ -2711,9 +2755,13 @@ body {
 
 /* O OpenStreetMap só tem mapa claro: no tema escuro, inverte os ladrilhos. */
 @media (prefers-color-scheme: dark) {
-  .mapa .leaflet-tile-pane {
+  html:not([data-tema]) .mapa .leaflet-tile-pane {
     filter: invert(1) hue-rotate(180deg) brightness(0.95) contrast(0.9);
   }
+}
+
+html[data-tema="escuro"] .mapa .leaflet-tile-pane {
+  filter: invert(1) hue-rotate(180deg) brightness(0.95) contrast(0.9);
 }
 
 @media (max-width: 760px) {
@@ -6974,10 +7022,16 @@ a.funil-rotulo:hover {
 }
 
 @media (prefers-color-scheme: dark) {
-  :root {
+  :root:not([data-tema]) {
     --rolagem: rgba(255, 255, 255, 0.14);
     --rolagem-forte: rgba(255, 255, 255, 0.28);
   }
+}
+
+/* a mesma paleta quando o tema escuro foi escolhido (botão do menu) ou já é o do sistema */
+:root[data-tema="escuro"] {
+  --rolagem: rgba(255, 255, 255, 0.14);
+  --rolagem-forte: rgba(255, 255, 255, 0.28);
 }
 
 /* ---- barras de rolagem ---------------------------------------------------
@@ -9480,4 +9534,275 @@ input[type="file"]::file-selector-button:hover {
   box-shadow:
     inset 3px 0 0 var(--cobre),
     var(--shadow);
+}
+
+/* =========================================================================
+ * Botão de tema: o sol da marca vira lua
+ *
+ * Um interruptor no topo do menu. De dia a bolinha é o símbolo do Selebi (sol
+ * dourado, três arcos cobre girando); ao clicar ela rola para o outro lado,
+ * os arcos somem e o sol vira lua, num céu com estrelas. Tudo é desenhado a
+ * partir de html[data-tema], que o script do <head> escreve antes de pintar:
+ * a tela nunca abre com o botão no lado errado, nem anima ao carregar.
+ * ========================================================================= */
+
+.tema-botao {
+  flex: none;
+  margin-left: auto;
+  /* a área de toque é maior que o desenho */
+  padding: 8px 4px;
+  border: 0;
+  border-radius: 999px;
+  background: none;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.tema-botao:focus-visible {
+  outline: 2px solid var(--sol);
+  outline-offset: 0;
+}
+
+.tema-trilho {
+  position: relative;
+  display: block;
+  width: 56px;
+  height: 30px;
+  border-radius: 999px;
+  /* de dia: o céu quente da marca, do dourado ao cobre */
+  border: 1px solid rgba(255, 194, 71, 0.4);
+  background: linear-gradient(100deg, rgba(255, 194, 71, 0.3), rgba(201, 86, 26, 0.22));
+  /* o céu fica dentro da borda: sem isto o dourado do dia aparece por baixo da borda da noite */
+  background-clip: padding-box;
+}
+
+/* de noite: o céu azul-escuro entra por cima, desvanecendo (gradiente não anima) */
+.tema-trilho::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: linear-gradient(100deg, #1d2740, #10151f);
+  opacity: 0;
+}
+
+html[data-tema="escuro"] .tema-trilho {
+  border-color: rgba(255, 255, 255, 0.16);
+}
+
+html[data-tema="escuro"] .tema-trilho::before {
+  opacity: 1;
+}
+
+.tema-estrelas {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  fill: #fff;
+  opacity: 0;
+}
+
+html[data-tema="escuro"] .tema-estrelas {
+  opacity: 0.9;
+}
+
+html[data-tema="escuro"] .tema-estrelas circle {
+  animation: tema-cintila 3.2s ease-in-out infinite;
+}
+
+html[data-tema="escuro"] .tema-estrelas circle:nth-child(2) {
+  animation-delay: -0.8s;
+}
+
+html[data-tema="escuro"] .tema-estrelas circle:nth-child(3) {
+  animation-delay: -1.6s;
+}
+
+html[data-tema="escuro"] .tema-estrelas circle:nth-child(4) {
+  animation-delay: -2.4s;
+}
+
+@keyframes tema-cintila {
+  50% {
+    opacity: 0.25;
+  }
+}
+
+/* a bolinha: 28 px, a altura de dentro do trilho; corre 26 px até o outro lado, com um leve repique */
+.tema-bolinha {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 28px;
+  height: 28px;
+}
+
+html[data-tema="escuro"] .tema-bolinha {
+  transform: translateX(26px);
+}
+
+.tema-bolinha svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+  filter: drop-shadow(0 0 3px rgba(255, 194, 71, 0.65));
+}
+
+/* rola uma volta inteira no caminho: sol e lua terminam na mesma posição */
+html[data-tema="escuro"] .tema-bolinha svg {
+  transform: rotate(-360deg);
+  filter: drop-shadow(0 0 3px rgba(246, 231, 184, 0.5));
+}
+
+.tema-botao:hover .tema-bolinha svg {
+  filter: drop-shadow(0 0 6px rgba(255, 194, 71, 0.9));
+}
+
+html[data-tema="escuro"] .tema-botao:hover .tema-bolinha svg {
+  filter: drop-shadow(0 0 6px rgba(246, 231, 184, 0.7));
+}
+
+.tema-botao:active .tema-bolinha {
+  scale: 0.9;
+}
+
+/* o sol: disco dourado. A lua é o mesmo disco com um círculo recortado de um lado. */
+.tema-disco {
+  fill: #ffc247;
+}
+
+html[data-tema="escuro"] .tema-disco {
+  fill: #f6e7b8;
+}
+
+.tema-recorte {
+  transform: translate(48px, -48px); /* fora do disco: sol inteiro */
+}
+
+html[data-tema="escuro"] .tema-recorte {
+  transform: translate(14px, -11px); /* morde o canto de cima: quarto crescente */
+}
+
+/* os três arcos da marca: giram devagar de dia, encolhem e somem de noite */
+.tema-arcos {
+  transform-origin: 50px 50px;
+}
+
+html[data-tema="escuro"] .tema-arcos {
+  opacity: 0;
+  transform: scale(0.3);
+}
+
+.tema-gira {
+  transform-origin: 50px 50px;
+  animation: tema-gira 16s linear infinite;
+}
+
+html[data-tema="escuro"] .tema-gira {
+  animation-play-state: paused;
+}
+
+@keyframes tema-gira {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* As transições só existem logo depois de um clique (o botão põe `trocando-tema` na página por 0,8 s).
+   Se valessem o tempo todo, o navegador poderia animar o tema que o script do <head> escreveu antes
+   da primeira pintura, e a tela abriria com o botão "correndo" até o lugar. */
+html.trocando-tema .tema-trilho {
+  transition: border-color 0.4s var(--ease);
+}
+
+html.trocando-tema .tema-trilho::before,
+html.trocando-tema .tema-estrelas {
+  transition: opacity 0.4s var(--ease);
+}
+
+html.trocando-tema .tema-bolinha {
+  transition: transform 0.5s cubic-bezier(0.34, 1.45, 0.5, 1);
+}
+
+html.trocando-tema .tema-bolinha svg {
+  transition: transform 0.6s var(--ease), filter 0.4s var(--ease);
+}
+
+html.trocando-tema .tema-disco {
+  transition: fill 0.4s var(--ease);
+}
+
+html.trocando-tema .tema-recorte {
+  transition: transform 0.5s var(--ease);
+}
+
+html.trocando-tema .tema-arcos {
+  transition: opacity 0.35s var(--ease), transform 0.5s var(--ease);
+}
+
+/* No resto da tela, as cores mudam em 0,3 s em vez de estalar. */
+html.trocando-tema *:not(.tema-botao, .tema-botao *),
+html.trocando-tema *:not(.tema-botao, .tema-botao *)::before,
+html.trocando-tema *:not(.tema-botao, .tema-botao *)::after {
+  transition:
+    background-color 0.3s ease,
+    border-color 0.3s ease,
+    color 0.3s ease,
+    fill 0.3s ease,
+    stroke 0.3s ease,
+    box-shadow 0.3s ease !important;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html.trocando-tema .tema-trilho,
+  html.trocando-tema .tema-trilho::before,
+  html.trocando-tema .tema-estrelas,
+  html.trocando-tema .tema-bolinha,
+  html.trocando-tema .tema-bolinha svg,
+  html.trocando-tema .tema-disco,
+  html.trocando-tema .tema-recorte,
+  html.trocando-tema .tema-arcos {
+    transition: none;
+  }
+
+  .tema-gira,
+  .tema-estrelas circle {
+    animation: none !important;
+  }
+
+  html.trocando-tema *:not(.tema-botao, .tema-botao *),
+  html.trocando-tema *:not(.tema-botao, .tema-botao *)::before,
+  html.trocando-tema *:not(.tema-botao, .tema-botao *)::after {
+    transition: none !important;
+  }
+}
+
+/* Menu recolhido (só ícones): sobra só a bolinha, embaixo da marca; sol ou lua conforme o tema. */
+@media (min-width: 901px) {
+  html[data-menu="recolhido"] .lateral-topo {
+    flex-direction: column;
+    gap: 0.35rem;
+  }
+
+  html[data-menu="recolhido"] .tema-botao {
+    margin-left: 0;
+    padding: 2px;
+  }
+
+  html[data-menu="recolhido"] .tema-trilho {
+    width: 30px;
+    border-color: transparent;
+    background: none;
+  }
+
+  html[data-menu="recolhido"] .tema-trilho::before,
+  html[data-menu="recolhido"] .tema-estrelas {
+    display: none;
+  }
+
+  html[data-menu="recolhido"] .tema-bolinha {
+    transform: none;
+  }
 }

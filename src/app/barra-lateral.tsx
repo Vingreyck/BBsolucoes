@@ -27,6 +27,7 @@ import {
 import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
 
+import { BotaoTema } from "./_ui/botao-tema";
 import { SimboloSelebi } from "./_ui/marca";
 import { iniciais } from "./formatar";
 import { sair } from "./login/actions";
@@ -163,6 +164,7 @@ export function BarraLateral({
             <SimboloSelebi tamanho={26} />
             Selebi
           </a>
+          <BotaoTema />
           <button
             type="button"
             className="lateral-fechar"
