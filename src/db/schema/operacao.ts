@@ -98,6 +98,13 @@ export const projeto = pgTable(
       .defaultNow(),
     valor: numeric("valor", { precision: 12, scale: 2 }),
     potenciaKwp: numeric("potencia_kwp", { precision: 10, scale: 3 }),
+    /**
+     * A forma de pagamento que o cliente aceitou no Lead (ver
+     * `FORMAS_PAGAMENTO` em `@/projeto/pagamento`). Pode mudar depois.
+     */
+    formaPagamento: varchar("forma_pagamento", { length: 30 }),
+    /** Entrada, parcelas, banco: o combinado, em texto livre. */
+    pagamentoCondicoes: text("pagamento_condicoes"),
 
     /**
      * Etapa 2, coleta de informações.

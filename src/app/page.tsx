@@ -83,7 +83,7 @@ export default async function Inicio() {
 
   const [ordens, etapas, projetos, alertas, [usinas], geracao, energisa] = await Promise.all([
     temOs ? listarOs(ator, { aba: "abertas" }) : Promise.resolve([] as OsDaLista[]),
-    db.query.etapa.findMany({ where: eq(schema.etapa.empresaId, usuario.empresaId), orderBy: asc(schema.etapa.ordem) }),
+    db.query.etapa.findMany({ where: and(eq(schema.etapa.empresaId, usuario.empresaId), eq(schema.etapa.ativa, true)), orderBy: asc(schema.etapa.ordem) }),
     db.query.projeto.findMany({
       where: and(eq(schema.projeto.empresaId, usuario.empresaId), ne(schema.projeto.situacao, "concluido")),
       columns: { id: true, titulo: true, etapaId: true, etapaDesde: true, situacao: true },

@@ -125,19 +125,11 @@ export async function salvarPasso1(dados: FormData): Promise<void> {
         .onConflictDoNothing();
     }
 
-    // O projeto entra na esteira já na coleta de informações.
-    const etapa = await tx.query.etapa.findFirst({
-      where: and(
-        eq(etapaTable.empresaId, usuario.empresaId),
-        eq(etapaTable.slug, "coleta_info"),
-      ),
+    // O projeto entra na primeira etapa ativa da esteira (o Lead).
+    const primeira = await tx.query.etapa.findFirst({
+      where: and(eq(etapaTable.empresaId, usuario.empresaId), eq(etapaTable.ativa, true)),
+      orderBy: asc(etapaTable.ordem),
     });
-    const primeira =
-      etapa ??
-      (await tx.query.etapa.findFirst({
-        where: eq(etapaTable.empresaId, usuario.empresaId),
-        orderBy: asc(etapaTable.ordem),
-      }));
 
     if (primeira) {
       await tx.insert(projetoTable).values({

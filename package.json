@@ -42,6 +42,7 @@
     "recomecar": "tsx src/db/recomecar.ts",
     "empresa:codigo": "tsx src/empresa/definir-codigo.ts",
     "usuario:aprovar": "tsx src/auth/aprovar-cli.ts",
+    "usuario:desativar-genericas": "tsx src/auth/desativar-genericas-cli.ts",
     "mfa:redefinir": "tsx src/auth/mfa-cli.ts",
     "demo:revisao": "tsx src/empresa/preparar-demonstracao.ts",
     "testar:app": "tsx src/app-movel/testar-fluxo.ts",

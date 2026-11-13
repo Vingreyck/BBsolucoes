@@ -39,7 +39,7 @@ interface Regra {
 const REGRAS: Regra[] = [
   {
     tipo: "uc_geradora",
-    etapa: "coleta",
+    etapa: "aguardando",
     obrigatorio: true,
     exigeAssinatura: false,
     observacao:
@@ -47,14 +47,14 @@ const REGRAS: Regra[] = [
   },
   {
     tipo: "orcamento",
-    etapa: "proposta",
+    etapa: "lead",
     obrigatorio: false,
     exigeAssinatura: false,
     observacao: "Nem toda venda guarda a proposta depois de fechada.",
   },
   {
     tipo: "simulacao",
-    etapa: "proposta",
+    etapa: "lead",
     obrigatorio: false,
     exigeAssinatura: false,
     observacao: "Simulação de geração e economia usada para vender.",

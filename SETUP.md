@@ -30,6 +30,10 @@ todas em `@bbsolucoes.local` — com a senha que estiver em `SEED_SENHA`.
 > produção, o administrador cria uma conta por pessoa em **Administração →
 > Usuários**, e cada uma recebe senha provisória que a própria pessoa troca no
 > primeiro acesso. O `db:seed` se recusa a rodar em produção sem `SEED_SENHA`.
+>
+> Se elas já estão no banco de produção, `npm run usuario:desativar-genericas`
+> mostra quais são e, com `-- --confirmar`, desativa todas de uma vez (recusa se
+> não sobrar um administrador nominal).
 
 > **`Failed query: select ... from "sessao" inner join "usuario"`**
 >

@@ -1,4 +1,4 @@
-import { asc, eq } from "drizzle-orm";
+import { and, asc, eq } from "drizzle-orm";
 import { ExternalLink, FolderOpen, Info, MessageCircle, Search, SearchX, TrendingUp } from "lucide-react";
 import Link from "next/link";
 
@@ -73,7 +73,7 @@ export default async function Documentos({
 
   const [etapas, todasExigencias, projetos] = await Promise.all([
     db.query.etapa.findMany({
-      where: eq(schema.etapa.empresaId, usuario.empresaId),
+      where: and(eq(schema.etapa.empresaId, usuario.empresaId), eq(schema.etapa.ativa, true)),
       orderBy: asc(schema.etapa.ordem),
     }),
     db.query.exigenciaDocumento.findMany({

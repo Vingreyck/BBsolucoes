@@ -4,8 +4,10 @@ import { and, asc, eq } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 
+import { cpfValido, normalizarCpf } from "@/auth/cpf";
 import { exigirUsuario } from "@/auth/sessao";
 import { db } from "@/db";
+import { ehFormaPagamento } from "@/projeto/pagamento";
 import {
   cliente as clienteTable,
   comentario,
@@ -30,6 +32,45 @@ const numero = (d: FormData, campo: string) => {
 };
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/**
+ * CPF ou CNPJ do formulário, só com dígitos. Vazio é permitido (o campo é
+ * opcional); preenchido, precisa ter os dígitos verificadores certos, para o
+ * erro de digitação aparecer agora e não virar um cliente que ninguém acha.
+ */
+function documentoDoCliente(d: FormData): { doc: string | null; tipo: "pf" | "pj" } | "invalido" {
+  const digitos = normalizarCpf(String(d.get("cpf") ?? ""));
+  if (!digitos) return { doc: null, tipo: "pf" };
+  if (digitos.length === 11) return cpfValido(digitos) ? { doc: digitos, tipo: "pf" } : "invalido";
+  if (digitos.length === 14) return { doc: digitos, tipo: "pj" };
+  return "invalido";
+}
+
+/**
+ * Endereço e contato do formulário. É daqui que o app do técnico tira a rota:
+ * rua + número + bairro + cidade vão para o mapa do celular.
+ */
+function contatoDoCliente(d: FormData) {
+  const uf = texto(d, "uf");
+  return {
+    telefone: texto(d, "telefone"),
+    logradouro: texto(d, "logradouro"),
+    numero: texto(d, "numero"),
+    bairro: texto(d, "bairro"),
+    cidade: texto(d, "cidade"),
+    uf: uf ? uf.toUpperCase().slice(0, 2) : null,
+  };
+}
+
+/** A forma de pagamento escolhida, ou nada se veio algo fora da lista. */
+function pagamentoDoFormulario(d: FormData) {
+  const forma = texto(d, "formaPagamento");
+  return {
+    formaPagamento: ehFormaPagamento(forma) ? forma : null,
+    pagamentoCondicoes: texto(d, "pagamentoCondicoes"),
+    valor: numero(d, "valor"),
+  };
+}
 
 /**
  * "Este projeto, e só se for da empresa de quem pede."
@@ -69,6 +110,10 @@ export async function criarProjeto(dados: FormData): Promise<void> {
   if (!clienteExistente && !usinaEscolhida && !nomeNovo) {
     redirect("/projeto/novo?erro=cliente");
   }
+
+  const documento = documentoDoCliente(dados);
+  if (documento === "invalido") redirect("/projeto/novo?erro=cpf");
+  const contato = contatoDoCliente(dados);
 
   const primeira = await db.query.etapa.findFirst({
     where: and(
@@ -120,13 +165,17 @@ export async function criarProjeto(dados: FormData): Promise<void> {
   }
 
   if (!clienteId && nomeNovo) {
-    // Nome repetido vira o mesmo cliente: a planilha dos portais não traz CPF,
-    // então é o melhor critério que existe hoje.
+    /**
+     * Com CPF, é ele que diz se a pessoa já existe. Sem CPF, nome repetido vira
+     * o mesmo cliente: a planilha dos portais não traz CPF, então é o melhor
+     * critério que sobra.
+     */
     const jaTem = await db.query.cliente.findFirst({
       where: and(
         eq(clienteTable.empresaId, usuario.empresaId),
-        eq(clienteTable.nome, nomeNovo),
+        documento.doc ? eq(clienteTable.cpfCnpj, documento.doc) : eq(clienteTable.nome, nomeNovo),
       ),
+      columns: { id: true },
     });
     if (jaTem) {
       clienteId = jaTem.id;
@@ -136,11 +185,45 @@ export async function criarProjeto(dados: FormData): Promise<void> {
         .values({
           empresaId: usuario.empresaId,
           nome: nomeNovo,
-          cidade: texto(dados, "cidade"),
-          telefone: texto(dados, "telefone"),
+          tipo: documento.tipo,
+          cpfCnpj: documento.doc,
+          ...contato,
         })
         .returning();
       clienteId = criado.id;
+    }
+  }
+
+  /**
+   * Cliente que já existia: o que veio preenchido completa o cadastro dele, sem
+   * apagar o que já estava lá. É o caso de quem comprou antes e nunca teve o
+   * endereço anotado — sem endereço, o técnico não tem rota no app.
+   */
+  if (clienteId) {
+    const atual = await db.query.cliente.findFirst({
+      where: eq(clienteTable.id, clienteId),
+    });
+    if (atual) {
+      const completar: Partial<typeof clienteTable.$inferInsert> = {};
+      for (const [campo, valor] of Object.entries(contato) as [keyof typeof contato, string | null][]) {
+        if (valor && !atual[campo]) completar[campo] = valor;
+      }
+      if (documento.doc && !atual.cpfCnpj) {
+        const deOutro = await db.query.cliente.findFirst({
+          where: and(eq(clienteTable.empresaId, usuario.empresaId), eq(clienteTable.cpfCnpj, documento.doc)),
+          columns: { id: true },
+        });
+        if (!deOutro) {
+          completar.cpfCnpj = documento.doc;
+          completar.tipo = documento.tipo;
+        }
+      }
+      if (Object.keys(completar).length) {
+        await db
+          .update(clienteTable)
+          .set({ ...completar, atualizadoEm: new Date() })
+          .where(eq(clienteTable.id, clienteId));
+      }
     }
   }
 
@@ -161,6 +244,7 @@ export async function criarProjeto(dados: FormData): Promise<void> {
         : null,
       consumoMedioKwh: numero(dados, "consumoMedioKwh"),
       observacoes: texto(dados, "observacoes"),
+      ...pagamentoDoFormulario(dados),
     })
     .returning();
 
@@ -238,11 +322,59 @@ export async function salvarProjetoTecnico(
       numeroArt: texto(dados, "numeroArt"),
       protocoloConcessionaria: texto(dados, "protocoloConcessionaria"),
       potenciaKwp: numero(dados, "potenciaKwp"),
-      valor: numero(dados, "valor"),
+      // O valor mora no cartão de Pagamento (`salvarPagamento`).
       atualizadoEm: new Date(),
     })
     .where(doProjetoDaEmpresa(projetoId, usuario.empresaId));
   revalidatePath(`/projeto/${projetoId}`);
+}
+
+/** A forma de pagamento que o cliente aceitou no Lead. Pode mudar depois. */
+export async function salvarPagamento(projetoId: string, dados: FormData): Promise<void> {
+  const usuario = await exigirUsuario();
+  await db
+    .update(projetoTable)
+    .set({ ...pagamentoDoFormulario(dados), atualizadoEm: new Date() })
+    .where(doProjetoDaEmpresa(projetoId, usuario.empresaId));
+  revalidatePath(`/projeto/${projetoId}`);
+}
+
+/**
+ * CPF, telefone e endereço do cliente deste projeto.
+ *
+ * Aqui substitui o que estava (é edição), ao contrário da criação do projeto,
+ * que só completa. O endereço é o que o app do técnico usa para a rota.
+ */
+export async function salvarCliente(projetoId: string, dados: FormData): Promise<void> {
+  const usuario = await exigirUsuario();
+  const projeto = await db.query.projeto.findFirst({
+    where: doProjetoDaEmpresa(projetoId, usuario.empresaId),
+    columns: { clienteId: true },
+  });
+  if (!projeto) redirect("/esteira");
+
+  const documento = documentoDoCliente(dados);
+  if (documento === "invalido") redirect(`/projeto/${projetoId}?cliente=cpf`);
+  if (documento.doc) {
+    const deOutro = await db.query.cliente.findFirst({
+      where: and(eq(clienteTable.empresaId, usuario.empresaId), eq(clienteTable.cpfCnpj, documento.doc)),
+      columns: { id: true },
+    });
+    if (deOutro && deOutro.id !== projeto.clienteId) redirect(`/projeto/${projetoId}?cliente=cpf-outro`);
+  }
+
+  await db
+    .update(clienteTable)
+    .set({
+      ...contatoDoCliente(dados),
+      cpfCnpj: documento.doc,
+      tipo: documento.tipo,
+      atualizadoEm: new Date(),
+    })
+    .where(and(eq(clienteTable.id, projeto.clienteId), eq(clienteTable.empresaId, usuario.empresaId)));
+
+  revalidatePath(`/projeto/${projetoId}`);
+  redirect(`/projeto/${projetoId}?cliente=ok`);
 }
 
 /**

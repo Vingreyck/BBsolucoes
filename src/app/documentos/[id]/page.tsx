@@ -93,7 +93,7 @@ export default async function Dossie({
       with: { etapa: true },
     }),
     db.query.etapa.findMany({
-      where: eq(schema.etapa.empresaId, usuario.empresaId),
+      where: and(eq(schema.etapa.empresaId, usuario.empresaId), eq(schema.etapa.ativa, true)),
       orderBy: asc(schema.etapa.ordem),
     }),
     // Documentos da pessoa: valem para qualquer dossiê dela.

@@ -55,33 +55,23 @@ if (process.env.NODE_ENV === "production" && !process.env.SEED_SENHA) {
  */
 
 const ETAPAS = [
+  // Coleta de informações, proposta e forma de pagamento acontecem no Lead
+  // (migração 0021): aprovada a proposta, o projeto anda; reprovada, sai.
   {
     slug: "lead",
     nome: "Lead",
     ordem: 10,
     papelResponsavel: "vendedor",
-    descricao: "Entrada por Instagram, tráfego pago e anúncios.",
+    descricao:
+      "Entrada do cliente, informações, proposta comercial e forma de pagamento. Aprovada, o projeto avança; reprovada, é excluído.",
   },
   {
-    slug: "coleta_info",
-    nome: "Coleta de informações",
-    ordem: 20,
-    papelResponsavel: "vendedor",
-    descricao: "Via WhatsApp, ligação ou presencial.",
-  },
-  {
-    slug: "proposta",
-    nome: "Proposta comercial",
-    ordem: 30,
-    papelResponsavel: "vendedor",
-    descricao: "Apresentação ao cliente.",
-  },
-  {
-    slug: "pagamento",
-    nome: "Forma de pagamento",
-    ordem: 40,
-    papelResponsavel: "vendedor",
-    descricao: "Simulação: banco, cartão, cheque, boleto comercial ou à vista.",
+    slug: "aguardando_vistoria",
+    nome: "Aguardando OS de vistoria",
+    ordem: 45,
+    papelResponsavel: "adm",
+    descricao:
+      "Proposta aprovada. Falta abrir a OS de vistoria técnica: ao abrir, o projeto vai sozinho para a Vistoria técnica.",
   },
   {
     slug: "vistoria_tecnica",
@@ -173,10 +163,10 @@ const USUARIOS = [
 const DEMO = [
   { nome: "Maria Souza", cidade: "Aracaju", etapa: "lead", kwp: 5.4, dias: 1 },
   { nome: "João Batista", cidade: "Itabaiana", etapa: "lead", kwp: 8.1, dias: 3 },
-  { nome: "Padaria Central", cidade: "Lagarto", etapa: "coleta_info", kwp: 22, dias: 2 },
-  { nome: "Rita Andrade", cidade: "Aracaju", etapa: "proposta", kwp: 6.6, dias: 4 },
-  { nome: "Mercado do Bairro", cidade: "Itabaiana", etapa: "proposta", kwp: 35, dias: 9 },
-  { nome: "Carlos Meneses", cidade: "Estância", etapa: "pagamento", kwp: 9.9, dias: 6 },
+  { nome: "Padaria Central", cidade: "Lagarto", etapa: "lead", kwp: 22, dias: 2 },
+  { nome: "Rita Andrade", cidade: "Aracaju", etapa: "lead", kwp: 6.6, dias: 4 },
+  { nome: "Mercado do Bairro", cidade: "Itabaiana", etapa: "aguardando_vistoria", kwp: 35, dias: 9 },
+  { nome: "Carlos Meneses", cidade: "Estância", etapa: "aguardando_vistoria", kwp: 9.9, dias: 6 },
   {
     nome: "Clínica São Lucas",
     cidade: "Aracaju",

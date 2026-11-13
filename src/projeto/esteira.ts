@@ -5,6 +5,12 @@ import { db, schema } from "@/db";
 type Transacao = Parameters<Parameters<typeof db.transaction>[0]>[0];
 
 /**
+ * A etapa logo depois do Lead (migração 0021): proposta aprovada, esperando
+ * alguém abrir a OS de vistoria. Abrir a OS tira o projeto dela sozinho.
+ */
+export const ETAPA_ESPERA_VISTORIA = "aguardando_vistoria";
+
+/**
  * Move um projeto para a etapa vizinha na esteira.
  *
  * Move por vizinhança de `ordem`, não por posição numa lista fixa: a esteira é

@@ -9,10 +9,15 @@ import {
   FolderOpen,
   History,
   Lightbulb,
+  MapPin,
   MessageSquare,
   Plus,
   ScanSearch,
+  ThumbsDown,
+  ThumbsUp,
+  Trash2,
   UserRound,
+  Wallet,
 } from "lucide-react";
 import Link from "next/link";
 import { notFound } from "next/navigation";
@@ -25,6 +30,7 @@ import { listarOs, vistoriaDoProjeto } from "@/os/consultas";
 import { textoDaResposta } from "@/os/formatar";
 import { formatarRelogio } from "@/os/relogio";
 import { numeroOs, STATUS_ROTULO, TIPO_ROTULO } from "@/os/tipos";
+import { FORMAS_PAGAMENTO, rotuloPagamento } from "@/projeto/pagamento";
 import { db } from "@/db";
 import {
   comentario as comentarioTable,
@@ -34,13 +40,17 @@ import {
 } from "@/db/schema";
 
 import { Cabecalho, Caminho, Cartao, Dados, Vazio } from "../../_ui";
+import { BotaoDialogo } from "../../_ui/dialogo";
 import { moverProjeto } from "../../actions";
+import { aprovarProposta, reprovarProposta } from "../../esteira/actions";
 import { kWh, kWp } from "../../formatar";
 import {
   anotarSerial,
   comentar,
   removerSerial,
+  salvarCliente,
   salvarInformacoes,
+  salvarPagamento,
   salvarProjetoTecnico,
   salvarVistoria,
 } from "../actions";
@@ -81,12 +91,12 @@ export default async function DetalheProjeto({
   searchParams,
 }: {
   params: Promise<{ id: string }>;
-  searchParams: Promise<{ serial?: string }>;
+  searchParams: Promise<{ serial?: string; cliente?: string; ok?: string; erro?: string }>;
 }) {
   const usuario = await exigirUsuario();
   const ator = atorDaWeb(usuario);
   const { id } = await params;
-  const { serial: aviso } = await searchParams;
+  const { serial: aviso, cliente: avisoCliente, ok, erro } = await searchParams;
   // O que vem no endereço é palpite de quem digita: id malformado é 404, não erro.
   if (!ehUuid(id)) notFound();
 
@@ -120,7 +130,7 @@ export default async function DetalheProjeto({
       orderBy: asc(comentarioTable.criadoEm),
     }),
     db.query.etapa.findMany({
-      where: eq(etapaTable.empresaId, usuario.empresaId),
+      where: and(eq(etapaTable.empresaId, usuario.empresaId), eq(etapaTable.ativa, true)),
       orderBy: asc(etapaTable.ordem),
       columns: { id: true, nome: true, slug: true },
     }),
@@ -144,7 +154,41 @@ export default async function DetalheProjeto({
    */
   let acaoDoGuia: React.ReactNode = null;
   const slug = projeto.etapa.slug;
-  if (slug === "vistoria_tecnica") {
+  if (slug === "lead" && ator.gestao) {
+    acaoDoGuia = (
+      <span className="grupo-botoes">
+        <form action={aprovarProposta.bind(null, projeto.id, "projeto")}>
+          <button type="submit" className="botao">
+            <ThumbsUp size={15} aria-hidden /> Proposta aprovada
+          </button>
+        </form>
+        <BotaoDialogo
+          rotulo="Reprovada"
+          icone={<ThumbsDown size={15} aria-hidden />}
+          classe="botao secundario botao-reprovar"
+          titulo="Proposta reprovada"
+          descricao={`${projeto.cliente.nome} não aceitou a proposta. O projeto sai da esteira e é excluído, e isso não se desfaz. O cadastro do cliente só sai junto se não tiver mais nada (usina, documento, OS).`}
+        >
+          <form action={reprovarProposta.bind(null, projeto.id)} className="form-agendar form-agendar-coluna">
+            <button type="submit" className="botao perigo">
+              <Trash2 size={15} aria-hidden /> Excluir o projeto
+            </button>
+          </form>
+        </BotaoDialogo>
+      </span>
+    );
+  } else if (slug === "aguardando_vistoria") {
+    const aberta = ordens.find((o) => o.tipo === "vistoria" && o.status !== "concluida" && o.status !== "cancelada");
+    acaoDoGuia = aberta ? (
+      <Link href={`/os/${aberta.id}`} className="botao secundario">
+        Ver a vistoria {numeroOs(aberta.numero)}
+      </Link>
+    ) : ator.gestao ? (
+      <Link href={`/os/nova?projeto=${projeto.id}&tipo=vistoria`} className="botao">
+        <ClipboardCheck size={15} aria-hidden /> Criar OS de vistoria
+      </Link>
+    ) : null;
+  } else if (slug === "vistoria_tecnica") {
     acaoDoGuia = vistoria ? (
       <Link href={`/os/${vistoria.id}`} className="botao secundario">
         Ver a vistoria {numeroOs(vistoria.numero)}
@@ -232,6 +276,17 @@ export default async function DetalheProjeto({
         }
       />
 
+      {ok && (
+        <p className="aviso ok" role="status">
+          {ok}
+        </p>
+      )}
+      {erro && (
+        <p className="aviso erro" role="alert">
+          {erro}
+        </p>
+      )}
+
       <div className="faixa-caminho">
         <Caminho etapas={etapas} atual={indiceEtapa} compacto />
         <div className="guia">
@@ -302,7 +357,7 @@ export default async function DetalheProjeto({
             contador={projeto.vistoriaEm ? data(projeto.vistoriaEm) : undefined}
             ajuda={
               <>
-                Feita pelo técnico, antes de vender. Não confundir com o pedido de vistoria da etapa 11, que é da
+                Feita pelo técnico depois que a proposta é aprovada. Não confundir com o pedido de vistoria, que é da
                 Energisa para ligar o sistema. O engenheiro usa o que está aqui para fazer o projeto.
               </>
             }
@@ -425,6 +480,100 @@ export default async function DetalheProjeto({
           </Cartao>
 
           <Cartao
+            titulo="Pagamento"
+            icone={<Wallet size={16} />}
+            contador={rotuloPagamento(projeto.formaPagamento) ?? undefined}
+            ajuda="A forma de pagamento que o cliente aceitou no Lead. Se a negociação mudar, corrija aqui."
+          >
+            <form action={salvarPagamento.bind(null, projeto.id)} className="form-ficha">
+              <div className="dupla">
+                <label>
+                  Forma de pagamento
+                  <select name="formaPagamento" defaultValue={projeto.formaPagamento ?? ""}>
+                    <option value="">Ainda não definida</option>
+                    {Object.entries(FORMAS_PAGAMENTO).map(([v, r]) => (
+                      <option key={v} value={v}>
+                        {r}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label>
+                  Valor total (R$)
+                  <input name="valor" inputMode="decimal" defaultValue={projeto.valor ?? ""} />
+                </label>
+              </div>
+              <label>
+                Condições combinadas
+                <textarea
+                  name="pagamentoCondicoes"
+                  rows={2}
+                  defaultValue={projeto.pagamentoCondicoes ?? ""}
+                  placeholder="Entrada, número de parcelas, banco do financiamento, data do primeiro vencimento"
+                />
+              </label>
+              <div className="ficha-acoes">
+                <button type="submit" className="primario">
+                  Salvar pagamento
+                </button>
+              </div>
+            </form>
+          </Cartao>
+
+          <Cartao
+            titulo="Cliente e endereço"
+            icone={<MapPin size={16} />}
+            ajuda="O endereço é o que o app do técnico usa para traçar a rota até a casa do cliente. Sem ele, o botão de rota não tem para onde ir."
+          >
+            {avisoCliente === "ok" && <p className="aviso ok">Dados do cliente salvos.</p>}
+            {avisoCliente === "cpf" && (
+              <p className="erro">O CPF não confere (dígito errado?). Corrija ou deixe em branco.</p>
+            )}
+            {avisoCliente === "cpf-outro" && <p className="erro">Esse CPF já está no cadastro de outro cliente.</p>}
+            <form action={salvarCliente.bind(null, projeto.id)} className="form-ficha">
+              <div className="dupla">
+                <label>
+                  CPF ou CNPJ <span className="fraco">(opcional)</span>
+                  <input name="cpf" inputMode="numeric" defaultValue={cliente.cpfCnpj ?? ""} autoComplete="off" />
+                </label>
+                <label>
+                  Telefone
+                  <input name="telefone" inputMode="tel" defaultValue={cliente.telefone ?? ""} />
+                </label>
+              </div>
+              <div className="dupla">
+                <label>
+                  Endereço
+                  <input name="logradouro" defaultValue={cliente.logradouro ?? ""} placeholder="Rua, avenida, povoado" />
+                </label>
+                <label>
+                  Número
+                  <input name="numero" defaultValue={cliente.numero ?? ""} placeholder="123 ou S/N" />
+                </label>
+                <label>
+                  Bairro
+                  <input name="bairro" defaultValue={cliente.bairro ?? ""} />
+                </label>
+              </div>
+              <div className="dupla">
+                <label>
+                  Cidade
+                  <input name="cidade" defaultValue={cliente.cidade ?? ""} />
+                </label>
+                <label>
+                  UF
+                  <input name="uf" defaultValue={cliente.uf ?? "SE"} maxLength={2} />
+                </label>
+              </div>
+              <div className="ficha-acoes">
+                <button type="submit" className="primario">
+                  Salvar cliente
+                </button>
+              </div>
+            </form>
+          </Cartao>
+
+          <Cartao
             titulo="Projeto técnico"
             icone={<FileText size={16} />}
             ajuda={
@@ -449,10 +598,6 @@ export default async function DetalheProjeto({
                 <label>
                   Potência (kWp)
                   <input name="potenciaKwp" inputMode="decimal" defaultValue={projeto.potenciaKwp ?? ""} />
-                </label>
-                <label>
-                  Valor (R$)
-                  <input name="valor" inputMode="decimal" defaultValue={projeto.valor ?? ""} />
                 </label>
               </div>
               <div className="ficha-acoes">
@@ -569,6 +714,13 @@ export default async function DetalheProjeto({
                   cliente.telefone ? <a href={`tel:${cliente.telefone.replace(/\D/g, "")}`}>{cliente.telefone}</a> : null,
                 ],
                 ["Cidade", cidade],
+                [
+                  "Endereço",
+                  [[cliente.logradouro, cliente.numero].filter(Boolean).join(", "), cliente.bairro]
+                    .filter(Boolean)
+                    .join(" · ") || null,
+                ],
+                ["Pagamento", rotuloPagamento(projeto.formaPagamento)],
                 ["Consumo médio", projeto.consumoMedioKwh ? `${kWh(projeto.consumoMedioKwh)}/mês` : null],
                 ["Potência", kWp(projeto.potenciaKwp)],
                 ["Valor", reais(projeto.valor)],

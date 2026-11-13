@@ -1,5 +1,16 @@
 import { and, asc, eq, inArray, isNotNull } from "drizzle-orm";
-import { CheckCircle2, ChevronLeft, ChevronRight, Clock, Plus, Wrench } from "lucide-react";
+import {
+  CheckCircle2,
+  ChevronLeft,
+  ChevronRight,
+  ClipboardCheck,
+  Clock,
+  Plus,
+  ThumbsDown,
+  ThumbsUp,
+  Trash2,
+  Wrench,
+} from "lucide-react";
 import Link from "next/link";
 
 import { exigirUsuario } from "@/auth/sessao";
@@ -13,7 +24,7 @@ import { Ajuda, Cabecalho } from "../_ui";
 import { BotaoDialogo } from "../_ui/dialogo";
 import { moverProjeto } from "../actions";
 import { iniciais, kWp, semAcento } from "../formatar";
-import { gerarOsInstalacao } from "./actions";
+import { aprovarProposta, gerarOsInstalacao, reprovarProposta } from "./actions";
 import { ColunaEsteira, QuadroEsteira } from "./quadro";
 
 /** Lê do banco a cada request — nada aqui é estático. */
@@ -51,7 +62,7 @@ export default async function Esteira({
   // pode mostrar etapa ou projeto de outra.
   const [etapas, projetos, daEnergisa] = await Promise.all([
     db.query.etapa.findMany({
-      where: eq(schema.etapa.empresaId, usuario.empresaId),
+      where: and(eq(schema.etapa.empresaId, usuario.empresaId), eq(schema.etapa.ativa, true)),
       orderBy: asc(schema.etapa.ordem),
     }),
     db.query.projeto.findMany({
@@ -91,6 +102,29 @@ export default async function Esteira({
         ),
       );
     for (const o of ordens) if (o.projetoId) osInstalacao.set(o.projetoId, { id: o.id, numero: o.numero });
+  }
+
+  /**
+   * A OS de vistoria já aberta dos projetos em "Aguardando OS de vistoria". Em
+   * geral não existe: abrir a OS tira o projeto da etapa. Sobra quando alguém
+   * voltou o projeto com a seta — aí o cartão mostra a OS em vez de abrir outra.
+   */
+  const slugDa = new Map(etapas.map((e) => [e.id, e.slug]));
+  const esperandoVistoria = projetos.filter((p) => slugDa.get(p.etapaId) === "aguardando_vistoria").map((p) => p.id);
+  const osVistoria = new Map<string, { id: string; numero: number }>();
+  if (esperandoVistoria.length) {
+    const ordens = await db
+      .select({ id: schema.ordemServico.id, numero: schema.ordemServico.numero, projetoId: schema.ordemServico.projetoId })
+      .from(schema.ordemServico)
+      .where(
+        and(
+          eq(schema.ordemServico.empresaId, usuario.empresaId),
+          inArray(schema.ordemServico.projetoId, esperandoVistoria),
+          eq(schema.ordemServico.tipo, "vistoria"),
+          inArray(schema.ordemServico.status, ["aberta", "agendada", "em_deslocamento", "em_andamento", "aguardando_peca"]),
+        ),
+      );
+    for (const o of ordens) if (o.projetoId) osVistoria.set(o.projetoId, { id: o.id, numero: o.numero });
   }
 
   if (etapas.length === 0) {
@@ -149,7 +183,7 @@ export default async function Esteira({
             {parados > 0 && <span className="pilula sev-atencao">{parados} parados</span>}
             <Ajuda rotulo="Como ler a esteira">
               <p>
-                As 13 etapas do fluxo, confirmadas com o cliente. A <strong>Execução</strong> é a etapa que mais gera
+                As {etapas.length} etapas do fluxo, confirmadas com o cliente. No <strong>Lead</strong>, “Aprovada” leva o projeto adiante e “Reprovada” o exclui; em <strong>Aguardando OS de vistoria</strong>, abrir a OS leva o projeto sozinho para a Vistoria técnica. A <strong>Execução</strong> é a etapa que mais gera
                 retrabalho, e para onde o projeto volta quando a concessionária reprova — use a seta para trás.
               </p>
               <p>
@@ -190,9 +224,9 @@ export default async function Esteira({
       )}
 
       <QuadroEsteira
-        etapas={etapas.map((e) => ({
+        etapas={etapas.map((e, i) => ({
           id: e.id,
-          ordem: String(Math.round(e.ordem / 10)).padStart(2, "0"),
+          ordem: String(i + 1).padStart(2, "0"),
           nome: e.nome,
           n: porEtapa.get(e.id)?.length ?? 0,
         }))}
@@ -201,7 +235,7 @@ export default async function Esteira({
         parados={parados}
         meus={meus}
       >
-        {etapas.map((e) => {
+        {etapas.map((e, posicao) => {
           // Quem pede ação vem primeiro na coluna: na etapa 9, o aprovado pela
           // Energisa que ainda espera a OS de instalação. O resto, do mais antigo.
           const pedeAcao = (p: (typeof abertos)[number]) => {
@@ -216,7 +250,7 @@ export default async function Esteira({
               cabecalho={
                 <header className="coluna-topo">
                   <span className="ordem">
-                    {String(Math.round(e.ordem / 10)).padStart(2, "0")}
+                    {String(posicao + 1).padStart(2, "0")}
                     {e.papelResponsavel ? ` · ${PAPEL_ROTULO[e.papelResponsavel] ?? e.papelResponsavel}` : ""}
                     {e.prazoPadraoDias ? ` · ${e.prazoPadraoDias}d` : ""}
                   </span>
@@ -241,6 +275,7 @@ export default async function Esteira({
                 const v = energisa.get(p.id);
                 const fase = v?.fase as FaseEnergisa | undefined;
                 const os = osInstalacao.get(p.id);
+                const vist = osVistoria.get(p.id);
                 const meta = [kWp(p.potenciaKwp), p.cliente.cidade].filter(Boolean).join(" · ");
                 return (
                   <article
@@ -259,6 +294,50 @@ export default async function Esteira({
                         <span className="pilula sev-info">{SITUACAO_ROTULO[p.situacao]}</span>
                       )}
                     </span>
+
+                    {e.slug === "lead" && gestao && (
+                      <div className="cartao-projeto-extra">
+                        <div className="cartao-projeto-decisao" role="group" aria-label="A proposta comercial foi aceita?">
+                          <form action={aprovarProposta.bind(null, p.id, "esteira")}>
+                            <button
+                              type="submit"
+                              className="botao botao-cartao"
+                              title="O cliente aceitou a proposta: o projeto avança"
+                            >
+                              <ThumbsUp size={14} aria-hidden /> Aprovada
+                            </button>
+                          </form>
+                          <BotaoDialogo
+                            key={`r|${p.id}|${ok ?? ""}|${erro ?? ""}`}
+                            rotulo="Reprovada"
+                            icone={<ThumbsDown size={14} aria-hidden />}
+                            classe="botao secundario botao-cartao botao-reprovar"
+                            titulo="Proposta reprovada"
+                            descricao={`${p.cliente.nome} não aceitou a proposta. O projeto sai da esteira e é excluído, e isso não se desfaz. O cadastro do cliente só sai junto se não tiver mais nada (usina, documento, OS).`}
+                          >
+                            <form action={reprovarProposta.bind(null, p.id)} className="form-agendar form-agendar-coluna">
+                              <button type="submit" className="botao perigo">
+                                <Trash2 size={15} aria-hidden /> Excluir o projeto
+                              </button>
+                            </form>
+                          </BotaoDialogo>
+                        </div>
+                      </div>
+                    )}
+
+                    {e.slug === "aguardando_vistoria" && (
+                      <div className="cartao-projeto-extra">
+                        {vist ? (
+                          <a className="link-acao" href={`/os/${vist.id}`}>
+                            {numeroOs(vist.numero)} de vistoria
+                          </a>
+                        ) : gestao ? (
+                          <a className="botao botao-cartao" href={`/os/nova?projeto=${p.id}&tipo=vistoria`}>
+                            <ClipboardCheck size={14} aria-hidden /> Criar OS de vistoria
+                          </a>
+                        ) : null}
+                      </div>
+                    )}
 
                     {v && fase && (
                       <div className="cartao-projeto-extra">

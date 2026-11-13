@@ -3,7 +3,7 @@ import { randomBytes } from "node:crypto";
 import { and, eq, like, notInArray, sql } from "drizzle-orm";
 
 import { db, schema } from "@/db";
-import { moverNaEsteira } from "@/projeto/esteira";
+import { ETAPA_ESPERA_VISTORIA, moverNaEsteira } from "@/projeto/esteira";
 import { avisarOs, type MotivoAviso } from "@/push/avisos";
 import { publicar } from "@/rastreamento/hub";
 
@@ -500,6 +500,30 @@ export async function criarOs(ator: Ator, dados: NovaOs): Promise<{ id: string; 
         if (responsavelNome) await evento(c, "atribuida", { de: null, para: responsavelNome });
         if (dados.agendadaPara) {
           await evento(c, "agendada", { de: null, para: campoRelogio(dados.agendadaPara) });
+        }
+
+        /**
+         * A OS de vistoria é o que a etapa "Aguardando OS de vistoria" espera:
+         * aberta para um projeto parado lá, o projeto anda sozinho para a
+         * Vistoria técnica. Concluí-la é o que o leva adiante de novo (ver
+         * `modelo_os.etapa_slug`).
+         */
+        if (dados.projetoId && dados.tipo === "vistoria") {
+          const projeto = await tx.query.projeto.findFirst({
+            where: eq(schema.projeto.id, dados.projetoId),
+            with: { etapa: { columns: { slug: true } } },
+          });
+          if (projeto?.etapa.slug === ETAPA_ESPERA_VISTORIA) {
+            const nova = await moverNaEsteira({
+              empresaId,
+              projetoId: projeto.id,
+              direcao: "avancar",
+              usuarioId: ator.origem === "sistema" ? null : ator.id,
+              observacao: `Automático: ${numeroOs(os.numero)} de vistoria aberta.`,
+              tx,
+            });
+            if (nova) await evento(c, "esteira", { etapa: nova.nome, projetoId: projeto.id }, true);
+          }
         }
         return { id: os.id, numero: os.numero, os };
       });

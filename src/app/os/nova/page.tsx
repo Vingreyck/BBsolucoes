@@ -25,6 +25,7 @@ export const dynamic = "force-dynamic";
 
 /** A etapa em que o projeto está sugere o tipo da OS. */
 const TIPO_DA_ETAPA: Record<string, string> = {
+  aguardando_vistoria: "vistoria",
   vistoria_tecnica: "vistoria",
   execucao: "instalacao",
 };

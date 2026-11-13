@@ -8059,6 +8059,21 @@ a.funil-rotulo:hover {
   font-size: 0.76rem;
 }
 
+/* Lead: "Aprovada" e "Reprovada" lado a lado no cartão */
+.cartao-projeto-decisao {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.35rem;
+  width: 100%;
+}
+.cartao-projeto-decisao form {
+  width: 100%;
+}
+.botao.secundario.botao-reprovar:hover {
+  color: var(--crit);
+  border-color: var(--crit);
+}
+
 .cartao-projeto-rodape {
   display: flex;
   align-items: center;

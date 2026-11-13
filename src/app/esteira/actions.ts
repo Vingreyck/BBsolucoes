@@ -14,12 +14,118 @@ import { moverNaEsteira } from "@/projeto/esteira";
 
 const ABERTAS = ["aberta", "agendada", "em_deslocamento", "em_andamento", "aguardando_peca"] as const;
 
-function voltar(m: { ok?: string; erro?: string; os?: string }): never {
+function voltar(m: { ok?: string; erro?: string; os?: string }, para = "/esteira"): never {
   const q = new URLSearchParams();
   if (m.ok) q.set("ok", m.ok);
   if (m.erro) q.set("erro", m.erro);
   if (m.os) q.set("os", m.os);
-  redirect(`/esteira?${q.toString()}`);
+  redirect(`${para}?${q.toString()}`);
+}
+
+/** De onde veio o clique: o cartão da esteira ou a tela do projeto. */
+type Origem = "esteira" | "projeto";
+
+/** O projeto, só se for da empresa de quem pede e estiver no Lead. */
+async function projetoNoLead(projetoId: string, empresaId: string) {
+  const projeto = await db.query.projeto.findFirst({
+    where: and(eq(schema.projeto.id, projetoId), eq(schema.projeto.empresaId, empresaId)),
+    with: { etapa: { columns: { slug: true } }, cliente: { columns: { id: true, nome: true } } },
+  });
+  if (!projeto) voltar({ erro: "Projeto não encontrado." });
+  if (projeto.etapa.slug !== "lead") {
+    voltar({ erro: `${projeto.cliente.nome} já saiu do Lead: a proposta já foi decidida.` });
+  }
+  return projeto;
+}
+
+/**
+ * "Aprovada", no cartão do Lead: o cliente aceitou a proposta comercial.
+ *
+ * O projeto anda sozinho para a etapa seguinte (Aguardando OS de vistoria),
+ * onde o botão da OS de vistoria já espera.
+ */
+export async function aprovarProposta(projetoId: string, origem: Origem): Promise<void> {
+  const ator = await exigirGestaoWeb();
+  const projeto = await projetoNoLead(projetoId, ator.empresaId);
+
+  const nova = await moverNaEsteira({
+    empresaId: ator.empresaId,
+    projetoId: projeto.id,
+    direcao: "avancar",
+    usuarioId: ator.id,
+    observacao: "Proposta comercial aprovada pelo cliente.",
+  });
+
+  revalidatePath("/");
+  revalidatePath("/esteira");
+  revalidatePath(`/projeto/${projeto.id}`);
+  voltar(
+    {
+      ok: nova
+        ? `${projeto.cliente.nome}: proposta aprovada. O projeto foi para "${nova.nome}".`
+        : `${projeto.cliente.nome}: proposta aprovada.`,
+    },
+    origem === "projeto" ? `/projeto/${projeto.id}` : "/esteira",
+  );
+}
+
+/**
+ * "Reprovada", no cartão do Lead: o cliente recusou a proposta, e o projeto é
+ * excluído (pedido do dono: reprovada não fica na esteira).
+ *
+ * Só vale no Lead. Depois dele já existe OS, documento e histórico de verdade,
+ * e apagar isso por um clique seria perder trabalho.
+ *
+ * O cliente vai junto **só** se não sobrar nada dele: outro projeto, usina,
+ * documento, OS ou unidade consumidora o seguram. Documento, em especial,
+ * cairia em cascata com o cliente — por isso a conferência vem antes.
+ */
+export async function reprovarProposta(projetoId: string): Promise<void> {
+  const ator = await exigirGestaoWeb();
+  const projeto = await projetoNoLead(projetoId, ator.empresaId);
+
+  await db.transaction(async (tx) => {
+    await tx
+      .delete(schema.comentario)
+      .where(
+        and(
+          eq(schema.comentario.empresaId, ator.empresaId),
+          eq(schema.comentario.entidade, "projeto"),
+          eq(schema.comentario.entidadeId, projeto.id),
+        ),
+      );
+    // Eventos, seriais e cobranças caem em cascata; OS e documentos ficam, sem projeto.
+    await tx.delete(schema.projeto).where(eq(schema.projeto.id, projeto.id));
+  });
+
+  const clienteId = projeto.cliente.id;
+  const contar = async (tabela: "projeto" | "usina" | "documento" | "ordemServico" | "unidadeConsumidora") => {
+    const t = schema[tabela];
+    const [linha] = await db.select({ id: t.id }).from(t).where(eq(t.clienteId, clienteId)).limit(1);
+    return Boolean(linha);
+  };
+  const preso =
+    (await contar("projeto")) ||
+    (await contar("usina")) ||
+    (await contar("documento")) ||
+    (await contar("ordemServico")) ||
+    (await contar("unidadeConsumidora"));
+
+  let clienteSaiu = false;
+  if (!preso) {
+    try {
+      await db.delete(schema.cliente).where(and(eq(schema.cliente.id, clienteId), eq(schema.cliente.empresaId, ator.empresaId)));
+      clienteSaiu = true;
+    } catch {
+      // Alguma tabela nova ainda aponta para ele: o cliente fica, o projeto já saiu.
+    }
+  }
+
+  revalidatePath("/");
+  revalidatePath("/esteira");
+  voltar({
+    ok: `Proposta reprovada: o projeto de ${projeto.cliente.nome} foi excluído${clienteSaiu ? ", junto com o cadastro do cliente" : ""}.`,
+  });
 }
 
 /**

@@ -122,7 +122,7 @@ export function EscolherCliente({ opcoes }: { opcoes: Opcao[] }) {
                 </button>
               </li>
             ))}
-            {filtradas.length === 0 && <li className="vazio-lista">Ninguém encontrado. Escreva o nome abaixo para cadastrar.</li>}
+            {filtradas.length === 0 && <li className="vazio-lista">Ninguém encontrado. Preencha os dados acima para cadastrar.</li>}
           </ul>
 
           {filtradas.length > visiveis.length && (
