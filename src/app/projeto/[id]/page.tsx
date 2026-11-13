@@ -63,6 +63,7 @@ import { kWh, kWp } from "../../formatar";
 import {
   anotarSerial,
   comentar,
+  excluirProjetoCompleto,
   removerSerial,
   salvarCliente,
   salvarInformacoes,
@@ -979,6 +980,44 @@ export default async function DetalheProjeto({
               ]}
             />
           </Cartao>
+
+          {usuario.papel === "adm" && (
+            <Cartao
+              titulo="Excluir projeto"
+              icone={<Trash2 size={16} />}
+              ajuda="Só o administrador vê isto. Serve para tirar projeto de teste ou lançado por engano, em qualquer etapa."
+            >
+              <BotaoDialogo
+                rotulo="Excluir este projeto…"
+                icone={<Trash2 size={15} aria-hidden />}
+                classe="botao secundario botao-reprovar"
+                titulo="Excluir o projeto"
+                descricao={`${cliente.nome} · o projeto, o histórico da esteira, as propostas e os contratos saem e isso não se desfaz. As ordens de serviço ficam, sem projeto.`}
+              >
+                <form action={excluirProjetoCompleto.bind(null, projeto.id)} className="form-agendar form-agendar-coluna">
+                  <label className="marcar">
+                    <input type="checkbox" name="documentos" value="sim" defaultChecked /> Apagar também os documentos deste
+                    projeto (ART, contrato, projeto elétrico…). Os arquivos vão para a <strong>lixeira do Drive</strong>.
+                  </label>
+                  <label className="marcar">
+                    <input type="checkbox" name="cliente" value="sim" /> Excluir também o <strong>cliente</strong>: todos os
+                    documentos dele (CNH, RG, conta de luz…) e a pasta dele no Drive. Só funciona se ele não tiver outro
+                    projeto, usina, OS ou unidade consumidora.
+                  </label>
+                  <p className="nota">
+                    Nada sai do Drive de forma definitiva: vai para a lixeira, onde fica 30 dias e pode ser restaurado.
+                  </p>
+                  <label className="entrada">
+                    <span className="entrada-rotulo">Para confirmar, digite EXCLUIR</span>
+                    <input name="confirmar" autoComplete="off" required placeholder="EXCLUIR" />
+                  </label>
+                  <button type="submit" className="botao perigo">
+                    <Trash2 size={15} aria-hidden /> Excluir
+                  </button>
+                </form>
+              </BotaoDialogo>
+            </Cartao>
+          )}
 
           <Cartao titulo="Histórico na esteira" icone={<History size={16} />}>
             {eventos.length === 0 ? (

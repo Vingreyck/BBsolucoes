@@ -357,6 +357,24 @@ export async function moverParaLixeira(fileId: string): Promise<void> {
   });
 }
 
+export interface InfoDoItem {
+  id: string;
+  name: string;
+  mimeType: string;
+  parents?: string[];
+}
+
+/** Nome, tipo e pasta-mãe de um arquivo ou pasta; nulo se ele não existe mais. */
+export async function infoDoItem(fileId: string): Promise<InfoDoItem | null> {
+  try {
+    const resposta = await chamar(`/files/${encodeURIComponent(fileId)}?fields=id,name,mimeType,parents`);
+    return (await resposta.json()) as InfoDoItem;
+  } catch (e) {
+    if (e instanceof Error && e.message.includes("Drive respondeu 404")) return null;
+    throw e;
+  }
+}
+
 /**
  * Tira do link do Drive o id do arquivo.
  *

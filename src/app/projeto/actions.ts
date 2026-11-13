@@ -11,6 +11,7 @@ import { sincronizarDatasheets } from "@/projeto/datasheets";
 import { OPCOES_DE_TELHADO } from "@/projeto/da-vistoria";
 import { ehFormaPagamento } from "@/projeto/pagamento";
 import { ehLigacao } from "@/proposta/calculo";
+import { excluirProjeto } from "@/projeto/excluir";
 import {
   cliente as clienteTable,
   comentario,
@@ -549,4 +550,33 @@ export async function removerSerial(
       ),
     );
   revalidatePath(`/projeto/${projetoId}`);
+}
+
+/**
+ * Exclui o projeto de verdade, em qualquer etapa — só o administrador.
+ *
+ * Opcionalmente leva junto os documentos do projeto e, se pedido, o cliente
+ * inteiro; os arquivos vão para a **lixeira do Drive** (30 dias para voltar).
+ * A palavra EXCLUIR digitada é a confirmação: o campo vem do navegador, mas é o
+ * servidor que confere.
+ */
+export async function excluirProjetoCompleto(projetoId: string, dados: FormData): Promise<void> {
+  const usuario = await exigirUsuario();
+  if (usuario.papel !== "adm") redirect("/sem-acesso");
+
+  const volta = `/projeto/${UUID.test(projetoId) ? projetoId : ""}`;
+  if (String(dados.get("confirmar") ?? "").trim().toUpperCase() !== "EXCLUIR") {
+    redirect(`${volta}?erro=${encodeURIComponent("Para excluir, digite EXCLUIR no campo de confirmação.")}`);
+  }
+
+  const resultado = await excluirProjeto({ empresaId: usuario.empresaId, id: usuario.id }, projetoId, {
+    documentos: dados.get("documentos") === "sim",
+    cliente: dados.get("cliente") === "sim",
+  });
+  if ("erro" in resultado) redirect(`${volta}?erro=${encodeURIComponent(resultado.erro)}`);
+
+  revalidatePath("/");
+  revalidatePath("/esteira");
+  revalidatePath("/documentos");
+  redirect(`/esteira?ok=${encodeURIComponent(resultado.ok)}`);
 }
