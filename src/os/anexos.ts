@@ -13,6 +13,7 @@ import {
   moverParaLixeira,
 } from "@/documentos/drive";
 import { limparNome, pastaDoCliente } from "@/documentos/pastas";
+import { avancarPorDocumentos } from "@/projeto/automatico";
 
 import {
   apagarDoDeposito,
@@ -212,6 +213,11 @@ export async function anexar(ator: Ator, osId: string, novo: NovoAnexo): Promise
       return { anexoId: anexo.id, repetido: false, documentoId };
     });
     if (local) void subirPendente(resultado.anexoId);
+    // A foto entrou no dossiê (foto do padrão, conta de luz): a etapa de
+    // documentos pode ter ficado completa.
+    if (resultado.documentoId && os.projetoId) {
+      void avancarPorDocumentos(os.empresaId, os.projetoId, ator.origem === "sistema" ? null : ator.id).catch(() => null);
+    }
     return resultado;
   } catch (e) {
     if (local) apagarDoDeposito(local);
@@ -380,6 +386,9 @@ export async function subirPendente(anexoId: string): Promise<boolean> {
       return true;
     });
     if (!gravou) await moverParaLixeira(enviado.id).catch(() => undefined);
+    if (gravou && item?.tipoDocumento && os.projetoId && categoria !== "video") {
+      await avancarPorDocumentos(os.empresaId, os.projetoId, anexo.enviadoPorId).catch(() => null);
+    }
     apagarDoDeposito(arquivo);
     return gravou;
   } catch (e) {

@@ -9,6 +9,8 @@ import {
   House,
   KanbanSquare,
   ListChecks,
+  Building2,
+  Cpu,
   LogOut,
   MapPinned,
   MessageCircle,
@@ -57,7 +59,9 @@ export type IconeMenu =
   | "coleta"
   | "novaUsina"
   | "usuarios"
-  | "modelos";
+  | "modelos"
+  | "empresa"
+  | "equipamentos";
 
 const ICONES: Record<IconeMenu, LucideIcon> = {
   inicio: House,
@@ -76,6 +80,8 @@ const ICONES: Record<IconeMenu, LucideIcon> = {
   novaUsina: Plus,
   usuarios: Users,
   modelos: ListChecks,
+  empresa: Building2,
+  equipamentos: Cpu,
 };
 
 export interface ItemMenu {

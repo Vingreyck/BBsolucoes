@@ -7,11 +7,14 @@ import { redirect } from "next/navigation";
 import { cpfValido, normalizarCpf } from "@/auth/cpf";
 import { exigirUsuario } from "@/auth/sessao";
 import { db } from "@/db";
+import { sincronizarDatasheets } from "@/projeto/datasheets";
+import { OPCOES_DE_TELHADO } from "@/projeto/da-vistoria";
 import { ehFormaPagamento } from "@/projeto/pagamento";
 import {
   cliente as clienteTable,
   comentario,
   etapa as etapaTable,
+  modeloEquipamento,
   projeto as projetoTable,
   projetoEvento,
   serialInstalado,
@@ -52,13 +55,17 @@ function documentoDoCliente(d: FormData): { doc: string | null; tipo: "pf" | "pj
  */
 function contatoDoCliente(d: FormData) {
   const uf = texto(d, "uf");
+  const cep = (texto(d, "cep") ?? "").replace(/\D/g, "");
   return {
     telefone: texto(d, "telefone"),
     logradouro: texto(d, "logradouro"),
-    numero: texto(d, "numero"),
+    numero: texto(d, "numero")?.slice(0, 20) ?? null,
+    complemento: texto(d, "complemento"),
     bairro: texto(d, "bairro"),
     cidade: texto(d, "cidade"),
     uf: uf ? uf.toUpperCase().slice(0, 2) : null,
+    // Só vale com os 8 dígitos; o contrato não sai com CEP pela metade.
+    cep: cep.length === 8 ? cep : null,
   };
 }
 
@@ -316,17 +323,60 @@ export async function salvarProjetoTecnico(
   dados: FormData,
 ): Promise<void> {
   const usuario = await exigirUsuario();
+
+  /**
+   * O kit vem do catálogo de equipamentos. O id chega do formulário: só vale
+   * se for um modelo desta empresa e do tipo certo (inversor no campo do
+   * inversor, módulo no do módulo).
+   */
+  const catalogo = await db
+    .select()
+    .from(modeloEquipamento)
+    .where(eq(modeloEquipamento.empresaId, usuario.empresaId));
+  const doCatalogo = (id: string | null, tipos: string[]) =>
+    catalogo.find((m) => m.id === id && tipos.includes(m.tipo)) ?? null;
+  const inteiro = (campo: string) => {
+    const n = Number.parseInt(texto(dados, campo) ?? "", 10);
+    return n > 0 && n < 10_000 ? n : null;
+  };
+  const inversor = doCatalogo(texto(dados, "inversorModeloId"), ["inversor", "microinversor"]);
+  const modulo = doCatalogo(texto(dados, "moduloModeloId"), ["modulo"]);
+  const inversorQtd = inversor ? inteiro("inversorQtd") ?? 1 : null;
+  const moduloQtd = modulo ? inteiro("moduloQtd") : null;
+
+  // O texto do contrato só é gravado se alguém digitou. Em branco, ele é sugerido
+  // na hora de gerar o contrato (kit + telhado), para o telhado da vistoria
+  // entrar mesmo que a vistoria seja concluída depois.
+  const equipamentos = texto(dados, "equipamentos")?.slice(0, 1000) ?? null;
+  const telhado = texto(dados, "telhadoTipo");
+  const telhadoTipo = telhado && OPCOES_DE_TELHADO.includes(telhado) ? telhado : null;
+  // Em branco, a potência sai do kit.
+  const potenciaKwp =
+    numero(dados, "potenciaKwp") ??
+    (modulo?.potenciaW && moduloQtd ? String(Math.round(moduloQtd * Number(modulo.potenciaW)) / 1000) : null);
+
   await db
     .update(projetoTable)
     .set({
       numeroArt: texto(dados, "numeroArt"),
       protocoloConcessionaria: texto(dados, "protocoloConcessionaria"),
-      potenciaKwp: numero(dados, "potenciaKwp"),
+      potenciaKwp,
+      equipamentos,
+      telhadoTipo,
+      inversorModeloId: inversor?.id ?? null,
+      inversorQtd,
+      moduloModeloId: modulo?.id ?? null,
+      moduloQtd,
       // O valor mora no cartão de Pagamento (`salvarPagamento`).
       atualizadoEm: new Date(),
     })
     .where(doProjetoDaEmpresa(projetoId, usuario.empresaId));
+
+  // O datasheet e o Inmetro do kit entram (ou trocam) sozinhos no dossiê.
+  await sincronizarDatasheets(usuario.empresaId, projetoId, usuario.id);
+
   revalidatePath(`/projeto/${projetoId}`);
+  revalidatePath(`/documentos/${projetoId}`);
 }
 
 /** A forma de pagamento que o cliente aceitou no Lead. Pode mudar depois. */

@@ -1,5 +1,7 @@
 "use server";
 
+import { randomBytes } from "node:crypto";
+
 import { and, eq, inArray } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
@@ -10,6 +12,8 @@ import { exigirGestaoWeb } from "@/os/acesso";
 import { criarOs } from "@/os/fluxo";
 import { formatarRelogio, relogioDoCampo } from "@/os/relogio";
 import { numeroOs } from "@/os/tipos";
+import { faltaParaContrato, montarContrato } from "@/projeto/contrato";
+import { entradaDe, representantesDaEmpresa } from "@/projeto/contrato-dados";
 import { moverNaEsteira } from "@/projeto/esteira";
 
 const ABERTAS = ["aberta", "agendada", "em_deslocamento", "em_andamento", "aguardando_peca"] as const;
@@ -207,4 +211,74 @@ export async function gerarOsInstalacao(projetoId: string, form: FormData): Prom
       : `${numeroOs(os.numero)} de instalação agendada para ${formatarRelogio(agendadaPara)}. ${projeto.cliente.nome} foi para Execução, e o técnico recebe o aviso no app.`,
     os: os.id,
   });
+}
+
+/**
+ * "Gerar contrato", na etapa Contrato e procuração.
+ *
+ * Quem clica escolhe quem assina pela empresa (adm ou engenheiro) e confere o
+ * kit. O contrato só nasce com todos os dados: faltando qualquer um, a resposta
+ * diz qual — o PDF nunca sai com campo em branco para o cliente assinar.
+ *
+ * Gerar de novo (depois de corrigir um dado) cria outro contrato com outro
+ * link; vale o último.
+ */
+export async function gerarContrato(projetoId: string, origem: Origem, form: FormData): Promise<void> {
+  const ator = await exigirGestaoWeb();
+  const para = origem === "projeto" ? `/projeto/${projetoId}` : "/esteira";
+  const representanteId = String(form.get("representanteId") ?? "").trim();
+  const equipamentos = String(form.get("equipamentos") ?? "").trim().slice(0, 1000);
+
+  const projeto = await db.query.projeto.findFirst({
+    where: and(eq(schema.projeto.id, projetoId), eq(schema.projeto.empresaId, ator.empresaId)),
+    with: { cliente: true },
+  });
+  if (!projeto) voltar({ erro: "Projeto não encontrado." }, para);
+
+  if (equipamentos && equipamentos !== projeto.equipamentos) {
+    await db
+      .update(schema.projeto)
+      .set({ equipamentos, atualizadoEm: new Date() })
+      .where(eq(schema.projeto.id, projeto.id));
+    projeto.equipamentos = equipamentos;
+  }
+
+  const representante = (await representantesDaEmpresa(ator.empresaId)).find((r) => r.id === representanteId) ?? null;
+  const empresa = await db.query.empresa.findFirst({
+    where: eq(schema.empresa.id, ator.empresaId),
+    columns: { nome: true, razaoSocial: true, cnpj: true, endereco: true, email: true },
+  });
+  if (!empresa) voltar({ erro: "Empresa não encontrada." }, para);
+
+  const entrada = entradaDe(projeto.cliente, projeto, empresa, representante);
+  const falta = faltaParaContrato(entrada);
+  if (falta.length) {
+    voltar({ erro: `Não dá para gerar o contrato de ${projeto.cliente.nome}: falta ${falta.join(", ")}.` }, para);
+  }
+
+  await db.insert(schema.contrato).values({
+    empresaId: ator.empresaId,
+    projetoId: projeto.id,
+    token: randomBytes(24).toString("base64url"),
+    dados: montarContrato(entrada),
+    representanteId: representante!.id,
+    criadoPorId: ator.id,
+  });
+
+  revalidatePath("/esteira");
+  revalidatePath(`/projeto/${projeto.id}`);
+  voltar(
+    { ok: `Contrato de ${projeto.cliente.nome} gerado. Agora é enviar pelo WhatsApp: quando a via assinada subir no dossiê, o projeto anda sozinho.` },
+    para,
+  );
+}
+
+/** Anota que o contrato foi mandado ao cliente (o botão abre o WhatsApp e chama isto). */
+export async function marcarContratoEnviado(contratoId: string): Promise<void> {
+  const ator = await exigirGestaoWeb();
+  await db
+    .update(schema.contrato)
+    .set({ enviadoEm: new Date() })
+    .where(and(eq(schema.contrato.id, contratoId), eq(schema.contrato.empresaId, ator.empresaId)));
+  revalidatePath("/esteira");
 }

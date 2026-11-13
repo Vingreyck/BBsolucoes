@@ -148,12 +148,20 @@ export default async function NovoProjeto({
 
             <div className="dupla">
               <label>
+                Complemento
+                <input name="complemento" placeholder="Apto, bloco, referência" />
+              </label>
+              <label>
                 Cidade
                 <input name="cidade" placeholder="Itabaiana" />
               </label>
               <label>
                 UF
                 <input name="uf" defaultValue="SE" maxLength={2} />
+              </label>
+              <label>
+                CEP
+                <input name="cep" inputMode="numeric" placeholder="49500-000" maxLength={9} />
               </label>
             </div>
 

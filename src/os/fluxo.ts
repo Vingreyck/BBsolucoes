@@ -3,7 +3,9 @@ import { randomBytes } from "node:crypto";
 import { and, eq, like, notInArray, sql } from "drizzle-orm";
 
 import { db, schema } from "@/db";
-import { ETAPA_ESPERA_VISTORIA, moverNaEsteira } from "@/projeto/esteira";
+import { aproveitarVistoria } from "@/projeto/aproveitar-vistoria";
+import { avancarPorDocumentos } from "@/projeto/automatico";
+import { ETAPA_DA_OS, ETAPA_ESPERA_VISTORIA, moverNaEsteira } from "@/projeto/esteira";
 import { avisarOs, type MotivoAviso } from "@/push/avisos";
 import { publicar } from "@/rastreamento/hub";
 
@@ -797,17 +799,28 @@ const APLICAR: { [T in TipoAcao]: Aplicador<T> } = {
     });
     await evento(c, "concluida", { resultado: acao.resultado });
 
-    if (acao.resultado !== "resolvido") return;
+    const resolvido = acao.resultado === "resolvido";
+    const ehVistoria = c.os.tipo === "vistoria";
 
     // O alerta que originou a OS está resolvido junto.
-    await c.tx
-      .update(schema.alerta)
-      .set({ status: "resolvido", resolvidoEm: new Date() })
-      .where(eq(schema.alerta.ordemServicoId, c.os.id));
+    if (resolvido) {
+      await c.tx
+        .update(schema.alerta)
+        .set({ status: "resolvido", resolvidoEm: new Date() })
+        .where(eq(schema.alerta.ordemServicoId, c.os.id));
+    }
 
     if (!c.os.projetoId) return;
 
-    if (c.os.tipo === "vistoria") {
+    /**
+     * A vistoria anda a esteira mesmo "não resolvida". Ela é levantamento, não
+     * conserto: o que faltou vira visita de volta e fica no laudo, e o dono
+     * pediu que a vistoria concluída leve o projeto adiante sozinha. Instalação
+     * não resolvida é obra pela metade, e essa continua parada.
+     */
+    if (!resolvido && !ehVistoria) return;
+
+    if (ehVistoria) {
       await c.tx
         .update(schema.projeto)
         .set({
@@ -819,28 +832,64 @@ const APLICAR: { [T in TipoAcao]: Aplicador<T> } = {
         .where(eq(schema.projeto.id, c.os.projetoId));
     }
 
-    // A esteira anda sozinha — mas só se o projeto está parado na etapa que
-    // esta OS cumpre. Projeto que já passou dela, ou ainda nem chegou, fica.
-    if (modelo?.etapaSlug) {
-      const projeto = await c.tx.query.projeto.findFirst({
-        where: eq(schema.projeto.id, c.os.projetoId),
-        with: { etapa: { columns: { slug: true } } },
-      });
-      if (projeto?.etapa.slug === modelo.etapaSlug) {
-        const nova = await moverNaEsteira({
+    /**
+     * A esteira anda sozinha — mas só se o projeto está parado na etapa que
+     * esta OS cumpre. Projeto que já passou dela, ou ainda nem chegou, fica.
+     *
+     * A etapa vem do modelo da OS e, se ele estiver vazio, do tipo
+     * (`ETAPA_DA_OS`). Vistoria concluída com o projeto ainda em "Aguardando OS
+     * de vistoria" (OS aberta antes da etapa existir) atravessa as duas.
+     */
+    const alvo = modelo?.etapaSlug || ETAPA_DA_OS[c.os.tipo];
+    if (alvo) {
+      const projetoId = c.os.projetoId;
+      const pode = ehVistoria ? new Set([ETAPA_ESPERA_VISTORIA, alvo]) : new Set([alvo]);
+      let nova: { nome: string } | null = null;
+      for (let passo = 0; passo < 2; passo++) {
+        const projeto = await c.tx.query.projeto.findFirst({
+          where: eq(schema.projeto.id, projetoId),
+          with: { etapa: { columns: { slug: true } } },
+        });
+        if (!projeto || projeto.situacao !== "em_andamento" || !pode.has(projeto.etapa.slug)) break;
+        const andou = await moverNaEsteira({
           empresaId: c.os.empresaId,
-          projetoId: projeto.id,
+          projetoId,
           direcao: "avancar",
           usuarioId: c.ator.id,
           observacao: `Automático: ${numeroOs(c.os.numero)} concluída.`,
           tx: c.tx,
         });
-        if (nova) {
-          await evento(c, "esteira", { etapa: nova.nome, projetoId: projeto.id }, true);
-          c.avisos.push(`O projeto avançou para "${nova.nome}".`);
-        }
+        if (!andou) break;
+        nova = andou;
+        if (andou.slug === alvo) continue; // saiu da espera e caiu na etapa da OS: anda mais uma
+        break;
+      }
+      if (nova) {
+        await evento(c, "esteira", { etapa: nova.nome, projetoId }, true);
+        c.avisos.push(`O projeto avançou para "${nova.nome}".`);
+        if (!resolvido) c.avisos.push("A vistoria foi concluída como não resolvida: confira o laudo antes de seguir.");
       }
     }
+
+    // Chegando na etapa de documentos com tudo já na pasta, anda de novo.
+    const empresaId = c.os.empresaId;
+    const projetoId = c.os.projetoId;
+    const quem = c.ator.origem === "sistema" ? null : c.ator.id;
+
+    // O telhado e a UC que o técnico respondeu vão para o projeto e o cadastro
+    // (só em campo vazio). Falhar aqui não pode desfazer a conclusão da OS.
+    if (ehVistoria) {
+      c.depois.push(async () => {
+        await aproveitarVistoria(empresaId, projetoId).catch((e) =>
+          console.error("[os] aproveitar a vistoria falhou:", e),
+        );
+      });
+    }
+    c.depois.push(async () => {
+      await avancarPorDocumentos(empresaId, projetoId, quem).catch((e) =>
+        console.error("[os] avanço por documentos falhou:", e),
+      );
+    });
   },
 
   async nao_atendida(c, acao) {

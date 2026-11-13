@@ -12,7 +12,7 @@ import {
 
 import { cliente, empresa, usuario } from "./cadastro";
 import { acaoDocumento, statusDocumento, tipoDocumento } from "./enums";
-import { etapa, projeto } from "./operacao";
+import { etapa, modeloEquipamento, projeto } from "./operacao";
 
 /**
  * Um documento do dossiê.
@@ -88,6 +88,13 @@ export const documento = pgTable(
      * nesta tabela.
      */
     criadoPor: uuid("criado_por").references(() => usuario.id, {
+      onDelete: "set null",
+    }),
+    /**
+     * Entrou pelo catálogo de equipamentos (datasheet ou Inmetro de um modelo).
+     * Trocar o inversor ou o módulo do projeto troca estes anexos sozinho.
+     */
+    modeloEquipamentoId: uuid("modelo_equipamento_id").references(() => modeloEquipamento.id, {
       onDelete: "set null",
     }),
     criadoEm: timestamp("criado_em", { withTimezone: true }).notNull().defaultNow(),

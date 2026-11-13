@@ -18,6 +18,7 @@ import {
   Trash2,
   UserRound,
   Wallet,
+  Zap,
 } from "lucide-react";
 import Link from "next/link";
 import { notFound } from "next/navigation";
@@ -30,19 +31,31 @@ import { listarOs, vistoriaDoProjeto } from "@/os/consultas";
 import { textoDaResposta } from "@/os/formatar";
 import { formatarRelogio } from "@/os/relogio";
 import { numeroOs, STATUS_ROTULO, TIPO_ROTULO } from "@/os/tipos";
+import { numeroWhatsapp } from "@/documentos/cobranca";
+import { entradaDe, representantesDaEmpresa, ultimosContratos } from "@/projeto/contrato-dados";
+import { dadosTecnicosDosProjetos } from "@/projeto/aproveitar-vistoria";
+import { faltaParaOProjeto, lerDadosTecnicos, OPCOES_DE_TELHADO } from "@/projeto/da-vistoria";
+import { rotuloDoModelo, sugestaoDeEquipamentos } from "@/projeto/kit";
+import { diasCorridos, fraseDoTempo } from "@/projeto/tempo";
 import { FORMAS_PAGAMENTO, rotuloPagamento } from "@/projeto/pagamento";
 import { db } from "@/db";
 import {
   comentario as comentarioTable,
+  empresa as empresaTable,
   etapa as etapaTable,
+  modeloEquipamento as modeloEquipamentoTable,
   projeto as projetoTable,
   projetoEvento as eventoTable,
+  unidadeConsumidora as unidadeConsumidoraTable,
 } from "@/db/schema";
 
 import { Cabecalho, Caminho, Cartao, Dados, Vazio } from "../../_ui";
 import { BotaoDialogo } from "../../_ui/dialogo";
 import { moverProjeto } from "../../actions";
 import { aprovarProposta, reprovarProposta } from "../../esteira/actions";
+import { AcoesDoContrato } from "../../esteira/contrato";
+import { PedirDadosDoCliente } from "../../esteira/pedir-dados";
+import { origemDoSite } from "../../origem";
 import { kWh, kWp } from "../../formatar";
 import {
   anotarSerial,
@@ -139,6 +152,31 @@ export default async function DetalheProjeto({
     podeVerDocumentos(usuario.empresaId, usuario.papel),
   ]);
 
+  // O catálogo de equipamentos para o kit: os modelos ativos e o já escolhido (mesmo se saiu da lista).
+  const catalogo = (
+    await db
+      .select()
+      .from(modeloEquipamentoTable)
+      .where(eq(modeloEquipamentoTable.empresaId, usuario.empresaId))
+      .orderBy(asc(modeloEquipamentoTable.fabricante), asc(modeloEquipamentoTable.modelo))
+  ).filter((m) => m.ativo || m.id === projeto.inversorModeloId || m.id === projeto.moduloModeloId);
+  const inversores = catalogo.filter((m) => m.tipo === "inversor" || m.tipo === "microinversor");
+  const modulos = catalogo.filter((m) => m.tipo === "modulo");
+
+  // A UC do cliente (a vistoria preenche) e se a vistoria já foi concluída.
+  const ucs = await db
+    .select({ numeroInstalacao: unidadeConsumidoraTable.numeroInstalacao, titular: unidadeConsumidoraTable.titular })
+    .from(unidadeConsumidoraTable)
+    .where(and(eq(unidadeConsumidoraTable.empresaId, usuario.empresaId), eq(unidadeConsumidoraTable.clienteId, projeto.clienteId)));
+  const vistoriaConcluida = vistoria?.status === "concluida";
+  // Os números da vistoria para o projeto elétrico (junta a vistoria e a visita de volta).
+  const tecnicos = (await dadosTecnicosDosProjetos(usuario.empresaId, [projeto.id])).get(projeto.id) ?? null;
+  const d = tecnicos?.dados ?? lerDadosTecnicos([]);
+  const faltaProjeto = tecnicos ? faltaParaOProjeto(d) : [];
+  const nomeDaEmpresa =
+    (await db.query.empresa.findFirst({ where: eq(empresaTable.id, usuario.empresaId), columns: { nome: true } }))?.nome ??
+    "nossa empresa";
+
   const diasNaEtapa = Math.floor((Date.now() - projeto.etapaDesde.getTime()) / 86_400_000);
   const indiceEtapa = etapas.findIndex((e) => e.id === projeto.etapaId);
   const primeira = indiceEtapa <= 0;
@@ -207,6 +245,37 @@ export default async function DetalheProjeto({
       <Link href={`/os/nova?projeto=${projeto.id}&tipo=instalacao`} className="botao">
         <Plus size={15} aria-hidden /> Abrir OS de instalação
       </Link>
+    ) : null;
+  } else if (slug === "contrato" && ator.gestao) {
+    const [empresaDados, representantes, contratos, origemSite] = await Promise.all([
+      db.query.empresa.findFirst({
+        where: eq(empresaTable.id, usuario.empresaId),
+        columns: { nome: true, razaoSocial: true, cnpj: true, endereco: true, email: true },
+      }),
+      representantesDaEmpresa(usuario.empresaId),
+      ultimosContratos(usuario.empresaId, [projeto.id]),
+      origemDoSite(),
+    ]);
+    acaoDoGuia = empresaDados ? (
+      <div className="guia-contrato">
+        <AcoesDoContrato
+          projetoId={projeto.id}
+          entrada={entradaDe(projeto.cliente, projeto, empresaDados, null)}
+          equipamentos={sugestaoDeEquipamentos(projeto, catalogo)}
+          contrato={contratos.get(projeto.id) ?? null}
+          representantes={representantes}
+          whatsapp={numeroWhatsapp(projeto.cliente.telefone)}
+          origemSite={origemSite}
+          origem="projeto"
+          ehAdm={usuario.papel === "adm"}
+          chave={`c|${ok ?? ""}|${erro ?? ""}`}
+        />
+        {temDocumentos && (
+          <Link href={`/documentos/${projeto.id}`} className="botao secundario">
+            <FolderOpen size={15} aria-hidden /> Subir a via assinada
+          </Link>
+        )}
+      </div>
     ) : null;
   } else if (["documentacao", "contrato", "projeto"].includes(slug) && temDocumentos) {
     acaoDoGuia = (
@@ -441,6 +510,48 @@ export default async function DetalheProjeto({
             </details>
           </Cartao>
 
+          {tecnicos && (
+            <Cartao
+              titulo="Dados para o projeto elétrico"
+              icone={<Zap size={16} />}
+              ajuda="O que o técnico mediu e respondeu na vistoria, em números. É daqui que o projeto elétrico e o memorial leem: se faltar um item essencial, o engenheiro sabe antes de começar. Para corrigir, reabra a vistoria."
+              contador={
+                faltaProjeto.length === 0 ? (
+                  <span className="pilula sev-info">pronto para começar</span>
+                ) : (
+                  <span className="pilula sev-atencao">faltam {faltaProjeto.length}</span>
+                )
+              }
+            >
+              {!tecnicos.concluida && (
+                <p className="nota">
+                  A vistoria ainda está em campo: as respostas podem mudar.{" "}
+                  <Link href={`/os/${tecnicos.osId}`}>Abrir a {numeroOs(tecnicos.osNumero)}</Link>
+                </p>
+              )}
+              {faltaProjeto.length > 0 && (
+                <p className="aviso aviso-solto">
+                  <strong>Falta para o projeto elétrico:</strong> {faltaProjeto.join(", ")}.
+                </p>
+              )}
+              <Dados
+                itens={[
+                  ["Disjuntor do padrão", d.disjuntorA !== null ? `${d.disjuntorA} A${d.polos ? ` · ${d.polos.toLowerCase()}` : ""}` : d.polos],
+                  ["Cabo de entrada", d.bitola],
+                  ["Aterramento", d.aterramento],
+                  ["Vagas no quadro (QDG)", d.qdgVagas],
+                  ["Caminho do cabo", d.caminhoCabo],
+                  ["Rasgar parede", d.rasgarParede === null ? null : d.rasgarParede ? "Sim" : "Não"],
+                  ["Telhado", [d.telhado, ...d.telhadoEstado].filter(Boolean).join(" · ") || null],
+                  ["Área útil", d.areaUtilM2 !== null ? `${d.areaUtilM2.toLocaleString("pt-BR")} m²` : null],
+                  ["Sombra", d.sombra],
+                  ["Local do inversor", d.inversorLocal],
+                  ["Aumento de consumo previsto", d.ampliacao === null ? null : d.ampliacao ? "Sim" : "Não"],
+                ]}
+              />
+            </Cartao>
+          )}
+
           <Cartao
             titulo="Dados da venda"
             icone={<UserRound size={16} />}
@@ -530,6 +641,7 @@ export default async function DetalheProjeto({
               <p className="erro">O CPF não confere (dígito errado?). Corrija ou deixe em branco.</p>
             )}
             {avisoCliente === "cpf-outro" && <p className="erro">Esse CPF já está no cadastro de outro cliente.</p>}
+            {ator.gestao && <PedirDadosDoCliente cliente={cliente} empresa={nomeDaEmpresa} />}
             <form action={salvarCliente.bind(null, projeto.id)} className="form-ficha">
               <div className="dupla">
                 <label>
@@ -557,12 +669,26 @@ export default async function DetalheProjeto({
               </div>
               <div className="dupla">
                 <label>
+                  Complemento
+                  <input name="complemento" defaultValue={cliente.complemento ?? ""} placeholder="Apto, bloco, referência" />
+                </label>
+                <label>
                   Cidade
                   <input name="cidade" defaultValue={cliente.cidade ?? ""} />
                 </label>
                 <label>
                   UF
                   <input name="uf" defaultValue={cliente.uf ?? "SE"} maxLength={2} />
+                </label>
+                <label>
+                  CEP
+                  <input
+                    name="cep"
+                    inputMode="numeric"
+                    maxLength={9}
+                    defaultValue={cliente.cep ? cliente.cep.replace(/^(\d{5})(\d{3})$/, "$1-$2") : ""}
+                    placeholder="49500-000"
+                  />
                 </label>
               </div>
               <div className="ficha-acoes">
@@ -596,10 +722,82 @@ export default async function DetalheProjeto({
               </div>
               <div className="dupla">
                 <label>
-                  Potência (kWp)
-                  <input name="potenciaKwp" inputMode="decimal" defaultValue={projeto.potenciaKwp ?? ""} />
+                  Inversor
+                  <select name="inversorModeloId" defaultValue={projeto.inversorModeloId ?? ""}>
+                    <option value="">{inversores.length ? "Escolha do catálogo…" : "Catálogo vazio"}</option>
+                    {inversores.map((m) => (
+                      <option key={m.id} value={m.id}>
+                        {rotuloDoModelo(m)}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label className="curto">
+                  Quantos
+                  <input name="inversorQtd" type="number" min={1} max={999} defaultValue={projeto.inversorQtd ?? ""} />
+                </label>
+                <label>
+                  Módulo
+                  <select name="moduloModeloId" defaultValue={projeto.moduloModeloId ?? ""}>
+                    <option value="">{modulos.length ? "Escolha do catálogo…" : "Catálogo vazio"}</option>
+                    {modulos.map((m) => (
+                      <option key={m.id} value={m.id}>
+                        {rotuloDoModelo(m)}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label className="curto">
+                  Quantos
+                  <input name="moduloQtd" type="number" min={1} max={9999} defaultValue={projeto.moduloQtd ?? ""} />
                 </label>
               </div>
+              <p className="ajuda">
+                O datasheet e o Inmetro do inversor e do módulo entram sozinhos no dossiê. Falta um modelo?{" "}
+                {usuario.papel === "adm" || usuario.papel === "engenheiro" ? (
+                  <Link href="/administracao/equipamentos">Cadastre no catálogo</Link>
+                ) : (
+                  "Peça ao adm ou ao engenheiro para cadastrar no catálogo"
+                )}
+                .
+              </p>
+              <div className="dupla">
+                <label>
+                  Potência (kWp)
+                  <input
+                    name="potenciaKwp"
+                    inputMode="decimal"
+                    defaultValue={projeto.potenciaKwp ?? ""}
+                    placeholder="em branco: módulos × potência"
+                  />
+                </label>
+              </div>
+              <label className="curto">
+                Tipo de telhado
+                <select name="telhadoTipo" defaultValue={projeto.telhadoTipo ?? ""}>
+                  <option value="">Ainda não sei</option>
+                  {OPCOES_DE_TELHADO.map((t) => (
+                    <option key={t} value={t}>
+                      {t}
+                    </option>
+                  ))}
+                </select>
+                <small className="entrada-ajuda">
+                  {projeto.telhadoTipo && vistoriaConcluida
+                    ? "Veio da vistoria do técnico; pode corrigir."
+                    : "A vistoria do técnico preenche sozinha, ao ser concluída."}
+                </small>
+              </label>
+              <label>
+                Equipamentos do kit <span className="fraco">(entra no contrato; em branco, sai do inversor, do módulo e do telhado)</span>
+                <textarea
+                  name="equipamentos"
+                  rows={2}
+                  maxLength={1000}
+                  defaultValue={projeto.equipamentos ?? ""}
+                  placeholder="2 inversores Growatt on-grid 10K 220V, 40 módulos fotovoltaicos Jinko 625W / estrutura fibrocimento"
+                />
+              </label>
               <div className="ficha-acoes">
                 <button type="submit" className="primario">
                   Salvar
@@ -725,6 +923,9 @@ export default async function DetalheProjeto({
                 ["Potência", kWp(projeto.potenciaKwp)],
                 ["Valor", reais(projeto.valor)],
                 ["Concessionária", projeto.concessionaria],
+                ["UC", ucs.length ? ucs.map((u) => u.numeroInstalacao).join(", ") : null],
+                ["Titular da conta", ucs.find((u) => u.titular)?.titular ?? null],
+                ["Telhado", projeto.telhadoTipo],
                 [
                   "Usina",
                   projeto.usina ? (
@@ -733,6 +934,12 @@ export default async function DetalheProjeto({
                 ],
                 ["ART", projeto.numeroArt],
                 ["Protocolo", projeto.protocoloConcessionaria],
+                [
+                  "Contrato assinado",
+                  projeto.contratoAssinadoEm
+                    ? `${data(projeto.contratoAssinadoEm)} (${fraseDoTempo(diasCorridos(projeto.contratoAssinadoEm))})`
+                    : null,
+                ],
                 ["Criado em", data(projeto.criadoEm)],
               ]}
             />

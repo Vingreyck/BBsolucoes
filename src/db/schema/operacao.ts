@@ -23,6 +23,7 @@ import {
   situacaoProjeto,
   statusOs,
   tipoDocumento,
+  tipoEquipamento,
   tipoOs,
 } from "./enums";
 
@@ -105,6 +106,31 @@ export const projeto = pgTable(
     formaPagamento: varchar("forma_pagamento", { length: 30 }),
     /** Entrada, parcelas, banco: o combinado, em texto livre. */
     pagamentoCondicoes: text("pagamento_condicoes"),
+    /** O kit vendido, como entra no objeto do contrato: inversores, módulos, estrutura. */
+    equipamentos: text("equipamentos"),
+    /**
+     * O inversor e o módulo do kit, do catálogo (`modelo_equipamento`, migração
+     * 0023). É deles que o dossiê tira o datasheet e o Inmetro sozinho.
+     */
+    inversorModeloId: uuid("inversor_modelo_id").references((): AnyPgColumn => modeloEquipamento.id, {
+      onDelete: "set null",
+    }),
+    /**
+     * Quando a via assinada do contrato entrou no sistema (migração 0025). Só o
+     * primeiro valor vale. Base da métrica "há quantos dias o cliente assinou".
+     */
+    contratoAssinadoEm: timestamp("contrato_assinado_em", { withTimezone: true }),
+    /**
+     * O tipo de telhado, como o técnico respondeu na vistoria (uma das opções de
+     * `TELHADOS` em `@/projeto/da-vistoria`). Preenchido ao concluir a vistoria,
+     * se estiver vazio; editável na tela do projeto.
+     */
+    telhadoTipo: varchar("telhado_tipo", { length: 40 }),
+    inversorQtd: integer("inversor_qtd"),
+    moduloModeloId: uuid("modulo_modelo_id").references((): AnyPgColumn => modeloEquipamento.id, {
+      onDelete: "set null",
+    }),
+    moduloQtd: integer("modulo_qtd"),
 
     /**
      * Etapa 2, coleta de informações.
@@ -146,6 +172,64 @@ export const projeto = pgTable(
     index("projeto_responsavel_idx").on(t.responsavelId),
     index("projeto_prazo_idx").on(t.empresaId, t.prazoEtapa),
   ],
+);
+
+/**
+ * O catálogo de equipamentos (migração 0023): cada modelo de inversor e de
+ * módulo que a empresa vende, com o datasheet e o certificado do Inmetro.
+ *
+ * Os arquivos sobem uma vez, para o Drive (pasta BIBLIOTECA DE EQUIPAMENTOS),
+ * e os links ficam aqui. O documento de cada projeto aponta para o mesmo
+ * arquivo — o datasheet é igual para todo cliente com aquele modelo.
+ */
+export const modeloEquipamento = pgTable(
+  "modelo_equipamento",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    empresaId: uuid("empresa_id")
+      .notNull()
+      .references(() => empresa.id, { onDelete: "cascade" }),
+    tipo: tipoEquipamento("tipo").notNull(),
+    fabricante: text("fabricante").notNull(),
+    modelo: text("modelo").notNull(),
+    potenciaW: numeric("potencia_w", { precision: 12, scale: 2 }),
+    datasheetLink: text("datasheet_link"),
+    datasheetNome: text("datasheet_nome"),
+    inmetroLink: text("inmetro_link"),
+    inmetroNome: text("inmetro_nome"),
+    ativo: boolean("ativo").notNull().default(true),
+    criadoEm: timestamp("criado_em", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index("modelo_equipamento_empresa_idx").on(t.empresaId, t.tipo)],
+);
+
+/**
+ * O contrato de prestação de serviços que o Selebi gera na etapa "Contrato e
+ * procuração" (migração 0022).
+ *
+ * `dados` é a fotografia do que entrou no contrato no dia em que foi gerado:
+ * corrigir o cadastro depois não muda o PDF que o cliente já assinou — para
+ * isso se gera outro. O `token` é a chave do link público que vai pelo
+ * WhatsApp (`/r/c/<token>`).
+ */
+export const contrato = pgTable(
+  "contrato",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    empresaId: uuid("empresa_id")
+      .notNull()
+      .references(() => empresa.id, { onDelete: "cascade" }),
+    projetoId: uuid("projeto_id")
+      .notNull()
+      .references(() => projeto.id, { onDelete: "cascade" }),
+    token: varchar("token", { length: 64 }).notNull(),
+    dados: jsonb("dados").notNull(),
+    representanteId: uuid("representante_id").references(() => usuario.id, { onDelete: "set null" }),
+    criadoPorId: uuid("criado_por_id").references(() => usuario.id, { onDelete: "set null" }),
+    enviadoEm: timestamp("enviado_em", { withTimezone: true }),
+    criadoEm: timestamp("criado_em", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [uniqueIndex("contrato_token_uq").on(t.token), index("contrato_projeto_idx").on(t.projetoId, t.criadoEm)],
 );
 
 /**

@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 
 import { exigirUsuario } from "@/auth/sessao";
+import { avancarPorDocumentos } from "@/projeto/automatico";
 import { moverNaEsteira } from "@/projeto/esteira";
 
 /**
@@ -24,6 +25,10 @@ export async function moverProjeto(
     direcao,
     usuarioId: usuario.id,
   });
+  // Avançou para uma etapa de documentos que já está completa: segue sozinho.
+  if (direcao === "avancar") {
+    await avancarPorDocumentos(usuario.empresaId, projetoId, usuario.id).catch(() => null);
+  }
   revalidatePath("/");
   revalidatePath("/esteira");
 }

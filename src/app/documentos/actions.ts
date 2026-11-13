@@ -1,15 +1,16 @@
 "use server";
 
-import { and, eq } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 
 import { exigirAcessoDocumentos } from "@/auth/permissao";
 import { db, schema } from "@/db";
 import { driveConfigurado, enviarArquivo } from "@/documentos/drive";
 import { limparNome, pastaDoCliente } from "@/documentos/pastas";
-import { numeroWhatsapp } from "@/documentos/cobranca";
+import { ehDoCliente, numeroWhatsapp } from "@/documentos/cobranca";
 import { tipoDoDocumento } from "@/documentos/conteudo";
 import { filaDeCobranca } from "@/documentos/fila-cobranca";
+import { avancarPorDocumentos } from "@/projeto/automatico";
 
 /**
  * Sobe um documento pelo Selebi.
@@ -178,9 +179,25 @@ export async function enviarDocumento(
       acao: "enviou",
     });
 
+    // O contrato assinado marca o dia em que o cliente assinou (a métrica de dias
+    // desde a assinatura parte daqui). Só o primeiro vale: versão nova não zera.
+    if (tipo === "contrato") {
+      await db
+        .update(schema.projeto)
+        .set({ contratoAssinadoEm: sql`coalesce(${schema.projeto.contratoAssinadoEm}, now())` })
+        .where(eq(schema.projeto.id, projeto.id));
+    }
+
+    // Com este documento a etapa pode ter ficado completa: a esteira anda sozinha.
+    const andou = await avancarPorDocumentos(usuario.empresaId, projeto.id, usuario.id).catch((e) => {
+      console.error("[documentos] avanço por documentos falhou:", e);
+      return null;
+    });
+
     revalidatePath(`/documentos/${projeto.id}`);
     revalidatePath("/documentos");
-    return { ok: `${nomeFinal} enviado.` };
+    revalidatePath("/esteira");
+    return { ok: `${nomeFinal} enviado.${andou ? ` O projeto foi para "${andou}".` : ""}` };
   } catch (e) {
     return { erro: e instanceof Error ? e.message : "Falhou ao enviar." };
   }
@@ -192,8 +209,30 @@ export async function enviarDocumento(
  * de tipos que o navegador mandaria: cobrança registrada é cobrança do que de
  * fato falta.
  */
-export async function registrarCobranca(projetoId: string): Promise<{ ok: boolean }> {
+export async function registrarCobranca(projetoId: string, tipo?: string): Promise<{ ok: boolean }> {
   const acesso = await exigirAcessoDocumentos();
+
+  // Cobrança de um documento só, pelo botão do cartão no dossiê.
+  if (tipo) {
+    if (!ehDoCliente(tipo) || !acesso.pode(tipo)) return { ok: false };
+    const projeto = await db.query.projeto.findFirst({
+      where: and(eq(schema.projeto.id, projetoId), eq(schema.projeto.empresaId, acesso.usuario.empresaId)),
+      columns: { id: true, clienteId: true },
+    });
+    if (!projeto) return { ok: false };
+    await db.insert(schema.cobrancaDocumento).values({
+      empresaId: acesso.usuario.empresaId,
+      projetoId: projeto.id,
+      clienteId: projeto.clienteId,
+      tipos: [tipo],
+      canal: "whatsapp",
+      usuarioId: acesso.usuario.id,
+    });
+    revalidatePath("/documentos/cobranca");
+    revalidatePath(`/documentos/${projetoId}`);
+    return { ok: true };
+  }
+
   const [linha] = await filaDeCobranca(acesso.usuario.empresaId, { pode: acesso.pode, projetoId });
   if (!linha) return { ok: false };
   await db.insert(schema.cobrancaDocumento).values({

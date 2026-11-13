@@ -25,6 +25,7 @@ export const PEDIDO_AO_CLIENTE: Record<string, string> = {
   procuracao: "a procuração que enviamos, assinada",
   declaracao: "a declaração que enviamos, assinada",
   comprovante: "o comprovante de pagamento",
+  recibo: "o comprovante do pagamento (recibo, ou o print do PIX ou da transferência)",
 };
 
 /** O nome curto, para as etiquetas da tela. */
@@ -38,6 +39,7 @@ export const ROTULO_PEDIDO: Record<string, string> = {
   procuracao: "Procuração assinada",
   declaracao: "Declaração assinada",
   comprovante: "Comprovante",
+  recibo: "Comprovante de pagamento",
 };
 
 export function ehDoCliente(tipo: string): boolean {
@@ -55,6 +57,26 @@ export interface Exigencia {
   obrigatorio: boolean;
   exigeAssinatura?: boolean;
   etapa: { ordem: number };
+}
+
+/**
+ * Os tipos que contam como entregues.
+ *
+ * Arquivo de trabalho (`.dwg`, `.xlsm`) não conta. Documento que exige
+ * assinatura e está marcado "falta assinar" também não: o contrato enviado ao
+ * cliente só vale quando volta assinado. "Indefinido" conta — quase nenhum
+ * nome de arquivo diz se foi assinado, e cobrar assinatura disso acusaria
+ * todo mundo.
+ */
+export function tiposEntregues(
+  docs: { tipo: string; status: string }[],
+  exigemAssinatura: Set<string>,
+): Set<string> {
+  return new Set(
+    docs
+      .filter((d) => d.status !== "trabalho" && !(exigemAssinatura.has(d.tipo) && d.status === "aguardando_assinatura"))
+      .map((d) => d.tipo),
+  );
 }
 
 /**

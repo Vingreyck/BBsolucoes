@@ -137,6 +137,8 @@ export default async function RootLayout({
             itens: [
               { href: "/administracao/usuarios", rotulo: "Usuários", icone: "usuarios" as const, contador: pedidos },
               { href: "/administracao/modelos", rotulo: "Modelos de OS", icone: "modelos" as const },
+              { href: "/administracao/equipamentos", rotulo: "Equipamentos", icone: "equipamentos" as const },
+              { href: "/administracao/empresa", rotulo: "Dados da empresa", icone: "empresa" as const },
             ],
           },
         ]

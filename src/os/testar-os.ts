@@ -12,6 +12,9 @@ import { db, schema } from "@/db";
 import { ErroOs, type Ator } from "./acesso";
 import { carregarOs, contarPorStatus, listarOs, tempoEmCampo, vistoriaDoProjeto } from "./consultas";
 import { abrirRetorno, agendarVisitaDeVolta, criarOs, executarAcao } from "./fluxo";
+import { aproveitarVistoria, dadosTecnicosDosProjetos } from "@/projeto/aproveitar-vistoria";
+import { faltaParaOProjeto } from "@/projeto/da-vistoria";
+
 import { garantirModelos } from "./modelos";
 import { anotar } from "./notas";
 import { renderizarRelatorio } from "./relatorio";
@@ -552,6 +555,8 @@ async function main() {
           : i.tipoResposta === "escolha" ? (i.chave === "cabo_bitola" ? "6 mm²" : i.opcoes?.[0])
           : i.tipoResposta === "multipla" ? [i.opcoes?.[0]]
           : i.tipoResposta === "foto" ? null
+          : i.chave === "uc_numero" ? "123456"
+          : i.chave === "titular_nome" ? "Maria de Teste"
           : "Resposta de teste";
         if (i.tipoResposta !== "foto") {
           await responderItem(tec, vist.id, i.id, {
@@ -617,6 +622,51 @@ async function main() {
       const lida = await vistoriaDoProjeto(empresa.id, projeto.id);
       const disjuntor = lida?.checklist.find((i) => i.chave === "disjuntor_amperagem");
       confere(disjuntor?.valor === 40, "o engenheiro lê na tela do projeto o disjuntor que a vistoria viu (40 A)");
+
+      // O que a vistoria respondeu vai sozinho para o projeto e para o cadastro (só em campo vazio).
+      const aproveitado = await db.query.projeto.findFirst({ where: eq(schema.projeto.id, projeto.id) });
+      confere(aproveitado?.telhadoTipo === "Cerâmica", "o telhado respondido na vistoria foi para o projeto", aproveitado?.telhadoTipo);
+      const ucsDoCliente = await db
+        .select()
+        .from(schema.unidadeConsumidora)
+        .where(eq(schema.unidadeConsumidora.clienteId, cliente.id));
+      confere(
+        ucsDoCliente.length === 1 && ucsDoCliente[0].numeroInstalacao === "123456" && ucsDoCliente[0].titular === "Maria de Teste",
+        "a UC e o titular respondidos na vistoria entraram no cadastro do cliente",
+        ucsDoCliente.map((u) => `${u.numeroInstalacao}/${u.titular}`),
+      );
+      // Os dados técnicos: a vistoria original traz quase tudo; a área útil ficou para a visita de volta.
+      const antes = (await dadosTecnicosDosProjetos(empresa.id, [projeto.id])).get(projeto.id);
+      confere(
+        antes?.concluida === true && antes.dados.disjuntorA === 40 && antes.dados.bitola === "6 mm²",
+        "dados técnicos: disjuntor e bitola respondidos na vistoria",
+        antes?.dados,
+      );
+      confere(
+        JSON.stringify(faltaParaOProjeto(antes!.dados)) === JSON.stringify(["área útil do telhado"]),
+        "dados técnicos: falta só a área útil, que ficou para a visita de volta",
+        faltaParaOProjeto(antes!.dados),
+      );
+      // A visita de volta responde a área útil: soma à vistoria original, sem apagar o que ela trouxe.
+      const areaDaVolta = volta?.checklist.find((i) => i.chave === "area_util");
+      if (areaDaVolta) {
+        await db.update(schema.osChecklistItem).set({ valor: 55 }).where(eq(schema.osChecklistItem.id, areaDaVolta.id));
+        const depois = (await dadosTecnicosDosProjetos(empresa.id, [projeto.id])).get(projeto.id);
+        confere(
+          depois?.dados.areaUtilM2 === 55 && depois.dados.disjuntorA === 40 && faltaParaOProjeto(depois.dados).length === 0,
+          "dados técnicos: a visita de volta completa a vistoria sem apagar o que ela trouxe",
+          depois?.dados,
+        );
+      }
+      await db.update(schema.projeto).set({ telhadoTipo: "Metálico" }).where(eq(schema.projeto.id, projeto.id));
+      await db.update(schema.unidadeConsumidora).set({ titular: "Corrigido à mão" }).where(eq(schema.unidadeConsumidora.clienteId, cliente.id));
+      const de_novo = await aproveitarVistoria(empresa.id, projeto.id);
+      const depoisDeNovo = await db.query.projeto.findFirst({ where: eq(schema.projeto.id, projeto.id) });
+      const ucDepois = await db.query.unidadeConsumidora.findFirst({ where: eq(schema.unidadeConsumidora.clienteId, cliente.id) });
+      confere(
+        depoisDeNovo?.telhadoTipo === "Metálico" && ucDepois?.titular === "Corrigido à mão" && !de_novo.telhado && de_novo.uc === null,
+        "aproveitar de novo não sobrescreve o que foi corrigido à mão",
+      );
     } else {
       confere(false, 'a esteira não tem a etapa "vistoria_tecnica"');
     }
@@ -642,7 +692,11 @@ async function main() {
       await db.delete(schema.projetoEvento).where(eq(schema.projetoEvento.projetoId, criados.projeto));
       await db.delete(schema.projeto).where(eq(schema.projeto.id, criados.projeto));
     }
-    if (criados.cliente) await db.delete(schema.cliente).where(eq(schema.cliente.id, criados.cliente));
+    if (criados.cliente) {
+      // A UC que a vistoria cadastrou segura o cliente (chave estrangeira): sai antes.
+      await db.delete(schema.unidadeConsumidora).where(eq(schema.unidadeConsumidora.clienteId, criados.cliente));
+      await db.delete(schema.cliente).where(eq(schema.cliente.id, criados.cliente));
+    }
     if (criados.usuarios.length) await db.delete(schema.usuario).where(inArray(schema.usuario.id, criados.usuarios));
     console.log("\n(dados de teste apagados)");
   }

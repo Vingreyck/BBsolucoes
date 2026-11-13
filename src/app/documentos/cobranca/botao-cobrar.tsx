@@ -19,10 +19,15 @@ export function BotaoCobrar({
   projetoId,
   link,
   rotulo = "Cobrar no WhatsApp",
+  tipo,
+  classe = "botao botao-whatsapp",
 }: {
   projetoId: string;
   link: string;
   rotulo?: string;
+  /** Cobrança de um documento só (o botão do cartão no dossiê). */
+  tipo?: string;
+  classe?: string;
 }) {
   const router = useRouter();
   const [anotando, iniciar] = useTransition();
@@ -32,11 +37,11 @@ export function BotaoCobrar({
       href={link}
       target="_blank"
       rel="noreferrer"
-      className="botao botao-whatsapp"
+      className={classe}
       aria-busy={anotando}
       onClick={() => {
         iniciar(async () => {
-          await registrarCobranca(projetoId);
+          await registrarCobranca(projetoId, tipo);
           router.refresh();
         });
       }}

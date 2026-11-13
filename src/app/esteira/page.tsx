@@ -1,10 +1,13 @@
-import { and, asc, eq, inArray, isNotNull } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, isNotNull } from "drizzle-orm";
 import {
   CheckCircle2,
   ChevronLeft,
   ChevronRight,
   ClipboardCheck,
   Clock,
+  FileCheck2,
+  FileClock,
+  FolderOpen,
   Plus,
   ThumbsDown,
   ThumbsUp,
@@ -13,18 +16,31 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 
+import { podeVerDocumentos } from "@/auth/permissao";
 import { exigirUsuario } from "@/auth/sessao";
 import { db, schema } from "@/db";
+import { numeroWhatsapp } from "@/documentos/cobranca";
+import { ROTULO_DOCUMENTO } from "@/documentos/rotulos";
 import { liberaOsDeInstalacao, tomDaFase, vigente, type FaseEnergisa } from "@/energisa/situacoes";
 import { ehGestaoWeb } from "@/os/acesso";
 import { quemUsaOApp } from "@/os/consultas";
-import { numeroOs } from "@/os/tipos";
+import { formatarRelogio } from "@/os/relogio";
+import { encerrada, numeroOs, STATUS_ROTULO, TIPO_ROTULO } from "@/os/tipos";
+import { dadosTecnicosDosProjetos } from "@/projeto/aproveitar-vistoria";
+import { situacaoDosDocumentos } from "@/projeto/automatico";
+import { faltaParaOProjeto } from "@/projeto/da-vistoria";
+import { diasCorridos, fraseDoTempo, rotuloDoTempo } from "@/projeto/tempo";
+import { sugestaoDeEquipamentos } from "@/projeto/kit";
+import { entradaDe, representantesDaEmpresa, ultimosContratos } from "@/projeto/contrato-dados";
 
 import { Ajuda, Cabecalho } from "../_ui";
 import { BotaoDialogo } from "../_ui/dialogo";
 import { moverProjeto } from "../actions";
 import { iniciais, kWp, semAcento } from "../formatar";
+import { origemDoSite } from "../origem";
 import { aprovarProposta, gerarOsInstalacao, reprovarProposta } from "./actions";
+import { AcoesDoContrato } from "./contrato";
+import { PedirDadosDoCliente } from "./pedir-dados";
 import { ColunaEsteira, QuadroEsteira } from "./quadro";
 
 /** Lê do banco a cada request — nada aqui é estático. */
@@ -88,44 +104,80 @@ export default async function Esteira({
   const energisa = new Map(
     [...entradasPorProjeto].map(([id, lista]) => [id, vigente(lista.map((en) => ({ ...en, fase: en.fase as FaseEnergisa })))]),
   );
-  const osInstalacao = new Map<string, { id: string; numero: number }>();
-  if (energisa.size) {
-    const ordens = await db
-      .select({ id: schema.ordemServico.id, numero: schema.ordemServico.numero, projetoId: schema.ordemServico.projetoId })
-      .from(schema.ordemServico)
-      .where(
-        and(
-          eq(schema.ordemServico.empresaId, usuario.empresaId),
-          inArray(schema.ordemServico.projetoId, [...energisa.keys()]),
-          inArray(schema.ordemServico.tipo, ["instalacao"]),
-          inArray(schema.ordemServico.status, ["aberta", "agendada", "em_deslocamento", "em_andamento", "aguardando_peca"]),
-        ),
-      );
-    for (const o of ordens) if (o.projetoId) osInstalacao.set(o.projetoId, { id: o.id, numero: o.numero });
+  /**
+   * As OS dos projetos em aberto, numa consulta só. Delas saem:
+   * - o aviso no cartão com a OS do projeto e o estado dela (aberta, agendada,
+   *   em andamento, concluída…), para ninguém precisar abrir a OS para saber;
+   * - a OS de instalação aberta, que troca o botão "Gerar OS de instalação";
+   * - a OS de vistoria aberta, que troca o botão "Criar OS de vistoria" (sobra
+   *   quando alguém voltou o projeto com a seta).
+   */
+  const idsAbertos = projetos.filter((p) => p.situacao !== "concluido").map((p) => p.id);
+  const ordensDosProjetos = idsAbertos.length
+    ? await db
+        .select({
+          id: schema.ordemServico.id,
+          numero: schema.ordemServico.numero,
+          projetoId: schema.ordemServico.projetoId,
+          tipo: schema.ordemServico.tipo,
+          status: schema.ordemServico.status,
+          agendadaPara: schema.ordemServico.agendadaPara,
+          criadoEm: schema.ordemServico.criadoEm,
+        })
+        .from(schema.ordemServico)
+        .where(and(eq(schema.ordemServico.empresaId, usuario.empresaId), inArray(schema.ordemServico.projetoId, idsAbertos)))
+        .orderBy(desc(schema.ordemServico.criadoEm))
+    : [];
+  type OsDoCartao = (typeof ordensDosProjetos)[number];
+  const aberta = (o: OsDoCartao) => !encerrada(o.status);
+  const osInstalacao = new Map<string, OsDoCartao>();
+  const osVistoria = new Map<string, OsDoCartao>();
+  const osDoCartao = new Map<string, OsDoCartao>();
+  for (const o of ordensDosProjetos) {
+    if (!o.projetoId) continue;
+    if (aberta(o) && o.tipo === "instalacao" && !osInstalacao.has(o.projetoId)) osInstalacao.set(o.projetoId, o);
+    if (aberta(o) && o.tipo === "vistoria" && !osVistoria.has(o.projetoId)) osVistoria.set(o.projetoId, o);
+    // A aberta mais nova; sem nenhuma aberta, a última que existiu.
+    const atual = osDoCartao.get(o.projetoId);
+    if (!atual || (aberta(o) && !aberta(atual))) osDoCartao.set(o.projetoId, o);
   }
 
   /**
-   * A OS de vistoria já aberta dos projetos em "Aguardando OS de vistoria". Em
-   * geral não existe: abrir a OS tira o projeto da etapa. Sobra quando alguém
-   * voltou o projeto com a seta — aí o cartão mostra a OS em vez de abrir outra.
+   * Etapas de documentos e de contrato: o que falta em cada cartão, o último
+   * contrato gerado e quem pode assinar pela empresa.
    */
-  const slugDa = new Map(etapas.map((e) => [e.id, e.slug]));
-  const esperandoVistoria = projetos.filter((p) => slugDa.get(p.etapaId) === "aguardando_vistoria").map((p) => p.id);
-  const osVistoria = new Map<string, { id: string; numero: number }>();
-  if (esperandoVistoria.length) {
-    const ordens = await db
-      .select({ id: schema.ordemServico.id, numero: schema.ordemServico.numero, projetoId: schema.ordemServico.projetoId })
-      .from(schema.ordemServico)
-      .where(
-        and(
-          eq(schema.ordemServico.empresaId, usuario.empresaId),
-          inArray(schema.ordemServico.projetoId, esperandoVistoria),
-          eq(schema.ordemServico.tipo, "vistoria"),
-          inArray(schema.ordemServico.status, ["aberta", "agendada", "em_deslocamento", "em_andamento", "aguardando_peca"]),
-        ),
-      );
-    for (const o of ordens) if (o.projetoId) osVistoria.set(o.projetoId, { id: o.id, numero: o.numero });
-  }
+  const etapaPorId = new Map(etapas.map((e) => [e.id, e]));
+  const naPapelada = projetos
+    .filter((p) => p.situacao === "em_andamento" && ["documentacao", "contrato"].includes(etapaPorId.get(p.etapaId)?.slug ?? ""))
+    .map((p) => ({ ...p, etapa: etapaPorId.get(p.etapaId)! }));
+  const noContrato = naPapelada.filter((p) => p.etapa.slug === "contrato").map((p) => p.id);
+  const [papelada, contratos, empresaDados, representantes, podeDocs, origemSite, catalogo] = await Promise.all([
+    situacaoDosDocumentos(usuario.empresaId, naPapelada),
+    ultimosContratos(usuario.empresaId, noContrato),
+    naPapelada.length
+      ? db.query.empresa.findFirst({
+          where: eq(schema.empresa.id, usuario.empresaId),
+          columns: { nome: true, razaoSocial: true, cnpj: true, endereco: true, email: true },
+        })
+      : null,
+    noContrato.length && gestao ? representantesDaEmpresa(usuario.empresaId) : [],
+    podeVerDocumentos(usuario.empresaId, usuario.papel),
+    noContrato.length ? origemDoSite() : "",
+    // O catálogo é pequeno: uma ida só serve a todos os cartões, para sugerir o
+    // texto de equipamentos do contrato (kit + telhado da vistoria).
+    noContrato.length
+      ? db.select().from(schema.modeloEquipamento).where(eq(schema.modeloEquipamento.empresaId, usuario.empresaId))
+      : [],
+  ]);
+
+  /**
+   * Na etapa Projeto, o engenheiro precisa saber de relance se a vistoria trouxe
+   * o que ele precisa (disjuntor, bitola, telhado, área útil…) ou se falta algo.
+   */
+  const noProjeto = projetos
+    .filter((p) => p.situacao === "em_andamento" && etapaPorId.get(p.etapaId)?.slug === "projeto")
+    .map((p) => p.id);
+  const tecnicosDosProjetos = await dadosTecnicosDosProjetos(usuario.empresaId, noProjeto);
 
   if (etapas.length === 0) {
     return (
@@ -185,6 +237,11 @@ export default async function Esteira({
               <p>
                 As {etapas.length} etapas do fluxo, confirmadas com o cliente. No <strong>Lead</strong>, “Aprovada” leva o projeto adiante e “Reprovada” o exclui; em <strong>Aguardando OS de vistoria</strong>, abrir a OS leva o projeto sozinho para a Vistoria técnica. A <strong>Execução</strong> é a etapa que mais gera
                 retrabalho, e para onde o projeto volta quando a concessionária reprova — use a seta para trás.
+              </p>
+              <p>
+                A faixa <strong>Assinado · 12 d</strong> no cartão conta os dias desde que o cliente assinou o contrato
+                (do envio, na etapa do contrato, enquanto não volta assinado). Já o relógio do rodapé conta os dias na
+                etapa atual.
               </p>
               <p>
                 <strong>Parado</strong> é o projeto há {DIAS_ATENCAO} dias ou mais na mesma etapa (relógio amarelo) ou
@@ -276,6 +333,7 @@ export default async function Esteira({
                 const fase = v?.fase as FaseEnergisa | undefined;
                 const os = osInstalacao.get(p.id);
                 const vist = osVistoria.get(p.id);
+                const osCard = osDoCartao.get(p.id);
                 const meta = [kWp(p.potenciaKwp), p.cliente.cidade].filter(Boolean).join(" · ");
                 return (
                   <article
@@ -325,17 +383,78 @@ export default async function Esteira({
                       </div>
                     )}
 
-                    {e.slug === "aguardando_vistoria" && (
+                    {e.slug === "aguardando_vistoria" && !vist && gestao && (
                       <div className="cartao-projeto-extra">
-                        {vist ? (
-                          <a className="link-acao" href={`/os/${vist.id}`}>
-                            {numeroOs(vist.numero)} de vistoria
+                        <a className="botao botao-cartao" href={`/os/nova?projeto=${p.id}&tipo=vistoria`}>
+                          <ClipboardCheck size={14} aria-hidden /> Criar OS de vistoria
+                        </a>
+                      </div>
+                    )}
+
+                    {e.slug === "documentacao" && (
+                      <div className="cartao-projeto-extra">
+                        {(papelada.get(p.id)?.falta.length ?? 0) > 0 && (
+                          <p className="cartao-projeto-falta">
+                            Falta:{" "}
+                            {papelada
+                              .get(p.id)!
+                              .falta.map((t) => ROTULO_DOCUMENTO[t] ?? t)
+                              .join(", ")}
+                          </p>
+                        )}
+                        {podeDocs && (
+                          <a className="botao botao-cartao" href={`/documentos/${p.id}`}>
+                            <FolderOpen size={14} aria-hidden /> Abrir documentos
                           </a>
-                        ) : gestao ? (
-                          <a className="botao botao-cartao" href={`/os/nova?projeto=${p.id}&tipo=vistoria`}>
-                            <ClipboardCheck size={14} aria-hidden /> Criar OS de vistoria
+                        )}
+                        {gestao && empresaDados && (
+                          <PedirDadosDoCliente
+                            cliente={p.cliente}
+                            empresa={empresaDados.nome}
+                            classe="botao botao-whatsapp botao-cartao"
+                          />
+                        )}
+                      </div>
+                    )}
+
+                    {e.slug === "projeto" &&
+                      (() => {
+                        const t = tecnicosDosProjetos.get(p.id);
+                        if (!t) return <p className="cartao-projeto-falta">Sem vistoria pelo app.</p>;
+                        const falta = faltaParaOProjeto(t.dados);
+                        return (
+                          <div className="cartao-projeto-extra">
+                            <a
+                              className={`pilula ${falta.length ? "sev-atencao" : "sev-info"}`}
+                              href={`/projeto/${p.id}`}
+                              title={falta.length ? `Falta na vistoria: ${falta.join(", ")}` : "A vistoria trouxe tudo o que o projeto elétrico precisa"}
+                            >
+                              {falta.length ? `Vistoria: faltam ${falta.length} dados` : "Vistoria completa"}
+                            </a>
+                            {falta.length > 0 && <p className="cartao-projeto-falta">Falta: {falta.join(", ")}</p>}
+                          </div>
+                        );
+                      })()}
+
+                    {e.slug === "contrato" && gestao && empresaDados && (
+                      <div className="cartao-projeto-extra">
+                        <AcoesDoContrato
+                          projetoId={p.id}
+                          entrada={entradaDe(p.cliente, p, empresaDados, null)}
+                          equipamentos={sugestaoDeEquipamentos(p, catalogo)}
+                          contrato={contratos.get(p.id) ?? null}
+                          representantes={representantes}
+                          whatsapp={numeroWhatsapp(p.cliente.telefone)}
+                          origemSite={origemSite}
+                          origem="esteira"
+                          ehAdm={usuario.papel === "adm"}
+                          chave={`c|${p.id}|${ok ?? ""}|${erro ?? ""}`}
+                        />
+                        {contratos.has(p.id) && podeDocs && (
+                          <a className="link-acao" href={`/documentos/${p.id}`}>
+                            <FolderOpen size={13} aria-hidden /> Subir a via assinada
                           </a>
-                        ) : null}
+                        )}
                       </div>
                     )}
 
@@ -349,11 +468,7 @@ export default async function Esteira({
                         </span>
                         {e.slug === "aprovacao_concessionaria" &&
                           liberaOsDeInstalacao(fase) &&
-                          (os ? (
-                            <a className="link-acao" href={`/os/${os.id}`}>
-                              {numeroOs(os.numero)} de instalação
-                            </a>
-                          ) : gestao ? (
+                          (os ? null : gestao ? (
                             <BotaoDialogo
                               key={`${p.id}|${ok ?? ""}|${erro ?? ""}`}
                               rotulo="Gerar OS de instalação"
@@ -388,6 +503,55 @@ export default async function Esteira({
                             </BotaoDialogo>
                           ) : null)}
                       </div>
+                    )}
+
+                    {(() => {
+                      /**
+                       * O tempo do contrato, numa linha de contexto com rótulo escrito
+                       * (e não só um número): "Assinado · 12 d" não se confunde com o
+                       * relógio do rodapé, que é o tempo na etapa. Na etapa do contrato
+                       * ainda sem assinatura, conta desde o envio ao cliente.
+                       */
+                      const assinou = p.contratoAssinadoEm;
+                      const enviado = e.slug === "contrato" && !assinou ? contratos.get(p.id)?.enviadoEm : null;
+                      const desde = assinou ?? enviado;
+                      if (!desde) return null;
+                      const dias = diasCorridos(desde);
+                      const rotulo = assinou ? "Assinado" : "Aguardando assinatura";
+                      const frase = fraseDoTempo(dias);
+                      return (
+                        <div
+                          className={`cartao-projeto-contrato${assinou ? "" : " espera"}`}
+                          title={`${assinou ? "Contrato assinado" : "Contrato enviado ao cliente"} em ${desde.toLocaleDateString("pt-BR")} (${frase})`}
+                        >
+                          <span className="cartao-projeto-contrato-rotulo">
+                            {assinou ? <FileCheck2 size={13} aria-hidden /> : <FileClock size={13} aria-hidden />}
+                            {rotulo}
+                          </span>
+                          <span className="cartao-projeto-contrato-dias">
+                            {rotuloDoTempo(dias)}
+                            <span className="sr-only"> ({frase})</span>
+                          </span>
+                        </div>
+                      );
+                    })()}
+
+                    {osCard && (
+                      <a
+                        className="cartao-projeto-os"
+                        href={`/os/${osCard.id}`}
+                        title={`Abrir a ${numeroOs(osCard.numero)}`}
+                      >
+                        <span className="cartao-projeto-os-nome">
+                          {numeroOs(osCard.numero)} · {TIPO_ROTULO[osCard.tipo] ?? osCard.tipo}
+                          {osCard.status === "agendada" && osCard.agendadaPara && (
+                            <small>{formatarRelogio(osCard.agendadaPara)}</small>
+                          )}
+                        </span>
+                        <span className={`pilula st-${osCard.status}`}>
+                          {STATUS_ROTULO[osCard.status] ?? osCard.status}
+                        </span>
+                      </a>
                     )}
 
                     <div className="cartao-projeto-rodape">

@@ -33,6 +33,14 @@ export const empresa = pgTable(
     id: uuid("id").primaryKey().defaultRandom(),
     nome: text("nome").notNull(),
     cnpj: varchar("cnpj", { length: 14 }),
+    /** Para o contrato: "BB soluções e tecnologia Ltda". O `nome` é o fantasia. */
+    razaoSocial: text("razao_social"),
+    /** Endereço da sede numa linha só, como sai no contrato e no rodapé dele. */
+    endereco: text("endereco"),
+    /** O e-mail que o contrato traz ("endereço eletrônico"). */
+    email: text("email"),
+    /** O logo, como data URL (PNG ou JPEG): cabeçalho e marca-d'água do contrato. */
+    logo: text("logo"),
     ativa: boolean("ativa").notNull().default(true),
     /**
      * SHA-256 do código que o desenvolvedor entrega à empresa.

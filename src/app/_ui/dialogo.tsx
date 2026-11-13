@@ -2,6 +2,7 @@
 
 import { X } from "lucide-react";
 import { useEffect, useState, type ReactNode } from "react";
+import { createPortal } from "react-dom";
 
 /**
  * A janelinha (diálogo) do sistema: um formulário por cima da tela, que fecha
@@ -10,6 +11,11 @@ import { useEffect, useState, type ReactNode } from "react";
  * O formulário dentro dela é do servidor e chega pronto como `children`.
  * Depois de enviar, a página volta com a mensagem; quem usa a janelinha troca
  * a `key` dela com a resposta, e ela nasce fechada.
+ *
+ * Ela é desenhada direto no `<body>` (portal), e não onde o botão está. Dentro
+ * de um cartão da esteira, a coluna rola e corta o que passa da borda: a
+ * janelinha aparecia espremida dentro do cartão. O clique dentro dela também
+ * não sobe para o quadro, senão começaria o "arrastar para o lado".
  */
 export function Dialogo({
   titulo,
@@ -30,8 +36,8 @@ export function Dialogo({
     return () => window.removeEventListener("keydown", aoTeclar);
   }, [fechar]);
 
-  return (
-    <div className="dialogo-fundo" onClick={fechar}>
+  return createPortal(
+    <div className="dialogo-fundo" onClick={fechar} onPointerDown={(e) => e.stopPropagation()}>
       <div className="dialogo dialogo-largo" role="dialog" aria-modal="true" aria-label={titulo} onClick={(e) => e.stopPropagation()}>
         <header className="dialogo-topo">
           {icone && (
@@ -49,7 +55,8 @@ export function Dialogo({
         </header>
         <div className="dialogo-corpo">{children}</div>
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }
 

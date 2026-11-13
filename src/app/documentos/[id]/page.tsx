@@ -7,6 +7,7 @@ import {
   FileWarning,
   FolderOpen,
   KanbanSquare,
+  Sparkles,
 } from "lucide-react";
 import Link from "next/link";
 import { notFound } from "next/navigation";
@@ -14,39 +15,16 @@ import { notFound } from "next/navigation";
 import { ehUuid } from "@/app-movel/http";
 import { exigirAcessoDocumentos } from "@/auth/permissao";
 import { db, schema } from "@/db";
-import { linkWhatsapp, mensagemDeCobranca } from "@/documentos/cobranca";
+import { linkWhatsapp, mensagemDeCobranca, numeroWhatsapp, tiposEntregues } from "@/documentos/cobranca";
 import { driveConfigurado } from "@/documentos/drive";
 import { filaDeCobranca } from "@/documentos/fila-cobranca";
+import { COBRAR_NO_CARTAO, ORIGEM_AUTOMATICA, ROTULO_DOCUMENTO } from "@/documentos/rotulos";
 
 import { Cabecalho, Caminho, Cartao, Vazio } from "../../_ui";
 import { BotaoCobrar } from "../cobranca/botao-cobrar";
 import { EnvioDocumento } from "./envio";
 
 export const dynamic = "force-dynamic";
-
-const ROTULO: Record<string, string> = {
-  art: "ART",
-  boleto_art: "Boleto da ART",
-  contrato: "Contrato",
-  memorial: "Memorial",
-  procuracao: "Procuração",
-  recibo: "Recibo",
-  documento_pessoal: "Documento do titular",
-  uc_geradora: "Conta de luz da geradora",
-  projeto_eletrico: "Projeto elétrico",
-  simulacao: "Simulação",
-  uc_beneficiaria: "UCs beneficiárias",
-  compensativo: "Compensativo",
-  nota_fiscal: "Nota fiscal",
-  ficha_cadastral: "Ficha cadastral",
-  datasheet: "Datasheet e Inmetro",
-  comprovante: "Comprovante",
-  declaracao: "Declaração",
-  orcamento: "Orçamento",
-  foto_padrao: "Foto do padrão",
-  protocolo: "Protocolo Energisa",
-  outro: "Outro",
-};
 
 const STATUS_ROTULO: Record<string, string> = {
   indefinido: "",
@@ -166,9 +144,16 @@ export default async function Dossie({
    * fosse calculado sobre o visível, o técnico veria o dossiê pedindo um
    * documento que já está lá.
    */
-  const presentes = new Set<string>(
-    naPasta.filter((d) => d.status !== "trabalho").map((d) => d.tipo),
+  const presentes = tiposEntregues(
+    naPasta,
+    new Set(todasExigencias.filter((e) => e.exigeAssinatura).map((e) => e.tipo)),
   );
+  // O protocolo é fato que o sistema já sabe (ver `DOCUMENTOS_DE_FATO`).
+  const naEnergisa = await db.query.energisaProjeto.findFirst({
+    where: and(eq(schema.energisaProjeto.empresaId, usuario.empresaId), eq(schema.energisaProjeto.projetoId, projeto.id)),
+    columns: { numero: true },
+  });
+  if (naEnergisa || projeto.protocoloConcessionaria) presentes.add("protocolo");
 
   /** O que aparece na tabela: só o que este papel pode abrir. */
   const visiveis = naPasta.filter((d) => acesso.pode(d.tipo));
@@ -188,9 +173,86 @@ export default async function Dossie({
 
   // O que falta e é do cliente mandar: vira o botão do WhatsApp no cabeçalho.
   const [cobranca] = await filaDeCobranca(usuario.empresaId, { pode: acesso.pode, projetoId: projeto.id });
-  const empresa = cobranca?.whatsapp
-    ? await db.query.empresa.findFirst({ where: eq(schema.empresa.id, usuario.empresaId), columns: { nome: true } })
-    : null;
+  const empresa = await db.query.empresa.findFirst({
+    where: eq(schema.empresa.id, usuario.empresaId),
+    columns: { nome: true },
+  });
+  const whatsCliente = numeroWhatsapp(projeto.cliente.telefone);
+  // Quais tipos já foram cobrados deste dossiê: a 2ª mensagem diz "passando para lembrar".
+  const cobrados = new Set(
+    (
+      await db
+        .select({ tipos: schema.cobrancaDocumento.tipos })
+        .from(schema.cobrancaDocumento)
+        .where(eq(schema.cobrancaDocumento.projetoId, projeto.id))
+    ).flatMap((c) => c.tipos),
+  );
+
+  /**
+   * Um cartão de documento que falta.
+   *
+   * - O que chega sozinho (foto do padrão, conta de luz, protocolo) diz de onde
+   *   vem, e o envio à mão fica dobrado, só para quando o automático falhar.
+   * - O que é do cliente mandar (documento, contrato, recibo) tem o botão de
+   *   cobrar no WhatsApp, com a mensagem pedindo só aquele documento.
+   */
+  const cartaoDoDocumento = (e: (typeof exigencias)[number], comEtapa: boolean) => {
+    const auto = ORIGEM_AUTOMATICA[e.tipo];
+    const cobrar = COBRAR_NO_CARTAO.has(e.tipo) && acesso.pode(e.tipo);
+    const envio = (
+      <EnvioDocumento projetoId={projeto.id} tipo={e.tipo} exigeAssinatura={e.exigeAssinatura} desabilitado={semDrive} />
+    );
+    return (
+      <div key={e.tipo} className="cartao cartao-documento">
+        <h3>
+          {ROTULO_DOCUMENTO[e.tipo] ?? e.tipo}
+          {comEtapa && <span className="fraco"> · {e.etapa.nome}</span>}
+        </h3>
+        <p className="fraco">{e.observacao}</p>
+        {auto && (
+          <p className="cartao-documento-auto">
+            <Sparkles size={13} aria-hidden /> {auto}
+          </p>
+        )}
+        {e.tipo === "contrato" && (
+          <p className="cartao-documento-auto">
+            <Sparkles size={13} aria-hidden /> O Selebi gera o contrato na etapa Contrato. Aqui entra a via assinada que o
+            cliente devolver — com ela, a esteira anda sozinha.
+          </p>
+        )}
+        {cobrar &&
+          (whatsCliente ? (
+            <BotaoCobrar
+              projetoId={projeto.id}
+              tipo={e.tipo}
+              rotulo={cobrados.has(e.tipo) ? "Lembrar no WhatsApp" : "Cobrar no WhatsApp"}
+              link={linkWhatsapp(
+                whatsCliente,
+                mensagemDeCobranca({
+                  cliente: projeto.cliente.nome,
+                  empresa: empresa?.nome ?? "nossa empresa",
+                  tipos: [e.tipo],
+                  jaCobrado: cobrados.has(e.tipo),
+                }),
+              )}
+            />
+          ) : (
+            <p className="nota">
+              Sem um telefone válido no cadastro do cliente.{" "}
+              <Link href={`/projeto/${projeto.id}`}>Corrigir no projeto</Link>
+            </p>
+          ))}
+        {auto ? (
+          <details className="dobra-limpa">
+            <summary>Enviar à mão</summary>
+            {envio}
+          </details>
+        ) : (
+          envio
+        )}
+      </div>
+    );
+  };
 
   // Quanto do que já devia existir está na pasta: a régua do dossiê.
   const devidos = ordenadas.filter((e) => e.obrigatorio && e.etapa.ordem <= atual);
@@ -282,18 +344,7 @@ export default async function Dossie({
             <Vazio icone={<CheckCircle2 size={20} />} titulo={`Nada falta para ${projeto.etapa.nome.toLowerCase()}`} />
           ) : (
             <div className="cartoes cartoes-no-cartao">
-              {pendentes.map((e) => (
-                <div key={e.tipo} className="cartao cartao-documento">
-                  <h3>{ROTULO[e.tipo] ?? e.tipo}</h3>
-                  <p className="fraco">{e.observacao}</p>
-                  <EnvioDocumento
-                    projetoId={projeto.id}
-                    tipo={e.tipo}
-                    exigeAssinatura={e.exigeAssinatura}
-                    desabilitado={semDrive}
-                  />
-                </div>
-              ))}
+              {pendentes.map((e) => cartaoDoDocumento(e, false))}
             </div>
           )}
         </Cartao>
@@ -324,7 +375,7 @@ export default async function Dossie({
                 <tbody>
                   {visiveis.map((d) => (
                     <tr key={d.id}>
-                      <td className="forte">{ROTULO[d.tipo] ?? d.tipo}</td>
+                      <td className="forte">{ROTULO_DOCUMENTO[d.tipo] ?? d.tipo}</td>
                       {/* `title` porque o nome é cortado: os do Drive passam de 80
                           caracteres e sem isto a informação some de vez. */}
                       <td className="fraco nome-arquivo" title={d.nomeArquivo}>
@@ -373,20 +424,7 @@ export default async function Dossie({
             ajuda="Estes documentos passam a ser cobrados mais adiante na esteira. Se já tiver em mãos, pode subir agora — não faz mal adiantar."
           >
             <div className="cartoes cartoes-no-cartao">
-              {futuras.map((e) => (
-                <div key={e.tipo} className="cartao cartao-documento">
-                  <h3>
-                    {ROTULO[e.tipo] ?? e.tipo} <span className="fraco">· {e.etapa.nome}</span>
-                  </h3>
-                  <p className="fraco">{e.observacao}</p>
-                  <EnvioDocumento
-                    projetoId={projeto.id}
-                    tipo={e.tipo}
-                    exigeAssinatura={e.exigeAssinatura}
-                    desabilitado={semDrive}
-                  />
-                </div>
-              ))}
+              {futuras.map((e) => cartaoDoDocumento(e, true))}
             </div>
           </Cartao>
         )}

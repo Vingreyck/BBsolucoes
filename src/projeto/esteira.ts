@@ -11,6 +11,16 @@ type Transacao = Parameters<Parameters<typeof db.transaction>[0]>[0];
 export const ETAPA_ESPERA_VISTORIA = "aguardando_vistoria";
 
 /**
+ * A etapa que cada tipo de OS cumpre, quando o modelo da OS não diz
+ * (`modelo_os.etapa_slug` vazio, apagado sem querer na tela de modelos).
+ * Concluir a OS com o projeto parado nessa etapa anda a esteira.
+ */
+export const ETAPA_DA_OS: Record<string, string> = {
+  vistoria: "vistoria_tecnica",
+  instalacao: "execucao",
+};
+
+/**
  * Move um projeto para a etapa vizinha na esteira.
  *
  * Move por vizinhança de `ordem`, não por posição numa lista fixa: a esteira é

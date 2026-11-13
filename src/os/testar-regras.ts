@@ -22,6 +22,7 @@ import { verificarAnexosPendentes } from "../sistema/saude";
 import {
   diasEntre,
   faltaNoDossie,
+  tiposEntregues,
   linkWhatsapp,
   mensagemDeCobranca,
   numeroWhatsapp,
@@ -73,6 +74,29 @@ import {
   verificarCodigo,
 } from "../auth/totp";
 import { mascarar } from "../sistema/seguranca";
+import {
+  dadosDoClienteQueFaltam,
+  faltaDaEmpresa,
+  faltaParaContrato,
+  fraseDoPagamento,
+  inteiroPorExtenso,
+  mensagemDeDadosDoCliente,
+  mensagemDoContrato,
+  montarContrato,
+  reaisPorExtenso,
+  rotuloDoPedidoDeDados,
+  type EntradaContrato,
+} from "../projeto/contrato";
+import { gerarContratoPdf, nomeDoContrato } from "../projeto/contrato-pdf";
+import { potenciaLegivel, rotuloDoModelo, sugestaoDeEquipamentos, textoDoKit } from "../projeto/kit";
+import { diasCorridos, fraseDoTempo, rotuloDoTempo } from "../projeto/tempo";
+import {
+  estruturaDoTelhado,
+  faltaParaOProjeto,
+  lerDadosTecnicos,
+  lerVistoria,
+  OPCOES_DE_TELHADO,
+} from "../projeto/da-vistoria";
 import { readFileSync } from "node:fs";
 
 let falhas = 0;
@@ -670,8 +694,269 @@ async function testarSenha(): Promise<void> {
   confere(!(await conferirSenha("a".repeat(5000), hash)), "senha de 5.000 caracteres é recusada");
 }
 
+
+// --- Contrato gerado pelo Selebi --------------------------------------------------
+igual(inteiroPorExtenso(1), "um", "1 por extenso");
+igual(inteiroPorExtenso(100), "cem", "100 é cem");
+igual(inteiroPorExtenso(101), "cento e um", "101 é cento e um");
+igual(inteiroPorExtenso(1000), "mil", "1000 é mil, sem 'um'");
+igual(inteiroPorExtenso(1500), "mil e quinhentos", "mil e quinhentos");
+igual(inteiroPorExtenso(1230), "mil duzentos e trinta", "mil duzentos e trinta (sem 'e' depois do mil)");
+igual(inteiroPorExtenso(2030), "dois mil e trinta", "dois mil e trinta");
+igual(inteiroPorExtenso(1_000_000), "um milhão", "um milhão");
+igual(inteiroPorExtenso(2_500_000), "dois milhões e quinhentos mil", "dois milhões e quinhentos mil");
+igual(reaisPorExtenso(50000), "cinquenta mil reais", "R$ 50.000,00 por extenso (o do modelo)");
+igual(reaisPorExtenso(18500.5), "dezoito mil e quinhentos reais e cinquenta centavos", "reais e centavos");
+igual(reaisPorExtenso(1), "um real", "um real, no singular");
+igual(reaisPorExtenso(1_000_000), "um milhão de reais", "milhão redondo leva 'de reais'");
+igual(reaisPorExtenso(0.01), "um centavo", "só centavos");
+
+const entradaOk: EntradaContrato = {
+  cliente: {
+    nome: "Ana Maria Lima",
+    tipo: "pf",
+    cpfCnpj: "52998224725",
+    logradouro: "Rua das Flores",
+    numero: "62",
+    complemento: "Apto 802",
+    bairro: "Centro",
+    cidade: "Itabaiana",
+    uf: "SE",
+    cep: "49500000",
+  },
+  projeto: {
+    equipamentos: "2 inversores Growatt 10K, 40 módulos 625W / estrutura fibrocimento.",
+    valor: "50000.00",
+    formaPagamento: "cartao",
+    pagamentoCondicoes: "6x (seis vezes) sem juros",
+  },
+  empresa: {
+    nome: "Empresa Exemplo",
+    razaoSocial: "Empresa Exemplo Ltda",
+    cnpj: "11222333000181",
+    endereco: "Av. Principal, 100, Centro, Itabaiana - SE, CEP 49500-000",
+    email: "contato@exemplo.com.br",
+  },
+  representante: { nome: "Fulano de Tal", cpf: null },
+};
+igual(faltaParaContrato(entradaOk).length, 0, "contrato completo: nada falta");
+const semDados = faltaParaContrato({
+  ...entradaOk,
+  cliente: { ...entradaOk.cliente, cpfCnpj: null, cep: "4950", numero: "" },
+  projeto: { ...entradaOk.projeto, valor: null, formaPagamento: null },
+  empresa: { ...entradaOk.empresa, razaoSocial: null },
+  representante: null,
+});
+confere(semDados.includes("CPF do cliente"), "sem CPF: avisa o CPF");
+confere(semDados.includes("CEP") && semDados.includes("número da casa"), "CEP pela metade e número vazio: avisa os dois");
+confere(semDados.includes("valor total") && semDados.includes("forma de pagamento"), "sem valor e sem forma: avisa os dois");
+confere(semDados.includes("quem assina pela empresa"), "sem representante: avisa");
+igual(JSON.stringify(faltaDaEmpresa(semDados)), JSON.stringify(["razão social da empresa"]), "separa o que é da empresa");
+confere(
+  faltaParaContrato({ ...entradaOk, cliente: { ...entradaOk.cliente, tipo: "pj", cpfCnpj: "52998224725" } }).includes("CNPJ do cliente"),
+  "cliente PJ com CPF no lugar do CNPJ: avisa o CNPJ",
+);
+
+const montado = montarContrato(entradaOk, new Date("2026-11-13T12:00:00Z"));
+igual(
+  montado.contratante.qualificacao,
+  "brasileiro(a), inscrito(a) no CPF sob o nº 529.982.247-25",
+  "qualificação do contratante como no modelo",
+);
+igual(
+  montado.contratante.endereco,
+  "Rua das Flores nº 62, Apto 802 - Centro, Itabaiana/SE, CEP 49500-000",
+  "endereço do contratante como no modelo",
+);
+igual(montado.contratado.cnpj, "11.222.333/0001-81", "CNPJ da empresa formatado");
+igual(montado.equipamentos, "2 inversores Growatt 10K, 40 módulos 625W / estrutura fibrocimento", "ponto final do kit sai (o PDF põe o dele)");
+igual(
+  montado.pagamento,
+  "O(a) CONTRATANTE efetuará o pagamento de R$ 50.000,00 (cinquenta mil reais), cartão de crédito: 6x (seis vezes) sem juros.",
+  "cláusula do pagamento com valor, extenso, forma e condições",
+);
+igual(
+  fraseDoPagamento(18500.5, "a_vista", null),
+  "O(a) CONTRATANTE efetuará o pagamento de R$ 18.500,50 (dezoito mil e quinhentos reais e cinquenta centavos), à vista (PIX ou transferência).",
+  "pagamento sem condições",
+);
+const msgContrato = mensagemDoContrato({ cliente: "ANA MARIA LIMA", empresa: "Empresa Exemplo", link: "https://x/r/c/abc" });
+confere(msgContrato.startsWith("Olá, Ana!") && msgContrato.includes("https://x/r/c/abc"), "mensagem do contrato com o primeiro nome e o link");
+igual(nomeDoContrato(montado), "Contrato - Ana Maria Lima.pdf", "nome do arquivo do contrato");
+
+// Documento entregue: "falta assinar" não conta para quem exige assinatura.
+const entreguesTeste = tiposEntregues(
+  [
+    { tipo: "contrato", status: "aguardando_assinatura" },
+    { tipo: "memorial", status: "trabalho" },
+    { tipo: "documento_pessoal", status: "indefinido" },
+    { tipo: "orcamento", status: "aguardando_assinatura" },
+  ],
+  new Set(["contrato", "memorial"]),
+);
+confere(!entreguesTeste.has("contrato"), "contrato ainda por assinar não conta como entregue");
+confere(!entreguesTeste.has("memorial"), "arquivo de trabalho não conta");
+confere(entreguesTeste.has("documento_pessoal"), "documento indefinido conta");
+confere(entreguesTeste.has("orcamento"), "'falta assinar' em tipo que não exige assinatura conta");
+
+
+// --- Catálogo de equipamentos: o kit em palavras -----------------------------------
+const inversorTeste = { tipo: "inversor", fabricante: "Growatt", modelo: "MIN 10000TL-X", potenciaW: "10000.00" };
+const moduloTeste = { tipo: "modulo", fabricante: "Jinko", modelo: "Tiger Neo", potenciaW: "625.00" };
+igual(potenciaLegivel("10000.00", "inversor"), "10 kW", "inversor em kW");
+igual(potenciaLegivel("625.00", "modulo"), "625 W", "módulo em W");
+igual(potenciaLegivel(null, "modulo"), null, "sem potência, nada");
+igual(rotuloDoModelo(inversorTeste), "Growatt MIN 10000TL-X (10 kW)", "rótulo do inversor na lista");
+igual(
+  textoDoKit({ inversor: inversorTeste, inversorQtd: 2, modulo: moduloTeste, moduloQtd: 40 }),
+  "2 inversores Growatt MIN 10000TL-X, 40 módulos fotovoltaicos Jinko Tiger Neo 625W",
+  "kit completo vira o texto do contrato",
+);
+igual(
+  textoDoKit({ inversor: { ...inversorTeste, tipo: "microinversor" }, inversorQtd: 1, modulo: null, moduloQtd: null }),
+  "1 microinversor Growatt MIN 10000TL-X",
+  "um microinversor, no singular",
+);
+igual(textoDoKit({ inversor: null, inversorQtd: null, modulo: null, moduloQtd: null }), null, "sem kit, sem texto");
+
+
+// --- Vistoria: o que o sistema aproveita das respostas ----------------------------
+const respostasVistoria = [
+  { chave: "uc_numero", valor: "  3004 5678  " },
+  { chave: "titular_nome", valor: "Maria  das Dores Souza" },
+  { chave: "telhado_tipo", valor: "Fibrocimento" },
+  { chave: "disjuntor_amperagem", valor: 50 },
+  { chave: null, valor: "item sem chave" },
+];
+const lida = lerVistoria(respostasVistoria);
+igual(lida.ucNumero, "3004 5678", "UC: espaços sobrando saem");
+igual(lida.titular, "Maria das Dores Souza", "titular: espaço duplo vira um");
+igual(lida.telhado, "Fibrocimento", "telhado reconhecido");
+const vazia = lerVistoria([
+  { chave: "uc_numero", valor: "-" },
+  { chave: "titular_nome", valor: "   " },
+  { chave: "telhado_tipo", valor: "Sapê" },
+]);
+igual(vazia.ucNumero, null, "UC de 1 caractere não conta");
+igual(vazia.titular, null, "titular em branco não conta");
+igual(vazia.telhado, null, "telhado que não é opção não conta");
+igual(lerVistoria([{ chave: "uc_numero", valor: 123456 }]).ucNumero, "123456", "UC que o banco devolve como número vale como texto");
+igual(lerVistoria([{ chave: "uc_numero", valor: 1.5 }]).ucNumero, null, "número quebrado não é UC");
+igual(lerVistoria([{ chave: "uc_numero", valor: true }]).ucNumero, null, "resposta de tipo inesperado não preenche");
+igual(lerVistoria([]).telhado, null, "vistoria sem resposta nenhuma");
+igual(estruturaDoTelhado("Fibrocimento"), "estrutura fibrocimento", "fibrocimento como no contrato do modelo");
+igual(estruturaDoTelhado("Laje"), "estrutura para laje", "laje");
+igual(estruturaDoTelhado("Outro"), null, "'Outro' não diz nada");
+igual(estruturaDoTelhado(null), null, "sem telhado, sem estrutura");
+confere(OPCOES_DE_TELHADO.length === 6, "as seis opções do item de telhado da vistoria");
+igual(
+  textoDoKit({ inversor: inversorTeste, inversorQtd: 2, modulo: moduloTeste, moduloQtd: 40, estrutura: "estrutura fibrocimento" }),
+  "2 inversores Growatt MIN 10000TL-X, 40 módulos fotovoltaicos Jinko Tiger Neo 625W / estrutura fibrocimento",
+  "kit + telhado: o objeto do contrato completo, como no modelo",
+);
+const projetoTeste = { equipamentos: null, inversorModeloId: "i1", inversorQtd: 2, moduloModeloId: "m1", moduloQtd: 40, telhadoTipo: "Fibrocimento" };
+const catalogoTeste = [{ ...inversorTeste, id: "i1" }, { ...moduloTeste, id: "m1" }];
+igual(
+  sugestaoDeEquipamentos(projetoTeste, catalogoTeste),
+  "2 inversores Growatt MIN 10000TL-X, 40 módulos fotovoltaicos Jinko Tiger Neo 625W / estrutura fibrocimento",
+  "sugestão do contrato sem texto digitado",
+);
+igual(
+  sugestaoDeEquipamentos({ ...projetoTeste, equipamentos: "o que o comercial digitou" }, catalogoTeste),
+  "o que o comercial digitou",
+  "texto digitado vale mais que a sugestão",
+);
+igual(sugestaoDeEquipamentos({ ...projetoTeste, inversorModeloId: null, moduloModeloId: null }, catalogoTeste), null, "sem kit, sem sugestão");
+
+
+// --- Pedir os dados do cliente pelo WhatsApp ---------------------------------------
+const clienteCompleto = { tipo: "pf" as const, cpfCnpj: "52998224725", logradouro: "Rua A", numero: "10", bairro: "Centro", cep: "49500000" };
+igual(dadosDoClienteQueFaltam(clienteCompleto).length, 0, "cliente completo: nada a pedir");
+igual(
+  JSON.stringify(dadosDoClienteQueFaltam({ ...clienteCompleto, cpfCnpj: null })),
+  JSON.stringify(["cpf"]),
+  "sem CPF: pede só o CPF",
+);
+igual(
+  JSON.stringify(dadosDoClienteQueFaltam({ ...clienteCompleto, cpfCnpj: "123", cep: "4950", numero: " " })),
+  JSON.stringify(["cpf", "cep", "endereco"]),
+  "CPF curto, CEP pela metade e número vazio: pede os três",
+);
+confere(dadosDoClienteQueFaltam({ ...clienteCompleto, tipo: "pj" }).includes("cpf"), "empresa com 11 dígitos no lugar do CNPJ: pede o CNPJ");
+igual(rotuloDoPedidoDeDados(["cpf"]), "Cobrar CPF no WhatsApp", "botão quando só o CPF falta");
+igual(rotuloDoPedidoDeDados(["cpf"], true), "Cobrar CNPJ no WhatsApp", "botão para empresa");
+igual(rotuloDoPedidoDeDados(["cpf", "cep"]), "Pedir dados no WhatsApp", "botão quando falta mais de um");
+const pedido = mensagemDeDadosDoCliente({ cliente: "ANA MARIA LIMA", empresa: "Empresa Exemplo", faltam: ["cpf", "endereco"] });
+confere(pedido.startsWith("Olá, Ana!") && pedido.includes("• o seu CPF") && pedido.includes("rua, número e bairro"), "mensagem pede só o que falta");
+confere(!pedido.includes("CEP"), "mensagem não pede o que já tem");
+
+// --- Dados técnicos da vistoria ------------------------------------------------------
+const respostasTecnicas = [
+  { chave: "disjuntor_amperagem", valor: 50 },
+  { chave: "disjuntor_polos", valor: "Bipolar" },
+  { chave: "cabo_bitola", valor: "10 mm²" },
+  { chave: "aterramento", valor: "Existe e está bom" },
+  { chave: "qdg_vagas", valor: 4 },
+  { chave: "rasgar_parede", valor: false },
+  { chave: "telhado_tipo", valor: "Cerâmica" },
+  { chave: "telhado_estado", valor: ["Bom", "Telhas quebradas"] },
+  { chave: "area_util", valor: 42.5 },
+  { chave: "inversor_local", valor: 12 },
+  { chave: "ampliacao", valor: true },
+];
+const tecnicos = lerDadosTecnicos(respostasTecnicas);
+igual(tecnicos.disjuntorA, 50, "disjuntor em ampères");
+igual(tecnicos.polos, "Bipolar", "polos");
+igual(tecnicos.areaUtilM2, 42.5, "área útil com casa decimal");
+igual(tecnicos.rasgarParede, false, "'Não' é resposta, e não falta de resposta");
+igual(JSON.stringify(tecnicos.telhadoEstado), JSON.stringify(["Bom", "Telhas quebradas"]), "estado do telhado em lista");
+igual(tecnicos.inversorLocal, "12", "local do inversor que o banco devolveu como número volta como texto");
+igual(faltaParaOProjeto(tecnicos).length, 0, "vistoria completa: o engenheiro pode começar");
+const incompletos = faltaParaOProjeto(
+  lerDadosTecnicos([
+    { chave: "disjuntor_amperagem", valor: 50 },
+    { chave: "cabo_bitola", valor: "Não deu para ver" },
+    { chave: "area_util", valor: null },
+  ]),
+);
+confere(incompletos.includes("bitola do cabo de entrada"), "bitola 'Não deu para ver' conta como falta");
+confere(incompletos.includes("área útil do telhado") && incompletos.includes("polos do disjuntor"), "o que ficou em branco conta como falta");
+confere(!incompletos.includes("amperagem do disjuntor"), "o que veio não conta como falta");
+igual(faltaParaOProjeto(lerDadosTecnicos([])).length, 8, "sem nenhuma resposta, faltam os 8 essenciais");
+
+
+// --- Tempo desde a assinatura do contrato ---------------------------------------------
+const agoraTeste = new Date("2026-11-13T15:00:00Z");
+igual(diasCorridos(new Date("2026-11-13T09:00:00Z"), agoraTeste), 0, "assinou hoje: 0 dias");
+igual(diasCorridos(new Date("2026-11-12T16:00:00Z"), agoraTeste), 0, "menos de 24 h ainda é hoje");
+igual(diasCorridos(new Date("2026-11-12T15:00:00Z"), agoraTeste), 1, "24 h exatas: 1 dia");
+igual(diasCorridos(new Date("2026-11-01T15:00:00Z"), agoraTeste), 12, "12 dias");
+igual(diasCorridos(new Date("2026-11-20T15:00:00Z"), agoraTeste), 0, "data no futuro não dá dia negativo");
+igual(rotuloDoTempo(0), "hoje", "rótulo de hoje");
+igual(rotuloDoTempo(12), "12 d", "rótulo curto do cartão");
+igual(fraseDoTempo(1), "há 1 dia", "frase no singular");
+igual(fraseDoTempo(12), "há 12 dias", "frase no plural");
+
+/** O PDF do contrato sai de verdade, com e sem logo. */
+async function testarContratoPdf(): Promise<void> {
+  const logo =
+    "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==";
+  for (const comLogo of [null, logo]) {
+    const pdf = await gerarContratoPdf(montado, comLogo);
+    const texto = pdf.subarray(0, 8).toString("latin1");
+    confere(texto.startsWith("%PDF-"), `contrato em PDF ${comLogo ? "com" : "sem"} logo`);
+    const paginas = (pdf.toString("latin1").match(/\/Type\s*\/Page[^s]/g) ?? []).length;
+    confere(paginas >= 2 && paginas <= 4, `contrato ${comLogo ? "com" : "sem"} logo tem de 2 a 4 páginas (${paginas})`);
+    if (process.env.CONTRATO_AMOSTRA && comLogo === null) {
+      const { writeFileSync } = await import("node:fs");
+      writeFileSync(process.env.CONTRATO_AMOSTRA, pdf);
+    }
+  }
+}
+
 testarRetrace()
   .then(testarSenha)
+  .then(testarContratoPdf)
   .then(() => {
     console.log(falhas === 0 ? `✓ ${total} conferências, nenhuma falha.` : `✗ ${falhas} de ${total} falharam.`);
     process.exit(falhas === 0 ? 0 : 1);

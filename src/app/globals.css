@@ -8074,6 +8074,108 @@ a.funil-rotulo:hover {
   border-color: var(--crit);
 }
 
+/* O tempo do contrato no cartão: rótulo à esquerda, dias à direita. Os números
+   ficam alinhados de um cartão para o outro, e dá para comparar quem assinou há
+   mais tempo só descendo o olho pela coluna. Neutro de propósito: ainda não há
+   regra de quantos dias é "atrasado". */
+.cartao-projeto-contrato {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.4rem;
+  margin-top: 0.3rem;
+  padding: 0.22rem 0.5rem;
+  border-radius: 8px;
+  background: var(--surface-2);
+  color: var(--ink-2);
+  font-size: 0.74rem;
+}
+.cartao-projeto-contrato-rotulo {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.cartao-projeto-contrato-rotulo svg {
+  flex-shrink: 0;
+  color: var(--accent);
+}
+.cartao-projeto-contrato-dias {
+  flex-shrink: 0;
+  color: var(--ink);
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+.cartao-projeto-contrato.espera .cartao-projeto-contrato-rotulo svg {
+  color: var(--ink-3);
+}
+
+/* A OS do projeto e o estado dela, no pé do cartão da esteira */
+.cartao-projeto-os {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.4rem;
+  margin-top: 0.35rem;
+  padding-top: 0.35rem;
+  border-top: 1px dashed var(--line);
+  color: var(--ink-2);
+  font-size: 0.74rem;
+  text-decoration: none;
+}
+.cartao-projeto-os:hover .cartao-projeto-os-nome {
+  color: var(--accent);
+}
+.cartao-projeto-os-nome {
+  display: grid;
+  min-width: 0;
+}
+.cartao-projeto-os-nome small {
+  color: var(--ink-3);
+  font-size: 0.7rem;
+}
+.cartao-projeto-os .pilula {
+  flex-shrink: 0;
+}
+
+/* Dossiê: documento que chega sozinho, com a origem dele */
+.cartao-documento-auto {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.35rem;
+  margin: 0;
+  color: var(--accent);
+  font-size: 0.8rem;
+  line-height: 1.4;
+}
+.cartao-documento-auto svg {
+  flex-shrink: 0;
+  margin-top: 0.15rem;
+}
+
+/* Contrato: a lista do que falta, dentro da janelinha */
+.contrato-falta {
+  display: grid;
+  gap: 0.6rem;
+}
+.contrato-falta ul {
+  margin: 0;
+  padding-left: 1.1rem;
+  color: var(--ink-2);
+  line-height: 1.6;
+}
+
+/* Etapa de documentos: o que ainda falta, no cartão */
+.cartao-projeto-falta {
+  margin: 0;
+  color: var(--ink-3);
+  font-size: 0.72rem;
+  line-height: 1.35;
+}
+
 .cartao-projeto-rodape {
   display: flex;
   align-items: center;
@@ -9820,4 +9922,41 @@ html.trocando-tema *:not(.tema-botao, .tema-botao *)::after {
   html[data-menu="recolhido"] .tema-bolinha {
     transform: none;
   }
+}
+
+/* Guia da tela do projeto, etapa Contrato: situação, WhatsApp, PDF e gerar */
+.guia-contrato {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+}
+.guia-contrato .cartao-projeto-falta {
+  flex-basis: 100%;
+}
+
+/* Administração → Equipamentos: modelo fora da lista e botão com cara de link */
+.linha-apagada td {
+  opacity: 0.55;
+}
+button.link-acao {
+  padding: 0;
+  background: none;
+  border: 0;
+  cursor: pointer;
+  font: inherit;
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: var(--accent);
+}
+
+/* Administração → Dados da empresa: a prévia do logo */
+.logo-empresa {
+  max-width: 220px;
+  max-height: 100px;
+  object-fit: contain;
+  padding: 0.5rem;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #fff;
 }
