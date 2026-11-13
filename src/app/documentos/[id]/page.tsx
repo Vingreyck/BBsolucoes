@@ -7,6 +7,7 @@ import {
   FileWarning,
   FolderOpen,
   KanbanSquare,
+  Send,
   Sparkles,
 } from "lucide-react";
 import Link from "next/link";
@@ -19,10 +20,12 @@ import { linkWhatsapp, mensagemDeCobranca, numeroWhatsapp, tiposEntregues } from
 import { driveConfigurado } from "@/documentos/drive";
 import { filaDeCobranca } from "@/documentos/fila-cobranca";
 import { COBRAR_NO_CARTAO, ORIGEM_AUTOMATICA, ROTULO_DOCUMENTO } from "@/documentos/rotulos";
+import { pacoteDeEnvio } from "@/energisa/envio-pacote";
 
 import { Cabecalho, Caminho, Cartao, Vazio } from "../../_ui";
 import { BotaoCobrar } from "../cobranca/botao-cobrar";
 import { EnvioDocumento } from "./envio";
+import { AbrirNoPortal, CopiarValor, JaEnviei } from "./envio-energisa";
 
 export const dynamic = "force-dynamic";
 
@@ -170,6 +173,12 @@ export default async function Dossie({
   );
 
   const semDrive = !driveConfigurado();
+
+  // Na etapa Projeto, o engenheiro junta o pedido de acesso e manda pelo portal.
+  const envio =
+    projeto.etapa.slug === "projeto" && projeto.situacao === "em_andamento" && acesso.pode("protocolo")
+      ? await pacoteDeEnvio(usuario.empresaId, projeto.id)
+      : null;
 
   // O que falta e é do cliente mandar: vira o botão do WhatsApp no cabeçalho.
   const [cobranca] = await filaDeCobranca(usuario.empresaId, { pode: acesso.pode, projetoId: projeto.id });
@@ -332,6 +341,77 @@ export default async function Dossie({
               <span style={{ width: `${Math.round((entregues / devidos.length) * 100)}%` }} />
             </span>
           </div>
+        )}
+
+        {envio && (
+          <Cartao
+            id="energisa"
+            titulo="Enviar à Energisa"
+            icone={<Send size={16} />}
+            destaque
+            ajuda="O pedido de acesso é feito pelo engenheiro, no portal da Energisa, logado com o CPF dele. O Selebi junta os documentos e os dados; a extensão mostra tudo ao lado do formulário; o clique de enviar é no portal."
+          >
+            <ol className="envio-energisa-passos">
+              <li>Confira se os documentos do pedido estão na pasta. O que faltar, suba em “Falta nesta etapa”, logo abaixo.</li>
+              <li>Entre no portal da Energisa (CPF e código do SMS) e clique em <strong>Abrir o painel no portal</strong>: os dados e os documentos aparecem ao lado do formulário.</li>
+              <li>Confira e envie pelo portal. Depois, volte aqui e digite o número que o portal deu.</li>
+            </ol>
+            <div className="envio-energisa">
+              <div>
+                <h3 className="envio-energisa-titulo">Documentos do pedido</h3>
+                <ul className="lista-limpa envio-energisa-docs">
+                  {envio.itens.map((i) => (
+                    <li key={i.tipo} className={i.tem ? "tem" : i.quando ? "talvez" : "falta"}>
+                      <span className="envio-energisa-marca" aria-hidden>
+                        {i.tem ? <CheckCircle2 size={15} /> : <FileWarning size={15} />}
+                      </span>
+                      <span className="envio-energisa-nome">
+                        {i.rotulo}
+                        {i.quando && <small>só {i.quando}</small>}
+                      </span>
+                      {i.documentoId ? (
+                        <a href={`/documentos/arquivo/${i.documentoId}`} className="link-acao" title={i.nomeArquivo ?? undefined}>
+                          <Download size={13} aria-hidden /> baixar
+                        </a>
+                      ) : i.quando ? (
+                        <span className="fraco">—</span>
+                      ) : (
+                        <span className="pilula sev-atencao">falta</span>
+                      )}
+                    </li>
+                  ))}
+                </ul>
+                {envio.faltam.length > 0 && (
+                  <p className="nota">
+                    Falta{envio.faltam.length > 1 ? "m" : ""} {envio.faltam.join(", ")}. Dá para enviar sem, se o
+                    documento estiver com você, mas o Selebi não terá a cópia.
+                  </p>
+                )}
+              </div>
+              <div>
+                <h3 className="envio-energisa-titulo">Dados do formulário</h3>
+                {envio.campos.length ? (
+                  <dl className="dados envio-energisa-dados">
+                    {envio.campos.map((c) => (
+                      <div key={c.chave}>
+                        <dt>{c.rotulo}</dt>
+                        <dd>
+                          <span>{c.valor}</span>
+                          <CopiarValor valor={c.valor} rotulo={c.rotulo} />
+                        </dd>
+                      </div>
+                    ))}
+                  </dl>
+                ) : (
+                  <p className="nota">O cadastro do cliente e o kit ainda estão em branco.</p>
+                )}
+              </div>
+            </div>
+            <div className="envio-energisa-acoes">
+              <AbrirNoPortal projetoId={projeto.id} />
+              <JaEnviei projetoId={projeto.id} numero={envio.protocolo} />
+            </div>
+          </Cartao>
         )}
 
         <Cartao

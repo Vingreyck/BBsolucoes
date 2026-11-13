@@ -2,6 +2,7 @@ import { and, eq } from "drizzle-orm";
 import { redirect } from "next/navigation";
 
 import { db, schema } from "@/db";
+import { DOCUMENTOS_DO_ENVIO } from "@/energisa/envio";
 
 import { exigirUsuario, type UsuarioSessao } from "./sessao";
 
@@ -21,7 +22,7 @@ import { exigirUsuario, type UsuarioSessao } from "./sessao";
  * | --- | --- |
  * | técnico | foto do padrão, comprovante, nota fiscal |
  * | vendedor | conta de luz, orçamento, simulação, documento do titular, ficha, UCs |
- * | engenheiro | projeto, memorial, ART, boleto, datasheet, declaração, protocolo, compensativo |
+ * | engenheiro | projeto, memorial, ART, boleto, datasheet, declaração, protocolo, compensativo; e, por protocolar na Energisa, documento do titular, conta de luz, procuração e UCs |
  * | adm | tudo |
  * | estoque | nenhum — não entra na tela |
  *
@@ -76,7 +77,11 @@ export async function tiposDoPapel(
       ),
     );
 
-  return new Set(linhas.map((l) => l.tipo));
+  const tipos = new Set<string>(linhas.map((l) => l.tipo));
+  // Quem protocola na Energisa anexa no pedido o documento do titular e a conta
+  // de luz: precisa deles para trabalhar, mesmo nascendo em etapa de outro papel.
+  if (tipos.has("protocolo")) for (const d of DOCUMENTOS_DO_ENVIO) tipos.add(d.tipo);
+  return tipos;
 }
 
 /** Para o menu: vale a pena mostrar o link de Documentos para este usuário? */

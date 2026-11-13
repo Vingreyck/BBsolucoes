@@ -4,6 +4,11 @@
 // pede a mesma lista "Meus projetos" que a página mostra e entrega ao Selebi.
 // Não entra no portal, não digita nada, não abre o portal sozinha: quando ele
 // sai da conta, avisa a pessoa e espera ela entrar de novo.
+//
+// Envio de projeto (2.2): quando o engenheiro clica "Abrir o painel no portal"
+// no dossiê, mostra na aba do portal um painel com os dados e os documentos do
+// projeto, para ele copiar no formulário. Quem envia é ele, pelo botão do
+// portal; a extensão não clica em nada lá.
 
 const SELEBI = "https://app.selebi.com.br";
 const PORTAL = "https://servicos.energisa.com.br";
@@ -64,6 +69,23 @@ chrome.tabs.onUpdated.addListener((_id, mudou, aba) => {
   ultimo().then((u) => {
     if (u.estado !== "ok" || Date.now() - (u.quando ?? 0) > 10 * 60_000) atualizar("portal-aberto");
   });
+});
+chrome.tabs.onUpdated.addListener((id, mudou, aba) => {
+  // A aba do portal recarregou ou a pessoa acabou de entrar: o painel do envio volta.
+  if (mudou.status !== "complete" || !aba.url?.startsWith(`${PORTAL}/AWGPE/`)) return;
+  envioPendente().then((p) => p && mostrarPainel(id, p.dados));
+});
+chrome.runtime.onMessage.addListener((msg, sender, responder) => {
+  if (sender.id !== chrome.runtime.id) return;
+  if (msg?.tipo === "fechar-painel" && sender.url?.startsWith(`${PORTAL}/`)) {
+    chrome.storage.session.remove("envio");
+    return;
+  }
+  if (msg?.tipo !== "preencher-energisa" || !sender.url?.startsWith(`${SELEBI}/`)) return;
+  prepararEnvio(String(msg.projetoId ?? "")).then(responder, (e) =>
+    responder({ estado: "erro", texto: `Falhou: ${e?.message ?? e}` }),
+  );
+  return true; // resposta assíncrona
 });
 chrome.notifications.onClicked.addListener(abrirPeloAviso);
 garantirAlarme();
@@ -255,6 +277,184 @@ async function abrirPeloAviso(id) {
   if (!aba) return chrome.tabs.create({ url: PAINEL, pinned: true });
   await chrome.tabs.update(aba.id, { active: true });
   await chrome.windows.update(aba.windowId, { focused: true });
+}
+
+// --- Envio de projeto: o painel ao lado do formulário do portal ---------------------
+
+const PAINEL_DURA = 3 * 60 * 60_000;
+
+async function prepararEnvio(projetoId) {
+  if (!/^[0-9a-f-]{36}$/i.test(projetoId)) return { estado: "erro", texto: "Projeto inválido." };
+  let r;
+  try {
+    r = await fetch(`${SELEBI}/api/energisa/envio/${projetoId}`, {
+      credentials: "include",
+      cache: "no-store",
+      headers: { "X-Selebi-Extensao": chrome.runtime.getManifest().version },
+      signal: AbortSignal.timeout(30_000),
+    });
+  } catch (e) {
+    return { estado: "erro", texto: `O Selebi não respondeu (${e?.message ?? e}).` };
+  }
+  const dados = await r.json().catch(() => null);
+  if (!r.ok || !dados?.ok) return { estado: "erro", texto: dados?.erro ?? `O Selebi respondeu ${r.status}.` };
+  await chrome.storage.session.set({ envio: { dados, ate: Date.now() + PAINEL_DURA } });
+
+  const aba = await abaDoPortal();
+  if (!aba) {
+    // Abre porque a pessoa clicou; entrar (CPF e SMS) continua sendo com ela.
+    await chrome.tabs.create({ url: PAINEL, active: true });
+    return {
+      estado: "aguardando",
+      texto: "Abri o portal da Energisa numa aba nova. Entre com o CPF e o código do SMS: o painel do Selebi aparece sozinho.",
+    };
+  }
+  await chrome.tabs.update(aba.id, { active: true });
+  await chrome.windows.update(aba.windowId, { focused: true });
+  if (!aba.url?.includes("/AWGPE/")) {
+    return {
+      estado: "aguardando",
+      texto: "O portal está aberto, mas fora da área de projetos ou fora da conta. Entre: o painel aparece sozinho.",
+    };
+  }
+  return (await mostrarPainel(aba.id, dados))
+    ? {
+        estado: "ok",
+        texto: `Painel de ${dados.cliente} aberto na aba do portal. Envie pelo portal e volte aqui com o número.`,
+      }
+    : { estado: "erro", texto: "Não consegui mostrar o painel no portal. Recarregue a aba do portal (F5) e tente de novo." };
+}
+
+async function envioPendente() {
+  const { envio } = await chrome.storage.session.get("envio");
+  return envio && envio.ate > Date.now() ? envio : null;
+}
+
+async function mostrarPainel(tabId, dados) {
+  try {
+    const [r] = await comPrazo(
+      chrome.scripting.executeScript({ target: { tabId }, func: painelNoPortal, args: [dados] }),
+      15_000,
+    );
+    return r?.result === true;
+  } catch {
+    return false;
+  }
+}
+
+// Roda dentro da aba do portal (mundo isolado). Só desenha um painel por cima
+// da página, num shadow root: não mexe no formulário deles. Tudo por
+// textContent, nada de HTML montado com os dados.
+function painelNoPortal(dados) {
+  const ID = "selebi-painel-envio";
+  document.getElementById(ID)?.remove();
+  const host = document.createElement("div");
+  host.id = ID;
+  host.style.cssText = "position:fixed;top:12px;right:12px;z-index:2147483647;";
+  const raiz = host.attachShadow({ mode: "closed" });
+
+  const el = (tag, classe, texto) => {
+    const n = document.createElement(tag);
+    if (classe) n.className = classe;
+    if (texto !== undefined) n.textContent = texto;
+    return n;
+  };
+  const seguro = (url) => (typeof url === "string" && /^https:\/\//.test(url) ? url : null);
+  const copiar = async (valor, botao) => {
+    try {
+      await navigator.clipboard.writeText(valor);
+    } catch {
+      const t = document.createElement("textarea");
+      t.value = valor;
+      t.style.cssText = "position:fixed;opacity:0;";
+      document.body.appendChild(t);
+      t.select();
+      document.execCommand("copy");
+      t.remove();
+    }
+    botao.textContent = "copiado";
+    setTimeout(() => (botao.textContent = "copiar"), 1500);
+  };
+
+  const estilo = el("style");
+  estilo.textContent = `
+    :host { all: initial; }
+    .p { width: 340px; max-height: calc(100vh - 24px); display: flex; flex-direction: column; background: #fff; color: #1f2329;
+      font: 13px/1.4 system-ui, -apple-system, "Segoe UI", sans-serif; border: 1px solid #d9dde3; border-radius: 12px;
+      box-shadow: 0 14px 28px -6px rgba(17,20,24,.25); overflow: hidden; }
+    .topo { display: flex; align-items: center; gap: 8px; padding: 10px 12px; background: #b4501a; color: #fff; }
+    .topo strong { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .topo button { all: unset; cursor: pointer; padding: 0 6px; font-size: 16px; line-height: 1; }
+    .corpo { overflow: auto; padding: 10px 12px 12px; }
+    .p.min .corpo { display: none; }
+    .nota { margin: 0 0 10px; color: #5b6470; }
+    h3 { margin: 12px 0 6px; font-size: 11px; text-transform: uppercase; letter-spacing: .04em; color: #5b6470; }
+    .linha { display: flex; align-items: baseline; gap: 8px; padding: 5px 0; border-bottom: 1px dashed #e7e9ed; }
+    .rot { width: 118px; flex-shrink: 0; color: #5b6470; }
+    .val { flex: 1; min-width: 0; font-weight: 600; overflow-wrap: anywhere; }
+    .linha button, .linha a { all: unset; cursor: pointer; color: #b4501a; font-size: 12px; flex-shrink: 0; }
+    .linha button:hover, .linha a:hover { text-decoration: underline; }
+    .falta { color: #a16207; font-size: 12px; flex-shrink: 0; }
+    .fim { display: block; margin-top: 12px; color: #b4501a; font-weight: 600; }
+  `;
+
+  const painel = el("div", "p");
+  const topo = el("div", "topo");
+  topo.append(el("strong", "", `Selebi · ${dados.cliente ?? ""}`));
+  const minimizar = el("button", "", "–");
+  minimizar.title = "Recolher";
+  minimizar.onclick = () => painel.classList.toggle("min");
+  const fechar = el("button", "", "×");
+  fechar.title = "Fechar o painel";
+  fechar.onclick = () => {
+    host.remove();
+    chrome.runtime.sendMessage({ tipo: "fechar-painel" }).catch(() => undefined);
+  };
+  topo.append(minimizar, fechar);
+
+  const corpo = el("div", "corpo");
+  corpo.append(
+    el("p", "nota", "Copie cada dado para o formulário e anexe os documentos. O envio é você quem faz, pelo botão do portal."),
+  );
+
+  corpo.append(el("h3", "", "Dados"));
+  for (const c of Array.isArray(dados.campos) ? dados.campos : []) {
+    const linha = el("div", "linha");
+    const botao = el("button", "", "copiar");
+    botao.onclick = () => copiar(String(c.valor), botao);
+    linha.append(el("span", "rot", String(c.rotulo)), el("span", "val", String(c.valor)), botao);
+    corpo.append(linha);
+  }
+
+  corpo.append(el("h3", "", "Documentos"));
+  for (const d of Array.isArray(dados.documentos) ? dados.documentos : []) {
+    const linha = el("div", "linha");
+    linha.append(el("span", "val", d.quando ? `${d.rotulo} (só ${d.quando})` : String(d.rotulo)));
+    const url = seguro(d.baixar);
+    if (url) {
+      const a = el("a", "", "baixar");
+      a.href = url;
+      a.target = "_blank";
+      a.rel = "noopener";
+      if (d.nome) a.title = String(d.nome);
+      linha.append(a);
+    } else if (!d.quando) linha.append(el("span", "falta", "falta no Selebi"));
+    corpo.append(linha);
+  }
+
+  const dossie = seguro(dados.dossie);
+  if (dossie) {
+    const fim = el("a", "fim", "Enviou? Registre o número no Selebi →");
+    fim.href = dossie;
+    fim.target = "_blank";
+    fim.rel = "noopener";
+    corpo.append(fim);
+  }
+
+  painel.append(topo, corpo);
+  raiz.append(estilo, painel);
+  document.documentElement.appendChild(host);
+  return true;
 }
 
 function esperarCarregar(tabId, ms = 45_000) {

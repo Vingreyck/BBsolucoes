@@ -121,6 +121,11 @@ export const projeto = pgTable(
      */
     contratoAssinadoEm: timestamp("contrato_assinado_em", { withTimezone: true }),
     /**
+     * Quando o engenheiro marcou "Já enviei" à Energisa, com o número do portal
+     * (migração 0027). Base de "há quantos dias está na Energisa".
+     */
+    energisaEnviadoEm: timestamp("energisa_enviado_em", { withTimezone: true }),
+    /**
      * O tipo de telhado, como o técnico respondeu na vistoria (uma das opções de
      * `TELHADOS` em `@/projeto/da-vistoria`). Preenchido ao concluir a vistoria,
      * se estiver vazio; editável na tela do projeto.

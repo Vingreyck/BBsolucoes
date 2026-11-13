@@ -109,7 +109,7 @@ export async function sincronizar(empresaId: string, crus: Record<string, unknow
  * (alguém já anotou o ID da Energisa no campo "Protocolo" do projeto), depois
  * pelo nome do cliente no nome do empreendimento — só quando não há dúvida.
  */
-async function vincularPendentes(empresaId: string): Promise<number> {
+export async function vincularPendentes(empresaId: string): Promise<number> {
   const pendentes = await db.query.energisaProjeto.findMany({
     where: and(eq(schema.energisaProjeto.empresaId, empresaId), isNull(schema.energisaProjeto.projetoId)),
     columns: { id: true, numero: true, empreendimento: true },

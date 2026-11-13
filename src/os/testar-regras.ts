@@ -43,6 +43,7 @@ import {
 } from "../energisa/situacoes";
 import { CAMPOS, codigoDoFavorito, ORIGEM_ENERGISA } from "../energisa/favorito";
 import { montarZip } from "../energisa/extensao";
+import { conferirEnvio, dadosParaOPortal, lerNumeroDoPortal } from "../energisa/envio";
 import {
   classificar,
   referenciaDoParque,
@@ -370,6 +371,29 @@ async function testarRetrace() {
     extensaoCompila = false;
   }
   confere(extensaoCompila, "o código da extensão é JavaScript válido");
+  const ponte = readFileSync("extensao/selebi.js", "utf8");
+  let ponteCompila = true;
+  try {
+    new Function(ponte);
+  } catch {
+    ponteCompila = false;
+  }
+  confere(ponteCompila, "o script da extensão nas páginas do Selebi é JavaScript válido");
+  const scripts = (manifesto as unknown as { content_scripts?: { matches: string[]; js: string[] }[] }).content_scripts ?? [];
+  confere(
+    scripts.length === 1 && scripts[0].matches.join() === `${selebiDaExtensao}/*` && scripts[0].js.join() === "selebi.js",
+    "a ponte com o botão do dossiê roda só nas páginas do Selebi",
+  );
+  confere(
+    ponte.includes("e.source !== window") && ponte.includes("e.origin !== location.origin"),
+    "a ponte só aceita mensagem da própria página do Selebi",
+  );
+  confere(
+    fundo.includes("sender.url?.startsWith(`${SELEBI}/`)") && fundo.includes("/api/energisa/envio/"),
+    "o pedido de envio só vale vindo do Selebi e busca os dados na rota do envio",
+  );
+  confere(!/\.click\(\)|\.submit\(\)|requestSubmit/.test(fundo), "a extensão não clica nem envia formulário no portal");
+  confere(!/innerHTML/.test(fundo), "o painel no portal não monta HTML com os dados");
 
   const zip = montarZip([
     { nome: "selebi-energisa/manifest.json", dados: Buffer.from("{}") },
@@ -952,6 +976,61 @@ igual(distribuidoraDaCidade("Itabaianinha"), "Sulgipe", "Itabaianinha é Sulgipe
 igual(distribuidoraDaCidade("ESTÂNCIA"), "Sulgipe", "Estância, em maiúscula e com acento, é Sulgipe");
 igual(distribuidoraDaCidade("Umbaúba - SE"), "Sulgipe", "cidade com '- SE' no fim");
 igual(distribuidoraDaCidade(null), "Energisa Sergipe", "sem cidade, Energisa");
+
+// --- Envio do projeto à Energisa -------------------------------------------------------
+{
+  const vazio = conferirEnvio(new Set());
+  confere(
+    ["Documento do titular", "Conta de luz da geradora", "ART", "Projeto elétrico", "Memorial", "Datasheet e Inmetro"].every((r) =>
+      vazio.faltam.includes(r),
+    ),
+    "sem nada na pasta, faltam os 6 documentos obrigatórios do pedido",
+  );
+  confere(!vazio.faltam.includes("Procuração"), "procuração é condicional: não conta como falta");
+  const cheio = conferirEnvio(new Set(["documento_pessoal", "uc_geradora", "art", "projeto_eletrico", "memorial", "datasheet"]));
+  igual(cheio.faltam.length, 0, "com os 6 na pasta, nada falta");
+  confere(cheio.itens.find((i) => i.tipo === "art")?.tem === true, "o item diz que a ART está na pasta");
+
+  igual(lerNumeroDoPortal(" 1236226 "), "1236226", "número do portal com espaço");
+  igual(lerNumeroDoPortal("ID 1.236.226"), "1236226", "número do portal com pontos e texto fica só com os dígitos");
+  igual(lerNumeroDoPortal("12"), null, "número curto demais não vale");
+  igual(lerNumeroDoPortal(1236226), null, "só texto do formulário vale");
+
+  const campos = dadosParaOPortal({
+    cliente: {
+      nome: "Maria da Silva",
+      cpfCnpj: "12345678901",
+      telefone: "(79) 99999-1234",
+      email: null,
+      cep: "49500000",
+      logradouro: "Rua A",
+      numero: "10",
+      complemento: "",
+      bairro: "Centro",
+      cidade: "Itabaiana",
+      uf: "se",
+    },
+    uc: { numero: "3001234567", titular: "José da Silva", concessionaria: "Energisa Sergipe" },
+    distribuidora: "Energisa Sergipe",
+    potenciaKwp: null,
+    inversor: { fabricante: "Growatt", modelo: "MIN 4200TL-X", potenciaW: "4200" },
+    inversorQtd: null,
+    modulo: { fabricante: "Jinko", modelo: "Tiger Neo", potenciaW: 585 },
+    moduloQtd: 7,
+    telhado: "Cerâmica",
+    numeroArt: null,
+  });
+  const valor = (chave: string) => campos.find((c) => c.chave === chave)?.valor;
+  igual(valor("titular"), "José da Silva", "o titular é o da conta de luz, não o cliente");
+  igual(valor("cpf_cnpj"), "123.456.789-01", "CPF com pontos e traço");
+  igual(valor("cep"), "49500-000", "CEP com traço");
+  igual(valor("uf"), "SE", "UF em maiúscula");
+  igual(valor("potencia_kwp"), "4,095", "sem potência no projeto, sai dos módulos (7 × 585 W)");
+  igual(valor("inversor_qtd"), "1", "inversor sem quantidade conta como 1");
+  igual(valor("inversor_kw"), "4,2", "potência do inversor em kW");
+  igual(valor("complemento"), undefined, "campo em branco não entra no painel");
+  igual(valor("art"), undefined, "ART sem número não entra");
+}
 
 /** O PDF do contrato sai de verdade, com e sem logo. */
 async function testarContratoPdf(): Promise<void> {

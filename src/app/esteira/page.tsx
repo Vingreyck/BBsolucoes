@@ -9,6 +9,7 @@ import {
   FileClock,
   FolderOpen,
   Plus,
+  Send,
   ThumbsDown,
   ThumbsUp,
   Trash2,
@@ -16,7 +17,7 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 
-import { podeVerDocumentos } from "@/auth/permissao";
+import { tiposDoPapel } from "@/auth/permissao";
 import { exigirUsuario } from "@/auth/sessao";
 import { db, schema } from "@/db";
 import { numeroWhatsapp } from "@/documentos/cobranca";
@@ -151,7 +152,7 @@ export default async function Esteira({
     .filter((p) => p.situacao === "em_andamento" && ["documentacao", "contrato"].includes(etapaPorId.get(p.etapaId)?.slug ?? ""))
     .map((p) => ({ ...p, etapa: etapaPorId.get(p.etapaId)! }));
   const noContrato = naPapelada.filter((p) => p.etapa.slug === "contrato").map((p) => p.id);
-  const [papelada, contratos, empresaDados, representantes, podeDocs, origemSite, catalogo] = await Promise.all([
+  const [papelada, contratos, empresaDados, representantes, meusTipos, origemSite, catalogo] = await Promise.all([
     situacaoDosDocumentos(usuario.empresaId, naPapelada),
     ultimosContratos(usuario.empresaId, noContrato),
     naPapelada.length
@@ -161,7 +162,7 @@ export default async function Esteira({
         })
       : null,
     noContrato.length && gestao ? representantesDaEmpresa(usuario.empresaId) : [],
-    podeVerDocumentos(usuario.empresaId, usuario.papel),
+    tiposDoPapel(usuario.empresaId, usuario.papel),
     noContrato.length ? origemDoSite() : "",
     // O catálogo é pequeno: uma ida só serve a todos os cartões, para sugerir o
     // texto de equipamentos do contrato (kit + telhado da vistoria).
@@ -169,6 +170,9 @@ export default async function Esteira({
       ? db.select().from(schema.modeloEquipamento).where(eq(schema.modeloEquipamento.empresaId, usuario.empresaId))
       : [],
   ]);
+  const podeDocs = meusTipos.size > 0;
+  // Quem cuida do protocolo (o engenheiro) é quem envia o projeto à Energisa.
+  const podeEnviarEnergisa = meusTipos.has("protocolo");
 
   /**
    * Na etapa Projeto, o engenheiro precisa saber de relance se a vistoria trouxe
@@ -240,8 +244,9 @@ export default async function Esteira({
               </p>
               <p>
                 A faixa <strong>Assinado · 12 d</strong> no cartão conta os dias desde que o cliente assinou o contrato
-                (do envio, na etapa do contrato, enquanto não volta assinado). Já o relógio do rodapé conta os dias na
-                etapa atual.
+                (do envio, na etapa do contrato, enquanto não volta assinado). Na Aprovação da concessionária, a faixa{" "}
+                <strong>Na Energisa · 8 d</strong> conta os dias desde que o engenheiro registrou o envio no dossiê. Já o
+                relógio do rodapé conta os dias na etapa atual.
               </p>
               <p>
                 <strong>Parado</strong> é o projeto há {DIAS_ATENCAO} dias ou mais na mesma etapa (relógio amarelo) ou
@@ -420,18 +425,26 @@ export default async function Esteira({
                     {e.slug === "projeto" &&
                       (() => {
                         const t = tecnicosDosProjetos.get(p.id);
-                        if (!t) return <p className="cartao-projeto-falta">Sem vistoria pelo app.</p>;
-                        const falta = faltaParaOProjeto(t.dados);
+                        const falta = t ? faltaParaOProjeto(t.dados) : [];
                         return (
                           <div className="cartao-projeto-extra">
-                            <a
-                              className={`pilula ${falta.length ? "sev-atencao" : "sev-info"}`}
-                              href={`/projeto/${p.id}`}
-                              title={falta.length ? `Falta na vistoria: ${falta.join(", ")}` : "A vistoria trouxe tudo o que o projeto elétrico precisa"}
-                            >
-                              {falta.length ? `Vistoria: faltam ${falta.length} dados` : "Vistoria completa"}
-                            </a>
+                            {t ? (
+                              <a
+                                className={`pilula ${falta.length ? "sev-atencao" : "sev-info"}`}
+                                href={`/projeto/${p.id}`}
+                                title={falta.length ? `Falta na vistoria: ${falta.join(", ")}` : "A vistoria trouxe tudo o que o projeto elétrico precisa"}
+                              >
+                                {falta.length ? `Vistoria: faltam ${falta.length} dados` : "Vistoria completa"}
+                              </a>
+                            ) : (
+                              <p className="cartao-projeto-falta">Sem vistoria pelo app.</p>
+                            )}
                             {falta.length > 0 && <p className="cartao-projeto-falta">Falta: {falta.join(", ")}</p>}
+                            {podeEnviarEnergisa && (
+                              <a className="botao botao-cartao" href={`/documentos/${p.id}#energisa`}>
+                                <Send size={14} aria-hidden /> Enviar à Energisa
+                              </a>
+                            )}
                           </div>
                         );
                       })()}
@@ -535,6 +548,21 @@ export default async function Esteira({
                         </div>
                       );
                     })()}
+
+                    {e.slug === "aprovacao_concessionaria" && p.energisaEnviadoEm && (
+                      <div
+                        className="cartao-projeto-contrato espera"
+                        title={`Enviado à Energisa em ${p.energisaEnviadoEm.toLocaleDateString("pt-BR")}${p.protocoloConcessionaria ? `, projeto ${p.protocoloConcessionaria}` : ""} (${fraseDoTempo(diasCorridos(p.energisaEnviadoEm))})`}
+                      >
+                        <span className="cartao-projeto-contrato-rotulo">
+                          <Send size={13} aria-hidden /> Na Energisa
+                        </span>
+                        <span className="cartao-projeto-contrato-dias">
+                          {rotuloDoTempo(diasCorridos(p.energisaEnviadoEm))}
+                          <span className="sr-only"> ({fraseDoTempo(diasCorridos(p.energisaEnviadoEm))})</span>
+                        </span>
+                      </div>
+                    )}
 
                     {osCard && (
                       <a

@@ -1,6 +1,6 @@
 "use server";
 
-import { and, eq, sql } from "drizzle-orm";
+import { and, eq, ne, sql } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 
 import { exigirAcessoDocumentos } from "@/auth/permissao";
@@ -10,7 +10,11 @@ import { limparNome, pastaDoCliente } from "@/documentos/pastas";
 import { ehDoCliente, numeroWhatsapp } from "@/documentos/cobranca";
 import { tipoDoDocumento } from "@/documentos/conteudo";
 import { filaDeCobranca } from "@/documentos/fila-cobranca";
+import { lerNumeroDoPortal } from "@/energisa/envio";
+import { vincularPendentes } from "@/energisa/sincronizar";
+import { numeroDoProjeto } from "@/energisa/situacoes";
 import { avancarPorDocumentos } from "@/projeto/automatico";
+import { moverNaEsteira } from "@/projeto/esteira";
 
 /**
  * Sobe um documento pelo Selebi.
@@ -246,6 +250,76 @@ export async function registrarCobranca(projetoId: string, tipo?: string): Promi
   revalidatePath("/documentos/cobranca");
   revalidatePath(`/documentos/${projetoId}`);
   return { ok: true };
+}
+
+/**
+ * "Já enviei à Energisa": o engenheiro mandou o pedido no portal e digita o
+ * número que o portal deu. O número liga o projeto à linha que a extensão lê
+ * (por ele, e não pelo nome do cliente, que pode dar dúvida), e o projeto sai da
+ * etapa Projeto para a Aprovação da concessionária.
+ *
+ * Fora da etapa Projeto só corrige o número, sem mexer na esteira nem na data.
+ */
+export async function registrarEnvioEnergisa(
+  projetoId: string,
+  _anterior: ResultadoEnvio,
+  form: FormData,
+): Promise<ResultadoEnvio> {
+  const acesso = await exigirAcessoDocumentos();
+  const usuario = acesso.usuario;
+  if (!acesso.pode("protocolo")) return { erro: "Quem registra o envio à Energisa é o engenheiro." };
+
+  const numero = lerNumeroDoPortal(form.get("numero"));
+  if (!numero) return { erro: "Digite o número que o portal deu ao pedido (só os dígitos)." };
+
+  const projeto = await db.query.projeto.findFirst({
+    where: and(eq(schema.projeto.id, projetoId), eq(schema.projeto.empresaId, usuario.empresaId)),
+    columns: { id: true, situacao: true },
+    with: { etapa: { columns: { slug: true } } },
+  });
+  if (!projeto) return { erro: "Projeto não encontrado." };
+
+  // O mesmo número em dois projetos ligaria a linha da Energisa ao errado.
+  const outros = await db.query.projeto.findMany({
+    where: and(eq(schema.projeto.empresaId, usuario.empresaId), ne(schema.projeto.id, projeto.id)),
+    columns: { protocoloConcessionaria: true },
+    with: { cliente: { columns: { nome: true } } },
+  });
+  const dono = outros.find((o) => numeroDoProjeto(o.protocoloConcessionaria) === numero);
+  if (dono) return { erro: `O número ${numero} já está no projeto de ${dono.cliente.nome}. Confira o número.` };
+
+  const naEtapa = projeto.etapa.slug === "projeto" && projeto.situacao === "em_andamento";
+  await db
+    .update(schema.projeto)
+    .set({
+      protocoloConcessionaria: numero,
+      ...(naEtapa ? { energisaEnviadoEm: new Date() } : {}),
+      atualizadoEm: new Date(),
+    })
+    .where(eq(schema.projeto.id, projeto.id));
+
+  const nova = naEtapa
+    ? await moverNaEsteira({
+        empresaId: usuario.empresaId,
+        projetoId: projeto.id,
+        direcao: "avancar",
+        usuarioId: usuario.id,
+        observacao: `Enviado à Energisa pelo portal: projeto ${numero}.`,
+      })
+    : null;
+
+  // Se a extensão já leu esse número, a ligação sai agora, sem esperar a próxima leitura.
+  await vincularPendentes(usuario.empresaId).catch((e) => console.error("[energisa] ligar pelo número falhou:", e));
+
+  revalidatePath(`/documentos/${projeto.id}`);
+  revalidatePath(`/projeto/${projeto.id}`);
+  revalidatePath("/esteira");
+  revalidatePath("/energisa");
+  return {
+    ok: nova
+      ? `Envio registrado com o número ${numero}. O projeto foi para "${nova.nome}".`
+      : `Número da Energisa atualizado para ${numero}.`,
+  };
 }
 
 /** O telefone que faltava no cadastro, direto da fila de cobrança. */

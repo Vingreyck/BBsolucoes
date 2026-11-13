@@ -1,12 +1,13 @@
 {
   "manifest_version": 3,
   "name": "Selebi — Energisa",
-  "version": "2.1",
-  "description": "Leva a lista \"Meus projetos\" do portal da Energisa para o Selebi a cada 30 minutos, enquanto o portal estiver aberto e logado.",
+  "version": "2.2",
+  "description": "Leva a lista \"Meus projetos\" do portal da Energisa para o Selebi a cada 30 minutos e mostra, ao lado do formulário do portal, os dados e documentos do projeto a enviar.",
   "minimum_chrome_version": "120",
   "permissions": ["alarms", "scripting", "storage", "notifications"],
   "host_permissions": ["https://servicos.energisa.com.br/*", "https://app.selebi.com.br/*"],
   "background": { "service_worker": "background.js" },
+  "content_scripts": [{ "matches": ["https://app.selebi.com.br/*"], "js": ["selebi.js"], "run_at": "document_idle" }],
   "action": {
     "default_title": "Selebi — Energisa: clique para atualizar agora",
     "default_icon": { "16": "icones/16.png", "32": "icones/32.png", "48": "icones/48.png" }
