@@ -58,6 +58,7 @@ import {
   rotuloDoPayback,
 } from "../proposta/calculo";
 import { diasDesde, pontosDaData, pontosDoNome, sugerirVendasParaUsina } from "../geracao/sugestao-dono";
+import { coordenadaValida, destinoDaOs, destinoEmTexto, linkDaRota } from "./destino";
 import { lerPremissas, premissasDoFormulario, SUGESTAO } from "../proposta/premissas";
 import {
   estruturaDaProposta,
@@ -1177,6 +1178,30 @@ const entradaDaPropostaTeste: EntradaProposta = {
   confere(doForm !== null && Math.abs(doForm.desempenho - 0.75) < 1e-9 && Math.abs(doForm.cartao.taxaMes - 0.008) < 1e-9, "o formulário digita porcentagem e grava fração");
   igual(doForm?.numeroInicial, null, "número inicial em branco fica nulo");
   igual(premissasDoFormulario({ tarifaKwh: "abc" }), null, "campo que não é número anula o formulário");
+}
+
+// --- Destino e rota no Google Maps ------------------------------------------------------
+{
+  const casa = { logradouro: "Rua das Flores", numero: "123", bairro: "Centro", cidade: "Itabaiana", uf: "se", cep: "49500000" };
+  igual(destinoEmTexto(casa), "Rua das Flores, 123, Centro, Itabaiana, SE, 49500-000, Brasil", "endereço com vírgulas, UF, CEP e Brasil");
+  igual(destinoEmTexto({ ...casa, numero: "S/N", cep: null }), "Rua das Flores, Centro, Itabaiana, SE, Brasil", "S/N e CEP faltando ficam de fora");
+  igual(destinoEmTexto({ ...casa, cep: "495" }), "Rua das Flores, 123, Centro, Itabaiana, SE, Brasil", "CEP incompleto não entra");
+  igual(destinoEmTexto({ logradouro: null, numero: "10", bairro: "Centro", cidade: "Lagarto", uf: "SE", cep: null }), "Lagarto, SE, Brasil", "sem rua, só a cidade (e sem bairro/número soltos)");
+  igual(destinoEmTexto({ logradouro: null, numero: null, bairro: null, cidade: null, uf: "SE", cep: null }), null, "sem rua nem cidade, sem destino");
+  confere(!destinoEmTexto(casa)!.includes("·"), "o ponto do meio que confundia o Google não aparece mais");
+
+  igual(destinoDaOs(casa, { latitude: "-10.9123456", longitude: "-37.6543210" }), "-10.9123456,-37.654321", "coordenada confiável da usina chega na porta e vale mais que o endereço");
+  igual(destinoDaOs(casa, { latitude: "0", longitude: "0" }), "Rua das Flores, 123, Centro, Itabaiana, SE, 49500-000, Brasil", "0,0 é o portal sem saber: vale o endereço");
+  igual(destinoDaOs(casa, { latitude: "48.8", longitude: "2.3" }), "Rua das Flores, 123, Centro, Itabaiana, SE, 49500-000, Brasil", "coordenada fora do Brasil não vale");
+  igual(destinoDaOs(casa, { latitude: null, longitude: null }), "Rua das Flores, 123, Centro, Itabaiana, SE, 49500-000, Brasil", "usina sem coordenada: o endereço");
+  igual(destinoDaOs(casa, null), "Rua das Flores, 123, Centro, Itabaiana, SE, 49500-000, Brasil", "sem usina (vistoria, instalação): o endereço do cliente");
+  igual(destinoDaOs({ ...casa, logradouro: null }, null), "Itabaiana, SE, 49500-000, Brasil", "sem rua cadastrada, a cidade e o CEP");
+  confere(coordenadaValida(-10.9, -37.6) && !coordenadaValida(null, -37.6) && !coordenadaValida(Number.NaN, -37.6), "coordenada válida só dentro do Brasil e em números");
+
+  const link = linkDaRota("Rua das Flores, 123, Centro, Itabaiana, SE, 49500-000, Brasil")!;
+  confere(link.startsWith("https://www.google.com/maps/dir/?api=1&destination="), "o link é de rota (dir), não de busca (search)");
+  confere(link.includes("travelmode=driving") && link.includes("Itabaiana%2C%20SE"), "de carro, com o destino codificado");
+  igual(linkDaRota(null), null, "sem destino, sem link");
 }
 
 // --- Sugestão de dono da usina ---------------------------------------------------------

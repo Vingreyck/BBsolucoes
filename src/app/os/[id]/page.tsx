@@ -28,6 +28,7 @@ import { notFound } from "next/navigation";
 
 import { ErroOs, exigirAtorWeb, podeExecutar } from "@/os/acesso";
 import { carregarOs, comentariosDaOs, quemUsaOApp, tempoEmCampo } from "@/os/consultas";
+import { destinoDaOs, linkDaRota } from "@/os/destino";
 import {
   formatarDuracao,
   formatarInstante,
@@ -163,12 +164,8 @@ export default async function DetalheOs({
   ]
     .filter(Boolean)
     .join(" · ");
-  const mapaCliente =
-    os.usina?.latitude && os.usina?.longitude
-      ? `https://www.google.com/maps?q=${os.usina.latitude},${os.usina.longitude}`
-      : endereco
-        ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(endereco)}`
-        : null;
+  // O botão "Rota" abre o Google Maps já com o caminho traçado até a casa do cliente.
+  const mapaCliente = linkDaRota(destinoDaOs(os.cliente, os.usina));
 
   /** O caminho da OS, como no ServiceTitan: onde ela está entre abrir e concluir. */
   const PASSOS = [
