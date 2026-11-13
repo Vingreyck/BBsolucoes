@@ -10055,3 +10055,34 @@ button.link-acao {
   border-radius: 8px;
   background: #fff;
 }
+
+/* sugestão do tamanho do sistema, no cadastro do projeto (as cores vêm das
+   variáveis do tema: claro e escuro já saem certos) */
+.sugestao-sistema {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.6rem 0.8rem;
+  background: var(--accent-soft);
+  border-left: 3px solid var(--accent);
+  border-radius: 0 var(--raio-p) var(--raio-p) 0;
+  font-size: 0.86rem;
+  color: var(--ink-2);
+}
+.sugestao-sistema > svg {
+  flex: none;
+  color: var(--accent);
+}
+.sugestao-sistema > span {
+  flex: 1;
+}
+.sugestao-sistema strong {
+  color: var(--ink);
+}
+.capa-proposta {
+  display: block;
+  max-width: 220px;
+  border-radius: var(--raio-p);
+  border: 1px solid var(--line);
+  margin-bottom: 0.6rem;
+}

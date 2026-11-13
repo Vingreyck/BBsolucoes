@@ -139,6 +139,7 @@ export default async function RootLayout({
               { href: "/administracao/modelos", rotulo: "Modelos de OS", icone: "modelos" as const },
               { href: "/administracao/equipamentos", rotulo: "Equipamentos", icone: "equipamentos" as const },
               { href: "/administracao/empresa", rotulo: "Dados da empresa", icone: "empresa" as const },
+              { href: "/administracao/proposta", rotulo: "Proposta comercial", icone: "proposta" as const },
             ],
           },
         ]

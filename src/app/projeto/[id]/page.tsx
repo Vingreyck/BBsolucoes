@@ -36,6 +36,8 @@ import { entradaDe, representantesDaEmpresa, ultimosContratos } from "@/projeto/
 import { dadosTecnicosDosProjetos } from "@/projeto/aproveitar-vistoria";
 import { faltaParaOProjeto, lerDadosTecnicos, OPCOES_DE_TELHADO } from "@/projeto/da-vistoria";
 import { rotuloDoModelo, sugestaoDeEquipamentos } from "@/projeto/kit";
+import { DISPONIBILIDADE_KWH, ligacaoDoProjeto, ROTULO_LIGACAO, type Ligacao } from "@/proposta/calculo";
+import { contextoDaProposta, montarEntrada, responsavelPadrao, ultimasPropostas } from "@/proposta/proposta-dados";
 import { diasCorridos, fraseDoTempo } from "@/projeto/tempo";
 import { FORMAS_PAGAMENTO, rotuloPagamento } from "@/projeto/pagamento";
 import { db } from "@/db";
@@ -54,6 +56,7 @@ import { BotaoDialogo } from "../../_ui/dialogo";
 import { moverProjeto } from "../../actions";
 import { aprovarProposta, reprovarProposta } from "../../esteira/actions";
 import { AcoesDoContrato } from "../../esteira/contrato";
+import { AcoesDaProposta } from "../../esteira/proposta";
 import { PedirDadosDoCliente } from "../../esteira/pedir-dados";
 import { origemDoSite } from "../../origem";
 import { kWh, kWp } from "../../formatar";
@@ -193,8 +196,25 @@ export default async function DetalheProjeto({
   let acaoDoGuia: React.ReactNode = null;
   const slug = projeto.etapa.slug;
   if (slug === "lead" && ator.gestao) {
+    const [ctxProposta, propostas, origemSite] = await Promise.all([
+      contextoDaProposta(usuario.empresaId, { nome: usuario.nome }),
+      ultimasPropostas(usuario.empresaId, [projeto.id]),
+      origemDoSite(),
+    ]);
     acaoDoGuia = (
       <span className="grupo-botoes">
+        <AcoesDaProposta
+          projetoId={projeto.id}
+          entrada={montarEntrada(projeto, ctxProposta, ligacaoDoProjeto(projeto.ligacao, d.polos))}
+          ehAdm={usuario.papel === "adm"}
+          proposta={propostas.get(projeto.id) ?? null}
+          whatsapp={numeroWhatsapp(projeto.cliente.telefone)}
+          origemSite={origemSite}
+          origem="projeto"
+          chave={`p|${ok ?? ""}|${erro ?? ""}`}
+          responsaveis={ctxProposta.responsaveis}
+          responsavelPadrao={responsavelPadrao(ctxProposta.responsaveis, usuario.id, projeto.responsavelId)}
+        />
         <form action={aprovarProposta.bind(null, projeto.id, "projeto")}>
           <button type="submit" className="botao">
             <ThumbsUp size={15} aria-hidden /> Proposta aprovada
@@ -569,8 +589,23 @@ export default async function DetalheProjeto({
                   <input name="consumoMedioKwh" inputMode="decimal" defaultValue={projeto.consumoMedioKwh ?? ""} placeholder="632" />
                 </label>
                 <label>
+                  Tipo de ligação
+                  <select name="ligacao" defaultValue={projeto.ligacao ?? ""}>
+                    <option value="">Ainda não sei</option>
+                    {(Object.keys(DISPONIBILIDADE_KWH) as Ligacao[]).map((l) => (
+                      <option key={l} value={l}>
+                        {ROTULO_LIGACAO[l]}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label>
                   Concessionária
-                  <input name="concessionaria" defaultValue={projeto.concessionaria ?? ""} placeholder="Energisa Sergipe" />
+                  <input name="concessionaria" list="concessionarias" defaultValue={projeto.concessionaria ?? ""} placeholder="Energisa Sergipe" />
+                  <datalist id="concessionarias">
+                    <option value="Energisa Sergipe" />
+                    <option value="Sulgipe" />
+                  </datalist>
                 </label>
               </div>
               <label>

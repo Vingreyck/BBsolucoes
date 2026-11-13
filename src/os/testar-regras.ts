@@ -45,6 +45,31 @@ import { CAMPOS, codigoDoFavorito, ORIGEM_ENERGISA } from "../energisa/favorito"
 import { montarZip } from "../energisa/extensao";
 import { conferirEnvio, dadosParaOPortal, lerNumeroDoPortal } from "../energisa/envio";
 import {
+  areaMinimaM2,
+  calcular,
+  FATORES_MENSAIS,
+  geracaoMensal,
+  ehLigacao,
+  ligacaoDoProjeto,
+  ligacaoDosPolos,
+  sugerirSistema,
+  moeda,
+  percentualFioB,
+  rotuloDoPayback,
+} from "../proposta/calculo";
+import { lerPremissas, premissasDoFormulario, SUGESTAO } from "../proposta/premissas";
+import {
+  estruturaDaProposta,
+  faltaParaProposta,
+  kwpDoProjeto,
+  lerNumeroBr,
+  mensagemDaProposta,
+  montarProposta,
+  nomeDaProposta,
+  type EntradaProposta,
+} from "../proposta/proposta";
+import { gerarPropostaPdf } from "../proposta/proposta-pdf";
+import {
   classificar,
   referenciaDoParque,
   diasDoMes,
@@ -1032,6 +1057,160 @@ igual(distribuidoraDaCidade(null), "Energisa Sergipe", "sem cidade, Energisa");
   igual(valor("art"), undefined, "ART sem número não entra");
 }
 
+// --- Proposta comercial ----------------------------------------------------------------
+const entradaDaPropostaTeste: EntradaProposta = {
+  empresa: { nome: "Empresa Exemplo" },
+  cliente: { nome: "Maria Exemplo", cidade: "Itabaiana", uf: "se" },
+  responsavel: { nome: "Maria Clara", contato: null },
+  projeto: { potenciaKwp: null, valor: "10431.95", consumoMedioKwh: "445", equipamentos: null, telhadoTipo: "Fibrocimento" },
+  inversor: { tipo: "inversor", fabricante: "Growatt", modelo: "NEO 2250M-X2", potenciaW: 2250 },
+  inversorQtd: 2,
+  modulo: { tipo: "modulo", fabricante: "Ronma", modelo: "RM620W", potenciaW: 620 },
+  moduloQtd: 6,
+  ligacao: "bifasico",
+  premissas: SUGESTAO,
+};
+{
+  igual(Math.round(FATORES_MENSAIS.reduce((a, b) => a + b, 0) * 1000) / 1000, 12, "os fatores mensais somam 12 (a média do ano é o mês médio)");
+  confere(FATORES_MENSAIS[5] < 1 && FATORES_MENSAIS[11] > 1, "junho gera menos que a média e dezembro mais (inverno e verão)");
+  const ger = geracaoMensal(3.72, { irradiacaoDia: 5.26, desempenho: 0.75 });
+  confere(Math.abs(ger.reduce((a, b) => a + b, 0) - 5352) < 25, "3,72 kWp com 5,26 de irradiação e PR de 0,75 geram ~5.352 kWh por ano");
+  igual(percentualFioB(2026), 0.6, "Fio B de 60% em 2026");
+  igual(percentualFioB(2028), 0.9, "Fio B de 90% em 2028");
+  igual(percentualFioB(2035), 0.9, "depois de 2028 o cálculo mantém 90%");
+  igual(ligacaoDosPolos("Bipolar"), "bifasico", "disjuntor bipolar é ligação bifásica");
+  igual(ligacaoDosPolos("Tripolar"), "trifasico", "disjuntor tripolar é ligação trifásica");
+  igual(ligacaoDosPolos("Monopolar"), "monofasico", "disjuntor monopolar é ligação monofásica");
+  igual(ligacaoDosPolos(null), null, "sem a resposta da vistoria, sem ligação");
+  igual(ligacaoDoProjeto("trifasico", "Bipolar"), "trifasico", "a ligação do cadastro do projeto vale mais que a da vistoria");
+  igual(ligacaoDoProjeto(null, "Monopolar"), "monofasico", "sem cadastro, vale a vistoria");
+  igual(ligacaoDoProjeto("qualquer", null), "bifasico", "sem nada (ou valor estranho), bifásica");
+  confere(ehLigacao("bifasico") && !ehLigacao("bifásica") && !ehLigacao(null), "só os três tipos de ligação valem");
+  const sug = sugerirSistema(500, "bifasico", { irradiacaoDia: 5.26, desempenho: 0.75 }, 585);
+  confere(sug?.modulos === 7 && Math.abs(sug.kwp - 4.095) < 1e-9, "500 kWh/mês bifásico com módulo de 585 W: 7 módulos, 4,095 kWp");
+  confere(sug !== null && sug.geracaoMes >= 450, "o sistema sugerido gera ao menos o consumo menos a disponibilidade");
+  const semModulo = sugerirSistema(500, "bifasico", { irradiacaoDia: 5.26, desempenho: 0.75 });
+  confere(semModulo?.modulos === null && semModulo.kwp >= 3.74 && semModulo.kwp <= 3.76, "sem o módulo, a sugestão sai em kWp (≈ 3,75)");
+  igual(sugerirSistema(40, "bifasico", { irradiacaoDia: 5.26, desempenho: 0.75 }, 585), null, "consumo abaixo da disponibilidade não pede sistema");
+  igual(areaMinimaM2(3.72, 6), 17, "6 módulos pedem 17 m²");
+  igual(areaMinimaM2(3.72, null), 17, "sem os módulos, ~4,5 m² por kWp");
+  igual(rotuloDoPayback(28), "2 anos e 4 meses", "retorno em anos e meses");
+  igual(rotuloDoPayback(12), "1 ano", "um ano redondo");
+  igual(rotuloDoPayback(8), "8 meses", "menos de um ano");
+  igual(rotuloDoPayback(null), "—", "sem retorno em 25 anos vira traço");
+  igual(moeda(10431.95), "R$ 10.431,95", "moeda com milhar e centavos");
+
+  const r = calcular({ kwp: 3.72, consumoKwh: 445, investimento: 10431.95, ligacao: "bifasico", anoBase: 2026 }, SUGESTAO);
+  igual(r.fluxo.length, 26, "o fluxo vai do ano 0 ao 25");
+  igual(Math.round(r.fluxo[0]), -10432, "o ano 0 é o investimento, negativo");
+  confere(r.contaComMes > 50 * SUGESTAO.tarifaKwh * 0.99, "a conta com solar nunca fica abaixo do custo de disponibilidade (50 kWh)");
+  confere(r.contaComMes < r.contaSemMes, "a conta com solar é menor que a sem solar");
+  confere(r.economiaMes > 300 && r.economiaMes < 445, "a economia do mês fica entre o razoável (R$ 300 e a conta inteira)");
+  confere(r.paybackMeses !== null && r.paybackMeses > 12 && r.paybackMeses < 60, "o retorno de um sistema de R$ 10 mil sai entre 1 e 5 anos");
+  confere(r.economia25 > r.economia5 * 4, "a economia em 25 anos passa de 4 vezes a de 5 anos (a tarifa sobe)");
+  const caro = calcular({ kwp: 3.72, consumoKwh: 445, investimento: 10_000_000, ligacao: "bifasico", anoBase: 2026 }, SUGESTAO);
+  igual(caro.paybackMeses, null, "investimento que não se paga em 25 anos não ganha retorno inventado");
+  const semGerar = calcular({ kwp: 0.5, consumoKwh: 2000, investimento: 5000, ligacao: "trifasico", anoBase: 2026 }, SUGESTAO);
+  confere(semGerar.contaComMes <= semGerar.contaSemMes && semGerar.economiaMes > 0, "sistema pequeno para um consumo grande ainda economiza, sem passar da conta");
+
+  igual(lerNumeroBr("10.431,95"), 10431.95, "valor com milhar e vírgula");
+  igual(lerNumeroBr("R$ 10431,95"), 10431.95, "valor com R$ e sem milhar");
+  igual(lerNumeroBr("10.431"), 10431, "10.431 é dez mil, não dez vírgula quatro");
+  igual(lerNumeroBr("3,72"), 3.72, "potência com vírgula");
+  igual(lerNumeroBr("3.72"), 3.72, "potência com ponto decimal");
+  igual(lerNumeroBr("abc"), null, "texto não é número");
+  igual(lerNumeroBr("0"), null, "zero não vale");
+
+  igual(faltaParaProposta(entradaDaPropostaTeste).length, 0, "proposta completa: nada falta");
+  igual(kwpDoProjeto(entradaDaPropostaTeste), 3.72, "sem potência no projeto, sai dos módulos (6 × 620 W)");
+  const incompleta = faltaParaProposta({
+    ...entradaDaPropostaTeste,
+    premissas: null,
+    cliente: { nome: "X", cidade: null, uf: null },
+    inversor: null,
+    modulo: null,
+    projeto: { ...entradaDaPropostaTeste.projeto, valor: null, consumoMedioKwh: null },
+  });
+  confere(
+    incompleta.length === 6 && incompleta.some((f) => f.includes("premissas")) && incompleta.some((f) => f.includes("kit")),
+    "proposta vazia: faltam premissas, cidade, potência, kit, valor e consumo",
+  );
+  igual(
+    faltaParaProposta({ ...entradaDaPropostaTeste, inversor: null, modulo: null, moduloQtd: null, projeto: { ...entradaDaPropostaTeste.projeto, potenciaKwp: "4", equipamentos: "2 inversores e 8 módulos" } }).length,
+    0,
+    "o texto de equipamentos do projeto vale no lugar do catálogo",
+  );
+
+  const hojeTeste = new Date("2026-11-12T15:00:00Z");
+  const proposta = montarProposta(entradaDaPropostaTeste, 209, hojeTeste);
+  igual(proposta.numero, 209, "número da proposta");
+  igual(proposta.criadaEm, "12/11/2026", "data de criação no fuso de Sergipe");
+  igual(proposta.validaAte, "22/11/2026", "válida por 10 dias");
+  igual(proposta.cliente.uf, "SE", "UF em maiúscula");
+  igual(proposta.sistema.modulos, "6 placas Ronma RM620W (620 W)", "linha dos módulos como no modelo");
+  igual(proposta.sistema.inversores, "2 Growatt NEO 2250M-X2 (2,25 kW)", "linha dos inversores como no modelo");
+  igual(proposta.sistema.estrutura, "Telhado - Fibrocimento", "estrutura pelo telhado da vistoria");
+  igual(proposta.premissas.fioBPercentual, 0.6, "a proposta anota o Fio B do ano");
+  igual(estruturaDaProposta("Laje"), "Laje", "laje não é telhado");
+  igual(estruturaDaProposta(null), "A definir na vistoria", "sem telhado, a definir");
+  igual(nomeDaProposta(proposta), "Proposta 209 - Maria Exemplo.pdf", "nome do arquivo da proposta");
+  confere(mensagemDaProposta({ cliente: "ANA LIMA", empresa: "Empresa", link: "https://x/r/p/abc", validaAte: "22/11/2026" }).startsWith("Olá, Ana!"), "mensagem da proposta com o primeiro nome");
+  let recusou = false;
+  try {
+    montarProposta({ ...entradaDaPropostaTeste, premissas: null }, 1);
+  } catch {
+    recusou = true;
+  }
+  confere(recusou, "montar sem premissas é erro: a proposta nunca sai com número inventado");
+
+  confere(lerPremissas(SUGESTAO) !== null, "a sugestão de premissas é válida");
+  igual(lerPremissas({ ...SUGESTAO, tarifaKwh: 0 }), null, "tarifa zero anula as premissas");
+  igual(lerPremissas({ ...SUGESTAO, desempenho: 1.5 }), null, "desempenho acima de 100% anula as premissas");
+  igual(lerPremissas({ ...SUGESTAO, garantias: { ...SUGESTAO.garantias, placas: undefined } }), null, "garantia faltando anula as premissas");
+  igual(lerPremissas(null), null, "sem nada salvo, sem premissas");
+  const doForm = premissasDoFormulario({
+    tarifaKwh: "1,00", fioBKwh: "0,27", irradiacaoDia: "5,26", desempenho: "75", simultaneidade: "30", reajusteAnual: "5",
+    degradacaoAnual: "0,7", validadeDias: "10", garantiaInversor: "10", garantiaPlacas: "15", garantiaEstrutura: "10",
+    garantiaEficiencia: "25", cartaoParcelas: "21", cartaoTaxa: "0,8", carencia: "120", numeroInicial: "",
+  });
+  confere(doForm !== null && Math.abs(doForm.desempenho - 0.75) < 1e-9 && Math.abs(doForm.cartao.taxaMes - 0.008) < 1e-9, "o formulário digita porcentagem e grava fração");
+  igual(doForm?.numeroInicial, null, "número inicial em branco fica nulo");
+  igual(premissasDoFormulario({ tarifaKwh: "abc" }), null, "campo que não é número anula o formulário");
+}
+
+/** A proposta sai em PDF de verdade, no modelo de 7 páginas, com e sem logo. */
+async function testarPropostaPdf(): Promise<void> {
+  const logo =
+    "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==";
+  const dados = montarProposta(entradaDaPropostaTeste, 209, new Date("2026-11-12T15:00:00Z"));
+  // O banco devolve o jsonb como texto lido: o PDF tem de sair do mesmo jeito depois do vai-e-volta.
+  const lido = JSON.parse(JSON.stringify(dados)) as typeof dados;
+  // Com a empresa completa (CNPJ, usinas acompanhadas), com logo e com foto na capa.
+  const completa = { ...lido, empresa: { ...lido.empresa, cnpj: "12345678000190", email: "a@b.c", usinas: 186 } };
+  for (const [nome, d, visual] of [
+    ["sem logo", lido, { logo: null }],
+    ["com logo", lido, { logo }],
+    ["com logo, capa e a empresa completa", completa, { logo, capa: logo }],
+  ] as const) {
+    const pdf = await gerarPropostaPdf(d, visual);
+    confere(pdf.subarray(0, 8).toString("latin1").startsWith("%PDF-"), `proposta em PDF ${nome}`);
+    const paginas = (pdf.toString("latin1").match(/\/Type\s*\/Page[^s]/g) ?? []).length;
+    igual(paginas, 7, `proposta ${nome} tem 7 páginas, como o modelo (${paginas})`);
+    if (process.env.PROPOSTA_AMOSTRA && nome === "sem logo") {
+      const { writeFileSync } = await import("node:fs");
+      writeFileSync(process.env.PROPOSTA_AMOSTRA, pdf);
+    }
+  }
+  // Sem telhado, sem responsável e com o kit só em texto: ainda sai inteira.
+  const magra = montarProposta(
+    { ...entradaDaPropostaTeste, responsavel: null, inversor: null, modulo: null, moduloQtd: null, projeto: { ...entradaDaPropostaTeste.projeto, potenciaKwp: "4", equipamentos: "2 inversores e 8 módulos", telhadoTipo: null } },
+    1,
+  );
+  const pdfMagro = await gerarPropostaPdf(magra, { logo: null });
+  const paginasMagra = (pdfMagro.toString("latin1").match(/\/Type\s*\/Page[^s]/g) ?? []).length;
+  igual(paginasMagra, 7, "proposta sem responsável, telhado nem catálogo também tem 7 páginas");
+}
+
 /** O PDF do contrato sai de verdade, com e sem logo. */
 async function testarContratoPdf(): Promise<void> {
   const logo =
@@ -1052,6 +1231,7 @@ async function testarContratoPdf(): Promise<void> {
 testarRetrace()
   .then(testarSenha)
   .then(testarContratoPdf)
+  .then(testarPropostaPdf)
   .then(() => {
     console.log(falhas === 0 ? `✓ ${total} conferências, nenhuma falha.` : `✗ ${falhas} de ${total} falharam.`);
     process.exit(falhas === 0 ? 0 : 1);

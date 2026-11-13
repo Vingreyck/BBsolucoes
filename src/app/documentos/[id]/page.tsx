@@ -226,7 +226,8 @@ export default async function Dossie({
         {e.tipo === "contrato" && (
           <p className="cartao-documento-auto">
             <Sparkles size={13} aria-hidden /> O Selebi gera o contrato na etapa Contrato. Aqui entra a via assinada que o
-            cliente devolver — com ela, a esteira anda sozinha.
+            cliente devolver: marque “Já está assinado” e a esteira anda sozinha. Sem a marca, o arquivo fica como
+            “falta assinar” e a esteira espera.
           </p>
         )}
         {cobrar &&

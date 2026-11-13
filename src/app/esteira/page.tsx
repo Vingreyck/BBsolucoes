@@ -33,6 +33,8 @@ import { faltaParaOProjeto } from "@/projeto/da-vistoria";
 import { diasCorridos, fraseDoTempo, rotuloDoTempo } from "@/projeto/tempo";
 import { sugestaoDeEquipamentos } from "@/projeto/kit";
 import { entradaDe, representantesDaEmpresa, ultimosContratos } from "@/projeto/contrato-dados";
+import { ligacaoDoProjeto } from "@/proposta/calculo";
+import { montarEntrada, contextoDaProposta, responsavelPadrao, ultimasPropostas, type PropostaDoProjeto } from "@/proposta/proposta-dados";
 
 import { Ajuda, Cabecalho } from "../_ui";
 import { BotaoDialogo } from "../_ui/dialogo";
@@ -41,6 +43,7 @@ import { iniciais, kWp, semAcento } from "../formatar";
 import { origemDoSite } from "../origem";
 import { aprovarProposta, gerarOsInstalacao, reprovarProposta } from "./actions";
 import { AcoesDoContrato } from "./contrato";
+import { AcoesDaProposta } from "./proposta";
 import { PedirDadosDoCliente } from "./pedir-dados";
 import { ColunaEsteira, QuadroEsteira } from "./quadro";
 
@@ -152,6 +155,9 @@ export default async function Esteira({
     .filter((p) => p.situacao === "em_andamento" && ["documentacao", "contrato"].includes(etapaPorId.get(p.etapaId)?.slug ?? ""))
     .map((p) => ({ ...p, etapa: etapaPorId.get(p.etapaId)! }));
   const noContrato = naPapelada.filter((p) => p.etapa.slug === "contrato").map((p) => p.id);
+  const noLead = gestao
+    ? projetos.filter((p) => p.situacao === "em_andamento" && etapaPorId.get(p.etapaId)?.slug === "lead").map((p) => p.id)
+    : [];
   const [papelada, contratos, empresaDados, representantes, meusTipos, origemSite, catalogo] = await Promise.all([
     situacaoDosDocumentos(usuario.empresaId, naPapelada),
     ultimosContratos(usuario.empresaId, noContrato),
@@ -163,13 +169,16 @@ export default async function Esteira({
       : null,
     noContrato.length && gestao ? representantesDaEmpresa(usuario.empresaId) : [],
     tiposDoPapel(usuario.empresaId, usuario.papel),
-    noContrato.length ? origemDoSite() : "",
+    noContrato.length || noLead.length ? origemDoSite() : "",
     // O catálogo é pequeno: uma ida só serve a todos os cartões, para sugerir o
     // texto de equipamentos do contrato (kit + telhado da vistoria).
     noContrato.length
       ? db.select().from(schema.modeloEquipamento).where(eq(schema.modeloEquipamento.empresaId, usuario.empresaId))
       : [],
   ]);
+  const [propostas, ctxProposta] = noLead.length
+    ? await Promise.all([ultimasPropostas(usuario.empresaId, noLead), contextoDaProposta(usuario.empresaId, { nome: usuario.nome })])
+    : [new Map<string, PropostaDoProjeto>(), null];
   const podeDocs = meusTipos.size > 0;
   // Quem cuida do protocolo (o engenheiro) é quem envia o projeto à Energisa.
   const podeEnviarEnergisa = meusTipos.has("protocolo");
@@ -357,6 +366,23 @@ export default async function Esteira({
                         <span className="pilula sev-info">{SITUACAO_ROTULO[p.situacao]}</span>
                       )}
                     </span>
+
+                    {e.slug === "lead" && gestao && ctxProposta && p.situacao === "em_andamento" && (
+                      <div className="cartao-projeto-extra">
+                        <AcoesDaProposta
+                          projetoId={p.id}
+                          entrada={montarEntrada(p, ctxProposta, ligacaoDoProjeto(p.ligacao))}
+                          ehAdm={usuario.papel === "adm"}
+                          proposta={propostas.get(p.id) ?? null}
+                          whatsapp={numeroWhatsapp(p.cliente.telefone)}
+                          origemSite={origemSite}
+                          origem="esteira"
+                          chave={`p|${p.id}|${ok ?? ""}|${erro ?? ""}`}
+                          responsaveis={ctxProposta.responsaveis}
+                          responsavelPadrao={responsavelPadrao(ctxProposta.responsaveis, usuario.id, p.responsavelId)}
+                        />
+                      </div>
+                    )}
 
                     {e.slug === "lead" && gestao && (
                       <div className="cartao-projeto-extra">

@@ -146,6 +146,12 @@ export const projeto = pgTable(
      * número fica registrado junto do projeto em vez de morrer na planilha.
      */
     consumoMedioKwh: numeric("consumo_medio_kwh", { precision: 10, scale: 2 }),
+    /**
+     * Monofásico, bifásico ou trifásico (`@/proposta/calculo`, `Ligacao`): o
+     * mínimo que a distribuidora cobra mesmo com a usina. Vem do cadastro do
+     * projeto; sem ele, a proposta usa os polos do disjuntor da vistoria.
+     */
+    ligacao: varchar("ligacao", { length: 12 }),
     concessionaria: text("concessionaria"),
     /** O que o cliente pediu, incluindo aparelhos que pretende acrescentar. */
     observacoes: text("observacoes"),
@@ -235,6 +241,37 @@ export const contrato = pgTable(
     criadoEm: timestamp("criado_em", { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [uniqueIndex("contrato_token_uq").on(t.token), index("contrato_projeto_idx").on(t.projetoId, t.criadoEm)],
+);
+
+/**
+ * A proposta comercial que o Selebi gera no Lead (migração 0028).
+ *
+ * `dados` é a fotografia do que entrou na proposta no dia em que foi gerada
+ * (preço, economia, validade): o cliente recebe sempre o mesmo PDF pelo mesmo
+ * link (`/r/p/<token>`). O `numero` é sequencial por empresa.
+ */
+export const proposta = pgTable(
+  "proposta",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    empresaId: uuid("empresa_id")
+      .notNull()
+      .references(() => empresa.id, { onDelete: "cascade" }),
+    projetoId: uuid("projeto_id")
+      .notNull()
+      .references(() => projeto.id, { onDelete: "cascade" }),
+    numero: integer("numero").notNull(),
+    token: varchar("token", { length: 64 }).notNull(),
+    dados: jsonb("dados").notNull(),
+    criadoPorId: uuid("criado_por_id").references(() => usuario.id, { onDelete: "set null" }),
+    enviadoEm: timestamp("enviado_em", { withTimezone: true }),
+    criadoEm: timestamp("criado_em", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    uniqueIndex("proposta_token_uq").on(t.token),
+    uniqueIndex("proposta_numero_uq").on(t.empresaId, t.numero),
+    index("proposta_projeto_idx").on(t.projetoId, t.criadoEm),
+  ],
 );
 
 /**

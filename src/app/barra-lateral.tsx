@@ -5,6 +5,7 @@ import {
   CalendarDays,
   ClipboardList,
   FileBarChart,
+  FileText,
   FolderOpen,
   House,
   KanbanSquare,
@@ -61,6 +62,7 @@ export type IconeMenu =
   | "usuarios"
   | "modelos"
   | "empresa"
+  | "proposta"
   | "equipamentos";
 
 const ICONES: Record<IconeMenu, LucideIcon> = {
@@ -81,6 +83,7 @@ const ICONES: Record<IconeMenu, LucideIcon> = {
   usuarios: Users,
   modelos: ListChecks,
   empresa: Building2,
+  proposta: FileText,
   equipamentos: Cpu,
 };
 

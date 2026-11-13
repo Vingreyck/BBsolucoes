@@ -1,13 +1,18 @@
 import { and, asc, eq, sql } from "drizzle-orm";
-import { Check, FileText, UserRound, Wallet } from "lucide-react";
+import { Check, FileText, Sun, UserRound, Wallet } from "lucide-react";
 
 import { exigirUsuario } from "@/auth/sessao";
 import { db, schema } from "@/db";
 import { cliente as clienteTable, etapa as etapaTable } from "@/db/schema";
+import { OPCOES_DE_TELHADO } from "@/projeto/da-vistoria";
+import { rotuloDoModelo } from "@/projeto/kit";
 import { FORMAS_PAGAMENTO } from "@/projeto/pagamento";
+import { SUGESTAO } from "@/proposta/premissas";
+import { premissasDaEmpresa } from "@/proposta/proposta-dados";
 
 import { Cabecalho, Cartao } from "../../_ui";
 import { criarProjeto } from "../actions";
+import { Dimensionamento, type ModeloParaEscolher } from "./dimensionamento";
 import { EscolherCliente, type Opcao } from "./escolher-cliente";
 
 const PORTAL: Record<string, string> = {
@@ -66,6 +71,24 @@ export default async function NovoProjeto({
       .from(schema.projeto)
       .where(and(eq(schema.projeto.empresaId, usuario.empresaId), eq(schema.projeto.situacao, "em_andamento"))),
   ]);
+
+  // O kit vem do catálogo de equipamentos (só os modelos ativos) e a sugestão
+  // de tamanho usa a irradiação e o desempenho que a proposta vai usar.
+  const [catalogo, premissas] = await Promise.all([
+    db.query.modeloEquipamento.findMany({
+      where: and(eq(schema.modeloEquipamento.empresaId, usuario.empresaId), eq(schema.modeloEquipamento.ativo, true)),
+      columns: { id: true, tipo: true, fabricante: true, modelo: true, potenciaW: true },
+      orderBy: [asc(schema.modeloEquipamento.fabricante), asc(schema.modeloEquipamento.modelo)],
+    }),
+    premissasDaEmpresa(usuario.empresaId),
+  ]);
+  const paraEscolher = (m: (typeof catalogo)[number]): ModeloParaEscolher => ({
+    id: m.id,
+    rotulo: rotuloDoModelo(m),
+    potenciaW: m.potenciaW === null ? null : Number(m.potenciaW) || null,
+  });
+  const modulos = catalogo.filter((m) => m.tipo === "modulo").map(paraEscolher);
+  const inversores = catalogo.filter((m) => m.tipo === "inversor" || m.tipo === "microinversor").map(paraEscolher);
 
   const comVendaAberta = new Set(emAndamento.map((p) => p.clienteId));
   const docsPor = new Map(docsPorCliente.map((d) => [d.clienteId, d.docs]));
@@ -177,21 +200,24 @@ export default async function NovoProjeto({
         </Cartao>
 
         <Cartao
-          titulo="O projeto"
-          icone={<FileText size={16} />}
-          ajuda="O consumo médio é a base do dimensionamento e sai da conta de luz — uma fatura da Energisa traz 13 meses de histórico numa página só. Pode ficar em branco agora e ser preenchido depois da vistoria."
+          titulo="Sistema e kit"
+          icone={<Sun size={16} />}
+          ajuda="É daqui que sai a proposta comercial: consumo, tipo de ligação, módulos, inversor, potência e telhado. O consumo e a ligação estão na conta de luz — uma fatura da Energisa traz 13 meses de histórico numa página só. O que ainda não se sabe pode ficar em branco e ser preenchido depois, na tela do projeto."
         >
+          <Dimensionamento
+            modulos={modulos}
+            inversores={inversores}
+            telhados={OPCOES_DE_TELHADO}
+            premissas={premissas ?? SUGESTAO}
+          />
+        </Cartao>
+
+        <Cartao titulo="O projeto" icone={<FileText size={16} />}>
           <div className="form-ficha">
-            <div className="dupla">
-              <label>
-                Título
-                <input name="titulo" placeholder="Ex.: 8 kWp — Itabaiana" defaultValue="" />
-              </label>
-              <label>
-                Consumo médio (kWh/mês)
-                <input name="consumoMedioKwh" inputMode="decimal" placeholder="632" />
-              </label>
-            </div>
+            <label>
+              Título
+              <input name="titulo" placeholder="Ex.: 8 kWp — Itabaiana" defaultValue="" />
+            </label>
 
             <label>
               O que o cliente pediu
@@ -207,7 +233,7 @@ export default async function NovoProjeto({
         <Cartao
           titulo="Pagamento"
           icone={<Wallet size={16} />}
-          ajuda="A forma de pagamento que o cliente aceitou na negociação. Pode ficar em branco agora e ser preenchida ou mudada depois, na tela do projeto."
+          ajuda="O valor total é o que a proposta e o contrato cobram. A forma de pagamento é a que o cliente aceitou na negociação; pode ficar em branco agora e ser preenchida ou mudada depois, na tela do projeto."
         >
           <div className="form-ficha">
             <div className="dupla">

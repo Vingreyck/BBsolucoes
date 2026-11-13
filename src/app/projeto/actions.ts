@@ -10,6 +10,7 @@ import { db } from "@/db";
 import { sincronizarDatasheets } from "@/projeto/datasheets";
 import { OPCOES_DE_TELHADO } from "@/projeto/da-vistoria";
 import { ehFormaPagamento } from "@/projeto/pagamento";
+import { ehLigacao } from "@/proposta/calculo";
 import {
   cliente as clienteTable,
   comentario,
@@ -77,6 +78,42 @@ function pagamentoDoFormulario(d: FormData) {
     pagamentoCondicoes: texto(d, "pagamentoCondicoes"),
     valor: numero(d, "valor"),
   };
+}
+
+/**
+ * O kit, a potência e o telhado do formulário.
+ *
+ * O kit vem do catálogo de equipamentos. O id chega do formulário: só vale se
+ * for um modelo desta empresa e do tipo certo (inversor no campo do inversor,
+ * módulo no do módulo). Potência em branco sai dos módulos × potência de cada um.
+ */
+async function kitDoFormulario(dados: FormData, empresaId: string) {
+  const catalogo = await db.select().from(modeloEquipamento).where(eq(modeloEquipamento.empresaId, empresaId));
+  const doCatalogo = (id: string | null, tipos: string[]) => catalogo.find((m) => m.id === id && tipos.includes(m.tipo)) ?? null;
+  const inteiro = (campo: string) => {
+    const n = Number.parseInt(texto(dados, campo) ?? "", 10);
+    return n > 0 && n < 10_000 ? n : null;
+  };
+  const inversor = doCatalogo(texto(dados, "inversorModeloId"), ["inversor", "microinversor"]);
+  const modulo = doCatalogo(texto(dados, "moduloModeloId"), ["modulo"]);
+  const moduloQtd = modulo ? inteiro("moduloQtd") : null;
+  const telhado = texto(dados, "telhadoTipo");
+  return {
+    inversorModeloId: inversor?.id ?? null,
+    inversorQtd: inversor ? (inteiro("inversorQtd") ?? 1) : null,
+    moduloModeloId: modulo?.id ?? null,
+    moduloQtd,
+    potenciaKwp:
+      numero(dados, "potenciaKwp") ??
+      (modulo?.potenciaW && moduloQtd ? String(Math.round(moduloQtd * Number(modulo.potenciaW)) / 1000) : null),
+    telhadoTipo: telhado && OPCOES_DE_TELHADO.includes(telhado) ? telhado : null,
+  };
+}
+
+/** Monofásico, bifásico ou trifásico; o que vier fora disso vira "não sei". */
+function ligacaoDoFormulario(dados: FormData) {
+  const v = texto(dados, "ligacao");
+  return ehLigacao(v) ? v : null;
 }
 
 /**
@@ -236,6 +273,8 @@ export async function criarProjeto(dados: FormData): Promise<void> {
 
   const agora = new Date();
   const titulo = texto(dados, "titulo") ?? "Projeto novo";
+  // O que a proposta comercial usa já entra aqui: consumo, ligação, kit, potência e telhado.
+  const kit = await kitDoFormulario(dados, usuario.empresaId);
 
   const [projeto] = await db
     .insert(projetoTable)
@@ -250,10 +289,18 @@ export async function criarProjeto(dados: FormData): Promise<void> {
         ? new Date(agora.getTime() + primeira.prazoPadraoDias * 86_400_000)
         : null,
       consumoMedioKwh: numero(dados, "consumoMedioKwh"),
+      ligacao: ligacaoDoFormulario(dados),
+      concessionaria: texto(dados, "concessionaria"),
       observacoes: texto(dados, "observacoes"),
+      ...kit,
       ...pagamentoDoFormulario(dados),
     })
     .returning();
+
+  // Com kit escolhido, o datasheet e o Inmetro entram no dossiê desde já.
+  if (kit.inversorModeloId || kit.moduloModeloId) {
+    await sincronizarDatasheets(usuario.empresaId, projeto.id, usuario.id);
+  }
 
   /**
    * A entrada na esteira também é um evento. Sem ele, o primeiro trecho do
@@ -284,6 +331,7 @@ export async function salvarInformacoes(
     .update(projetoTable)
     .set({
       consumoMedioKwh: numero(dados, "consumoMedioKwh"),
+      ligacao: ligacaoDoFormulario(dados),
       concessionaria: texto(dados, "concessionaria"),
       observacoes: texto(dados, "observacoes"),
       atualizadoEm: new Date(),
@@ -324,49 +372,18 @@ export async function salvarProjetoTecnico(
 ): Promise<void> {
   const usuario = await exigirUsuario();
 
-  /**
-   * O kit vem do catálogo de equipamentos. O id chega do formulário: só vale
-   * se for um modelo desta empresa e do tipo certo (inversor no campo do
-   * inversor, módulo no do módulo).
-   */
-  const catalogo = await db
-    .select()
-    .from(modeloEquipamento)
-    .where(eq(modeloEquipamento.empresaId, usuario.empresaId));
-  const doCatalogo = (id: string | null, tipos: string[]) =>
-    catalogo.find((m) => m.id === id && tipos.includes(m.tipo)) ?? null;
-  const inteiro = (campo: string) => {
-    const n = Number.parseInt(texto(dados, campo) ?? "", 10);
-    return n > 0 && n < 10_000 ? n : null;
-  };
-  const inversor = doCatalogo(texto(dados, "inversorModeloId"), ["inversor", "microinversor"]);
-  const modulo = doCatalogo(texto(dados, "moduloModeloId"), ["modulo"]);
-  const inversorQtd = inversor ? inteiro("inversorQtd") ?? 1 : null;
-  const moduloQtd = modulo ? inteiro("moduloQtd") : null;
-
   // O texto do contrato só é gravado se alguém digitou. Em branco, ele é sugerido
   // na hora de gerar o contrato (kit + telhado), para o telhado da vistoria
   // entrar mesmo que a vistoria seja concluída depois.
   const equipamentos = texto(dados, "equipamentos")?.slice(0, 1000) ?? null;
-  const telhado = texto(dados, "telhadoTipo");
-  const telhadoTipo = telhado && OPCOES_DE_TELHADO.includes(telhado) ? telhado : null;
-  // Em branco, a potência sai do kit.
-  const potenciaKwp =
-    numero(dados, "potenciaKwp") ??
-    (modulo?.potenciaW && moduloQtd ? String(Math.round(moduloQtd * Number(modulo.potenciaW)) / 1000) : null);
 
   await db
     .update(projetoTable)
     .set({
       numeroArt: texto(dados, "numeroArt"),
       protocoloConcessionaria: texto(dados, "protocoloConcessionaria"),
-      potenciaKwp,
       equipamentos,
-      telhadoTipo,
-      inversorModeloId: inversor?.id ?? null,
-      inversorQtd,
-      moduloModeloId: modulo?.id ?? null,
-      moduloQtd,
+      ...(await kitDoFormulario(dados, usuario.empresaId)),
       // O valor mora no cartão de Pagamento (`salvarPagamento`).
       atualizadoEm: new Date(),
     })

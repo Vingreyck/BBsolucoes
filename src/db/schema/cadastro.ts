@@ -5,6 +5,7 @@ import {
   boolean,
   index,
   integer,
+  jsonb,
   numeric,
   pgTable,
   text,
@@ -41,6 +42,14 @@ export const empresa = pgTable(
     email: text("email"),
     /** O logo, como data URL (PNG ou JPEG): cabeçalho e marca-d'água do contrato. */
     logo: text("logo"),
+    /**
+     * As premissas da proposta comercial (tarifa, Fio B, irradiação, desempenho,
+     * garantias e textos de pagamento), conferidas pelo adm. Ver
+     * `@/proposta/premissas`. Sem isto salvo, não se gera proposta.
+     */
+    propostaConfig: jsonb("proposta_config"),
+    /** A foto da capa da proposta (data URL, JPEG ou PNG). Sem ela, a capa desenhada. */
+    propostaCapa: text("proposta_capa"),
     ativa: boolean("ativa").notNull().default(true),
     /**
      * SHA-256 do código que o desenvolvedor entrega à empresa.

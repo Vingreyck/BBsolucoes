@@ -162,7 +162,9 @@ export async function enviarDocumento(
         clienteId: projeto.clienteId,
         projetoId: projeto.id,
         tipo,
-        status: assinado ? "assinado" : "indefinido",
+        // Contrato sem a marca "Já está assinado" é a via ainda sem assinatura: não
+        // conta como entregue, e a esteira só anda quando a assinada chegar.
+        status: assinado ? "assinado" : tipo === "contrato" ? "aguardando_assinatura" : "indefinido",
         versao,
         nomeArquivo: nomeFinal,
         caminho: "",
@@ -185,7 +187,7 @@ export async function enviarDocumento(
 
     // O contrato assinado marca o dia em que o cliente assinou (a métrica de dias
     // desde a assinatura parte daqui). Só o primeiro vale: versão nova não zera.
-    if (tipo === "contrato") {
+    if (tipo === "contrato" && assinado) {
       await db
         .update(schema.projeto)
         .set({ contratoAssinadoEm: sql`coalesce(${schema.projeto.contratoAssinadoEm}, now())` })
@@ -201,7 +203,11 @@ export async function enviarDocumento(
     revalidatePath(`/documentos/${projeto.id}`);
     revalidatePath("/documentos");
     revalidatePath("/esteira");
-    return { ok: `${nomeFinal} enviado.${andou ? ` O projeto foi para "${andou}".` : ""}` };
+    const semAssinatura =
+      tipo === "contrato" && !assinado
+        ? " Não foi marcado como assinado, então a esteira não andou: envie a via assinada com “Já está assinado”."
+        : "";
+    return { ok: `${nomeFinal} enviado.${semAssinatura}${andou ? ` O projeto foi para "${andou}".` : ""}` };
   } catch (e) {
     return { erro: e instanceof Error ? e.message : "Falhou ao enviar." };
   }
