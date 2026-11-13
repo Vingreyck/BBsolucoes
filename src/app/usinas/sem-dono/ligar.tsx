@@ -2,12 +2,19 @@
 
 import { useState, useTransition } from "react";
 
-import { ligarAoCliente } from "./actions";
+import { ligarAoCliente, ligarAoProjeto } from "./actions";
 
 interface Cliente {
   id: string;
   nome: string;
   docs: number;
+}
+
+/** Uma venda já instalada que combina com a usina, e por quê. */
+interface SugestaoDeVenda {
+  projetoId: string;
+  clienteNome: string;
+  motivos: string[];
 }
 
 /**
@@ -20,15 +27,26 @@ interface Cliente {
 export function Ligar({
   usinaId,
   sugestoes,
+  vendas,
   clientes,
 }: {
   usinaId: string;
   sugestoes: Cliente[];
+  vendas: SugestaoDeVenda[];
   clientes: Cliente[];
 }) {
   const [erro, setErro] = useState<string | null>(null);
   const [pronto, setPronto] = useState<string | null>(null);
   const [pendente, comecar] = useTransition();
+
+  function ligarVenda(venda: SugestaoDeVenda) {
+    setErro(null);
+    comecar(async () => {
+      const r = await ligarAoProjeto(usinaId, venda.projetoId);
+      if (r.erro) setErro(r.erro);
+      else setPronto(`${venda.clienteNome} (e à venda dele)`);
+    });
+  }
 
   function ligar(cliente: Cliente) {
     setErro(null);
@@ -45,6 +63,16 @@ export function Ligar({
 
   return (
     <div className="ligar">
+      {vendas.length > 0 && (
+        <div className="sugestoes sugestoes-venda">
+          {vendas.map((v) => (
+            <button key={v.projetoId} type="button" disabled={pendente} onClick={() => ligarVenda(v)} title={v.motivos.join(" · ")}>
+              {v.clienteNome}
+              <span className="conta">{v.motivos.join(" · ")}</span>
+            </button>
+          ))}
+        </div>
+      )}
       {sugestoes.length > 0 && (
         <div className="sugestoes">
           {sugestoes.map((c) => (

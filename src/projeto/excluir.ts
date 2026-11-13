@@ -1,8 +1,9 @@
-import { and, count, eq, inArray, like, ne, notInArray, or, sql } from "drizzle-orm";
+import { and, count, eq, inArray, isNull, like, ne, notInArray, or } from "drizzle-orm";
 
 import { ehUuid } from "@/app-movel/http";
 import { db, schema } from "@/db";
 import { driveConfigurado, idDoLink, infoDoItem, moverParaLixeira } from "@/documentos/drive";
+import { apagarDoDeposito, arquivoPendente } from "@/os/deposito-local";
 
 /**
  * Exclusão de um projeto, e, se pedido, dos documentos dele e do cliente, com os
@@ -19,6 +20,11 @@ import { driveConfigurado, idDoLink, infoDoItem, moverParaLixeira } from "@/docu
  */
 
 export interface OpcoesDeExclusao {
+  /**
+   * Apaga as ordens de serviço do projeto, com os anexos. O app do técnico lista
+   * OS: sem isto, o projeto some da esteira e a vistoria dele continua no celular.
+   */
+  ordens: boolean;
   /** Apaga os documentos deste projeto (e manda os arquivos para a lixeira). */
   documentos: boolean;
   /** Apaga também o cliente: todos os documentos dele e a pasta dele no Drive. */
@@ -40,8 +46,8 @@ async function paraALixeira(id: string): Promise<void> {
 const plural = (n: number, um: string, varios: string) => `${n} ${n === 1 ? um : varios}`;
 
 /** O que ainda prende o cliente, e por isso impede de apagar o cadastro dele. */
-async function oQueSeguraOCliente(empresaId: string, clienteId: string, projetoId: string): Promise<string[]> {
-  const contar = async (tabela: "usina" | "ordemServico" | "unidadeConsumidora") => {
+async function oQueSeguraOCliente(empresaId: string, clienteId: string, projetoId: string, ordensSaem: boolean): Promise<string[]> {
+  const contar = async (tabela: "usina" | "unidadeConsumidora") => {
     const t = schema[tabela];
     const [linha] = await db
       .select({ n: count() })
@@ -53,7 +59,19 @@ async function oQueSeguraOCliente(empresaId: string, clienteId: string, projetoI
     .select({ n: count() })
     .from(schema.projeto)
     .where(and(eq(schema.projeto.empresaId, empresaId), eq(schema.projeto.clienteId, clienteId), ne(schema.projeto.id, projetoId)));
-  const [usinas, ordens, ucs] = await Promise.all([contar("usina"), contar("ordemServico"), contar("unidadeConsumidora")]);
+  // As OS do próprio projeto, quando saem junto, não seguram o cliente.
+  const [os] = await db
+    .select({ n: count() })
+    .from(schema.ordemServico)
+    .where(
+      and(
+        eq(schema.ordemServico.empresaId, empresaId),
+        eq(schema.ordemServico.clienteId, clienteId),
+        ordensSaem ? or(isNull(schema.ordemServico.projetoId), ne(schema.ordemServico.projetoId, projetoId)) : undefined,
+      ),
+    );
+  const ordens = Number(os?.n ?? 0);
+  const [usinas, ucs] = await Promise.all([contar("usina"), contar("unidadeConsumidora")]);
   const preso: string[] = [];
   if (Number(outros?.n ?? 0)) preso.push(plural(Number(outros.n), "outro projeto", "outros projetos"));
   if (usinas) preso.push(plural(usinas, "usina", "usinas"));
@@ -76,20 +94,37 @@ export async function excluirProjeto(
   const cliente = projeto.cliente;
 
   if (opcoes.cliente) {
-    const preso = await oQueSeguraOCliente(ator.empresaId, cliente.id, projeto.id);
+    const preso = await oQueSeguraOCliente(ator.empresaId, cliente.id, projeto.id, opcoes.ordens);
     if (preso.length) {
       return {
-        erro: `O cadastro de ${cliente.nome} não pode ser apagado: ainda tem ${preso.join(", ")}. Desmarque “excluir o cliente” (o projeto e os documentos dele saem do mesmo jeito), ou resolva isso antes.`,
+        erro: `O cadastro de ${cliente.nome} não pode ser apagado: ainda tem ${preso.join(", ")}. Desmarque “excluir o cliente” (o projeto e as ordens dele saem do mesmo jeito), ou resolva isso antes.`,
       };
     }
   }
 
-  // Os documentos que saem: todos os do cliente, ou só os deste projeto.
+  // As ordens de serviço do projeto e os anexos delas (fotos, vídeo, assinatura).
+  const ordens = opcoes.ordens
+    ? await db
+        .select({ id: schema.ordemServico.id })
+        .from(schema.ordemServico)
+        .where(and(eq(schema.ordemServico.empresaId, ator.empresaId), eq(schema.ordemServico.projetoId, projeto.id)))
+    : [];
+  const anexos = ordens.length
+    ? await db
+        .select({ caminho: schema.osAnexo.caminho, driveId: schema.osAnexo.driveId, documentoId: schema.osAnexo.documentoId })
+        .from(schema.osAnexo)
+        .where(inArray(schema.osAnexo.ordemServicoId, ordens.map((o) => o.id)))
+    : [];
+  const documentosDosAnexos = anexos.map((a) => a.documentoId).filter((i): i is string => Boolean(i));
+
+  // Os documentos que saem: todos os do cliente, ou só os deste projeto (e os das fotos das OS).
+  const doProjeto = opcoes.documentos ? eq(schema.documento.projetoId, projeto.id) : null;
+  const dosAnexos = documentosDosAnexos.length ? inArray(schema.documento.id, documentosDosAnexos) : null;
   const quais = opcoes.cliente
     ? eq(schema.documento.clienteId, cliente.id)
-    : opcoes.documentos
-      ? eq(schema.documento.projetoId, projeto.id)
-      : null;
+    : doProjeto && dosAnexos
+      ? or(doProjeto, dosAnexos)!
+      : (doProjeto ?? dosAnexos);
   const docs = quais
     ? await db
         .select({
@@ -106,8 +141,17 @@ export async function excluirProjeto(
   // --- o que vai para a lixeira do Drive ---------------------------------------
   const avisos: string[] = [];
   // Datasheet e Inmetro são do catálogo e valem para outros projetos: só a linha sai.
+  // Os arquivos que ainda esperam o Drive (ronda de 1 min) estão no disco do servidor, não no Drive.
+  const locais = anexos.map((a) => arquivoPendente(a.caminho)).filter((a): a is string => Boolean(a));
+  const doDrive = anexos
+    .filter((a) => !arquivoPendente(a.caminho))
+    .map((a) => a.driveId ?? idDoLink(a.caminho))
+    .filter((i): i is string => Boolean(i));
   const candidatos = [
-    ...new Set(docs.filter((d) => !d.modeloEquipamentoId).map((d) => idDoLink(d.linkDrive)).filter((i): i is string => Boolean(i))),
+    ...new Set([
+      ...docs.filter((d) => !d.modeloEquipamentoId).map((d) => idDoLink(d.linkDrive)).filter((i): i is string => Boolean(i)),
+      ...doDrive,
+    ]),
   ];
   let arquivos = candidatos;
   if (candidatos.length && docs.length) {
@@ -191,6 +235,10 @@ export async function excluirProjeto(
     if (docs.length) {
       await tx.delete(schema.documento).where(inArray(schema.documento.id, docs.map((d) => d.id)));
     }
+    // Anexos, checklist e eventos da OS caem em cascata; o que apontava para ela só perde o vínculo.
+    if (ordens.length) {
+      await tx.delete(schema.ordemServico).where(inArray(schema.ordemServico.id, ordens.map((o) => o.id)));
+    }
     await tx
       .delete(schema.comentario)
       .where(and(eq(schema.comentario.empresaId, ator.empresaId), eq(schema.comentario.entidade, "projeto"), eq(schema.comentario.entidadeId, projeto.id)));
@@ -204,7 +252,11 @@ export async function excluirProjeto(
     }
   });
 
+  // Só agora o disco: se o banco tivesse falhado, o anexo ainda estaria lá.
+  for (const arquivo of locais) apagarDoDeposito(arquivo);
+
   let texto = `O projeto de ${cliente.nome} foi excluído${opcoes.cliente ? ", junto com o cadastro do cliente" : ""}.`;
+  if (ordens.length) texto += ` ${plural(ordens.length, "ordem de serviço saiu", "ordens de serviço saíram")} (e some do app do técnico).`;
   if (docs.length) texto += ` ${plural(docs.length, "documento saiu", "documentos saíram")} do Selebi.`;
   if (arquivos.length || pastasNaLixeira) {
     const dr = [

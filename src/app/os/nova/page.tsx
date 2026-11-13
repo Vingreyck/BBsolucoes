@@ -4,7 +4,6 @@ import {
   CalendarClock,
   Check,
   ChevronRight,
-  MapPin,
   Search,
   SearchX,
   UserRound,
@@ -20,6 +19,7 @@ import { PRIORIDADE_ROTULO, TIPO_ROTULO } from "@/os/tipos";
 
 import { Cabecalho, Caminho, Cartao, Dados, Vazio } from "../../_ui";
 import { criarOsAction } from "../actions";
+import { OndeDaOs } from "./onde";
 
 export const dynamic = "force-dynamic";
 
@@ -268,39 +268,13 @@ export default async function NovaOs({
             </div>
           </Cartao>
 
-          <Cartao titulo="Onde" icone={<MapPin size={16} />}>
-            <div className="form-ficha">
-              <div className="dupla">
-                <label>
-                  Usina
-                  <select name="usinaId" defaultValue={usinaEscolhida}>
-                    <option value="">Nenhuma (ou ainda não existe)</option>
-                    {cliente.usinas.map((u) => (
-                      <option key={u.id} value={u.id}>
-                        {u.nome}
-                        {u.cidade ? ` · ${u.cidade}` : ""}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-                <label>
-                  Venda (projeto)
-                  <select name="projetoId" defaultValue={projetoEscolhido}>
-                    <option value="">Nenhuma — não é de uma venda</option>
-                    {projetos.map((pr) => (
-                      <option key={pr.id} value={pr.id}>
-                        {pr.titulo} · {pr.etapa.nome}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-              </div>
-              <p className="ajuda">
-                Ligada à venda, a OS aparece no projeto, as fotos que viram documento entram no dossiê e, concluída, a
-                vistoria ou a instalação andam a esteira sozinhas.
-              </p>
-            </div>
-          </Cartao>
+          <OndeDaOs
+            tipoInicial={tipoSugerido}
+            usinas={cliente.usinas}
+            usinaPadrao={usinaEscolhida}
+            vendas={projetos.map((pr) => ({ id: pr.id, titulo: pr.titulo, etapa: pr.etapa.nome }))}
+            vendaPadrao={projetoEscolhido}
+          />
 
           <Cartao titulo="Quem e quando" icone={<CalendarClock size={16} />}>
             <div className="form-ficha">

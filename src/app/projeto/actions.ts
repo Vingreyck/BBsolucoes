@@ -570,6 +570,7 @@ export async function excluirProjetoCompleto(projetoId: string, dados: FormData)
   }
 
   const resultado = await excluirProjeto({ empresaId: usuario.empresaId, id: usuario.id }, projetoId, {
+    ordens: dados.get("ordens") === "sim",
     documentos: dados.get("documentos") === "sim",
     cliente: dados.get("cliente") === "sim",
   });

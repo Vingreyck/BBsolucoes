@@ -1,10 +1,13 @@
 import { asc, eq, sql } from "drizzle-orm";
-import { CheckCircle2, Info, Sun } from "lucide-react";
+import { CheckCircle2, Hourglass, Info, Sun } from "lucide-react";
 
 import { exigirUsuario } from "@/auth/sessao";
 import { db, schema } from "@/db";
 
-import { Cabecalho, Vazio } from "../../_ui";
+import { instalacoesSemUsina, projetosSemUsina } from "@/geracao/pendencias-de-usina";
+import { sugerirVendasParaUsina } from "@/geracao/sugestao-dono";
+
+import { Cabecalho, Cartao, Vazio } from "../../_ui";
 import { endereco, paginar, Paginacao } from "../../_ui/paginacao";
 import { Ligar } from "./ligar";
 
@@ -37,6 +40,12 @@ export default async function SemDono({ searchParams }: { searchParams: Promise<
       vinculosPortal: { with: { contaPortal: { columns: { fabricante: true } } } },
     },
   });
+
+  // As vendas já instaladas que ainda não têm usina: de quem pode ser cada usina órfã.
+  const [candidatos, instalacoes] = await Promise.all([
+    projetosSemUsina(usuario.empresaId),
+    instalacoesSemUsina(usuario.empresaId),
+  ]);
 
   const clientes = await db.query.cliente.findMany({
     where: eq(schema.cliente.empresaId, usuario.empresaId),
@@ -94,7 +103,15 @@ export default async function SemDono({ searchParams }: { searchParams: Promise<
       .slice(0, 4);
   }
 
-  if (orfas.length === 0) {
+  /** As vendas instaladas que mais combinam com a usina (nome, cidade, época). */
+  function vendasSugeridas(u: (typeof orfas)[number]) {
+    return sugerirVendasParaUsina(
+      { nome: u.nome, cidade: u.cidade, instaladaEm: u.dataInstalacao, criadaEm: u.criadoEm },
+      candidatos,
+    );
+  }
+
+  if (orfas.length === 0 && instalacoes.length === 0) {
     return (
       <main>
         <Cabecalho trilha={[{ href: "/usinas", rotulo: "Usinas" }]} titulo="Usinas sem dono" />
@@ -116,13 +133,23 @@ export default async function SemDono({ searchParams }: { searchParams: Promise<
   }
 
   const pagina = paginar(orfas, paginaPedida, POR_PAGINA);
+  const selos = (
+    <>
+      {orfas.length > 0 && <span className="pilula sev-atencao">{orfas.length} esperando dono</span>}
+      {instalacoes.length > 0 && (
+        <span className="pilula sev-atencao">
+          {instalacoes.length} {instalacoes.length > 1 ? "instaladas" : "instalada"} sem usina
+        </span>
+      )}
+    </>
+  );
 
   return (
     <main>
       <Cabecalho
         trilha={[{ href: "/usinas", rotulo: "Usinas" }]}
         titulo="Usinas sem dono"
-        selos={<span className="pilula sev-atencao">{orfas.length} esperando</span>}
+        selos={selos}
         meta="Ligue cada usina ao cliente certo: assim o alerta dela encontra o contrato, o telefone e a ART."
       />
 
@@ -143,6 +170,34 @@ export default async function SemDono({ searchParams }: { searchParams: Promise<
         </div>
       </details>
 
+      {instalacoes.length > 0 && (
+        <div className="pagina-corpo">
+          <Cartao
+            titulo="Instaladas e ainda sem usina no portal"
+            icone={<Hourglass size={16} />}
+            contador={instalacoes.length}
+            ajuda="Instalação concluída há 3 dias ou mais e nenhuma usina do cliente apareceu. O técnico pode ter esquecido de criá-la no portal, ou o inversor é de um fabricante que o Selebi ainda não lê (Hoymiles, GoodWe e NEP)."
+          >
+            <ul className="lista-instalacoes">
+              {instalacoes.map((i) => (
+                <li key={i.projetoId}>
+                  <a href={`/projeto/${i.projetoId}`}>
+                    <strong>{i.clienteNome}</strong>
+                  </a>
+                  <span className="fraco">
+                    {" "}
+                    · instalada há {i.dias} dias{i.cidade ? ` · ${i.cidade}` : ""} ·{" "}
+                    {i.seriais > 0
+                      ? `${i.seriais === 1 ? "serial anotado" : `${i.seriais} seriais anotados`}, o portal ainda não mostrou`
+                      : "sem serial do inversor anotado"}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          </Cartao>
+        </div>
+      )}
+
       <div className="cartoes" id="lista">
         {pagina.itens.map((u) => {
           const portal = u.vinculosPortal[0]?.contaPortal?.fabricante ?? "—";
@@ -157,7 +212,8 @@ export default async function SemDono({ searchParams }: { searchParams: Promise<
               </p>
               <Ligar
                 usinaId={u.id}
-                sugestoes={sugerir(u.nome)}
+                sugestoes={sugerir(u.nome).filter((c) => !vendasSugeridas(u).some((v) => v.clienteId === c.id))}
+                vendas={vendasSugeridas(u)}
                 clientes={clientes.map((c) => ({
                   id: c.id,
                   nome: c.nome,

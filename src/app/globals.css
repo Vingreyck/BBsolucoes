@@ -10086,3 +10086,23 @@ button.link-acao {
   border: 1px solid var(--line);
   margin-bottom: 0.6rem;
 }
+
+/* "Instaladas e ainda sem usina no portal", na tela Sem dono */
+.lista-instalacoes {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 0.5rem;
+}
+.lista-instalacoes li {
+  padding: 0.5rem 0;
+  border-bottom: 1px solid var(--line);
+  font-size: 0.9rem;
+}
+.lista-instalacoes li:last-child {
+  border-bottom: 0;
+}
+.sugestoes-venda button {
+  border-color: var(--accent);
+}

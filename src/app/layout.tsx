@@ -6,6 +6,7 @@ import { headers } from "next/headers";
 import { podeVerDocumentos } from "@/auth/permissao";
 import { usuarioAtual } from "@/auth/sessao";
 import { db, schema } from "@/db";
+import { contarPendenciasDeUsina } from "@/geracao/pendencias-de-usina";
 import { ehGestaoWeb } from "@/os/acesso";
 
 import { BarraLateral, type GrupoMenu } from "./barra-lateral";
@@ -83,10 +84,12 @@ export default async function RootLayout({
     );
   }
 
-  const [temDocumentos, alertas, pedidos] = await Promise.all([
+  const [temDocumentos, alertas, pedidos, semDono] = await Promise.all([
     podeVerDocumentos(usuario.empresaId, usuario.papel),
     alertasAbertos(usuario.empresaId),
     usuario.papel === "adm" ? pedidosPendentes(usuario.empresaId) : Promise.resolve(0),
+    // Usinas sem dono e instalações que ainda não apareceram no portal: o número ao lado de "Sem dono".
+    contarPendenciasDeUsina(usuario.empresaId),
   ]);
   const gestao = ehGestaoWeb(usuario.papel);
   const temOs = usuario.papel !== "estoque";
@@ -124,7 +127,7 @@ export default async function RootLayout({
       itens: [
         { href: "/usinas", rotulo: "Usinas", icone: "usinas" },
         { href: "/alertas", rotulo: "Alertas", icone: "alertas", contador: alertas },
-        { href: "/usinas/sem-dono", rotulo: "Sem dono", icone: "semDono" },
+        { href: "/usinas/sem-dono", rotulo: "Sem dono", icone: "semDono", contador: semDono },
         { href: "/coleta", rotulo: "Coleta", icone: "coleta" },
         ...(gestao ? [{ href: "/relatorios", rotulo: "Relatórios do mês", icone: "relatorios" as const }] : []),
         { href: "/cadastro", rotulo: "Nova usina", icone: "novaUsina" },

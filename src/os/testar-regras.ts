@@ -57,6 +57,7 @@ import {
   percentualFioB,
   rotuloDoPayback,
 } from "../proposta/calculo";
+import { diasDesde, pontosDaData, pontosDoNome, sugerirVendasParaUsina } from "../geracao/sugestao-dono";
 import { lerPremissas, premissasDoFormulario, SUGESTAO } from "../proposta/premissas";
 import {
   estruturaDaProposta,
@@ -1176,6 +1177,47 @@ const entradaDaPropostaTeste: EntradaProposta = {
   confere(doForm !== null && Math.abs(doForm.desempenho - 0.75) < 1e-9 && Math.abs(doForm.cartao.taxaMes - 0.008) < 1e-9, "o formulário digita porcentagem e grava fração");
   igual(doForm?.numeroInicial, null, "número inicial em branco fica nulo");
   igual(premissasDoFormulario({ tarifaKwh: "abc" }), null, "campo que não é número anula o formulário");
+}
+
+// --- Sugestão de dono da usina ---------------------------------------------------------
+{
+  const dia = (s: string) => new Date(`${s}T12:00:00Z`);
+  igual(pontosDoNome("Tawane Lopes ( David Som )", "Tawane Lopes"), 4, "todas as palavras do cliente estão no nome da usina");
+  igual(pontosDoNome("José Fernando7", "José Fernando"), 4, "o número colado no login do técnico não atrapalha");
+  igual(pontosDoNome("micaely 03", "Micaely Santos Lima"), 1, "só o primeiro nome em comum vale pouco");
+  igual(pontosDoNome("Maria da Silva", "Mariana Costa"), 0, "nome só parecido não conta");
+  igual(pontosDoNome("Ana de Souza", "Joana de Souza"), 1, "sobrenome comum sozinho vale pouco (“de” não conta)");
+  igual(pontosDaData({ instaladaEm: dia("2026-11-10"), criadaEm: dia("2026-11-11") }, dia("2026-11-08")), 2, "usina nasce dois dias depois da instalação: vale 2");
+  igual(pontosDaData({ instaladaEm: dia("2026-11-10"), criadaEm: dia("2026-11-11") }, dia("2026-11-11")), 2, "a data do portal vem sem hora: um dia antes ainda vale");
+  igual(pontosDaData({ instaladaEm: null, criadaEm: dia("2026-11-25") }, dia("2026-11-08")), 1, "17 dias depois vale só 1");
+  igual(pontosDaData({ instaladaEm: dia("2026-12-20"), criadaEm: dia("2026-12-20") }, dia("2026-11-08")), 0, "muito depois não combina");
+  igual(pontosDaData({ instaladaEm: dia("2026-11-01"), criadaEm: dia("2026-11-01") }, dia("2026-11-08")), 0, "usina anterior à instalação não combina");
+  igual(pontosDaData({ instaladaEm: dia("2026-11-10"), criadaEm: dia("2026-11-10") }, null), 0, "sem instalação concluída, sem pontos de data");
+
+  const usina = { nome: "Tawane Lopes ( David Som )", cidade: "Itabaiana", instaladaEm: dia("2026-11-10"), criadaEm: dia("2026-11-11") };
+  const candidato = (id: string, nome: string, cidade: string | null, concluida: string | null) => ({
+    projetoId: `p-${id}`,
+    clienteId: `c-${id}`,
+    clienteNome: nome,
+    cidade,
+    instalacaoConcluidaEm: concluida ? dia(concluida) : null,
+  });
+  const lista = sugerirVendasParaUsina(usina, [
+    candidato("1", "Tawane Lopes", "Itabaiana", "2026-11-09"),
+    candidato("2", "Joana Souza", "Itabaiana", "2026-11-09"),
+    candidato("3", "Pedro Alves", "Lagarto", "2026-10-01"),
+    candidato("4", "Tawane Costa", "Aracaju", null),
+  ]);
+  igual(lista[0]?.clienteNome, "Tawane Lopes", "o de nome, cidade e época iguais vem primeiro");
+  igual(lista[0]?.pontos, 7, "4 do nome + 1 da cidade + 2 da época");
+  confere(lista[0]?.motivos.join(" · ") === "nome parecido · mesma cidade · instalada na mesma época", "os motivos saem em palavras");
+  confere(lista.some((s) => s.clienteNome === "Joana Souza"), "mesma cidade e mesma época, sem nome, ainda aparece (3 pontos), abaixo do outro");
+  confere(!lista.some((s) => s.clienteNome === "Pedro Alves"), "outra cidade e instalação antiga não aparecem");
+  confere(!lista.some((s) => s.clienteNome === "Tawane Costa"), "um nome em comum sozinho não basta");
+  igual(sugerirVendasParaUsina(usina, []).length, 0, "sem candidatos, sem sugestão");
+  igual(sugerirVendasParaUsina(usina, Array.from({ length: 6 }, (_, i) => candidato(`x${i}`, `Tawane Lopes ${i}`, "Itabaiana", "2026-11-09"))).length, 3, "no máximo 3 sugestões");
+  igual(diasDesde(dia("2026-11-10"), dia("2026-11-13")), 3, "dias desde a instalação");
+  igual(diasDesde(dia("2026-11-20"), dia("2026-11-13")), 0, "data no futuro não dá dia negativo");
 }
 
 /** A proposta sai em PDF de verdade, no modelo de 7 páginas, com e sem logo. */

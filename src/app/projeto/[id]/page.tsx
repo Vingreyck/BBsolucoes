@@ -992,9 +992,16 @@ export default async function DetalheProjeto({
                 icone={<Trash2 size={15} aria-hidden />}
                 classe="botao secundario botao-reprovar"
                 titulo="Excluir o projeto"
-                descricao={`${cliente.nome} · o projeto, o histórico da esteira, as propostas e os contratos saem e isso não se desfaz. As ordens de serviço ficam, sem projeto.`}
+                descricao={`${cliente.nome} · o projeto, o histórico da esteira, as propostas e os contratos saem e isso não se desfaz.`}
               >
                 <form action={excluirProjetoCompleto.bind(null, projeto.id)} className="form-agendar form-agendar-coluna">
+                  <label className="marcar">
+                    <input type="checkbox" name="ordens" value="sim" defaultChecked /> Apagar também as{" "}
+                    <strong>
+                      {ordens.length} {ordens.length === 1 ? "ordem de serviço" : "ordens de serviço"}
+                    </strong>{" "}
+                    deste projeto, com as fotos anexadas. Elas <strong>somem do app do técnico</strong>.
+                  </label>
                   <label className="marcar">
                     <input type="checkbox" name="documentos" value="sim" defaultChecked /> Apagar também os documentos deste
                     projeto (ART, contrato, projeto elétrico…). Os arquivos vão para a <strong>lixeira do Drive</strong>.
