@@ -100,7 +100,7 @@ const ETAPAS = [
     nome: "Projeto",
     ordem: 80,
     papelResponsavel: "engenheiro",
-    descricao: "Boleto da ART, ART, memorial descritivo, submissão e aprovação.",
+    descricao: "Projeto elétrico, memorial, ART e datasheet. Anda sozinho quando a Energisa registra o pedido no portal.",
   },
   {
     slug: "aprovacao_concessionaria",
@@ -115,7 +115,7 @@ const ETAPAS = [
     ordem: 100,
     papelResponsavel: "tecnico",
     descricao:
-      "A obra. É a etapa que mais gera retrabalho, e para onde o projeto volta quando a concessionária reprova.",
+      "A obra, pela OS de instalação. Concluída a OS, o projeto vai sozinho para o Pedido de vistoria. É a etapa que mais gera retrabalho, e para onde o projeto volta quando a concessionária reprova.",
   },
   {
     slug: "pedido_vistoria",

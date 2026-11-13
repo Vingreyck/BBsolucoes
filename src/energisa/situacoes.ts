@@ -116,17 +116,26 @@ export function vigente<T extends { fase: FaseEnergisa; dataAbertura: Date | nul
  * ela faz sentido, para nunca empurrar um projeto que está em outro lugar por
  * outro motivo:
  *
+ * - **Projeto registrado no portal** (qualquer situação viva: em análise,
+ *   aprovado…) com o projeto do Selebi em "Projeto" → avança para a Aprovação
+ *   da concessionária. Aparecer no portal é a prova de que o engenheiro
+ *   submeteu: não há o que clicar à mão. Indeferido ou cancelado não conta, e
+ *   por isso o projeto devolvido para correção só anda de novo quando o
+ *   reenvio ("V2") aparecer;
  * - **Vistoria aprovada** (ou ligação liberada, ou já a UC GD conectada) com o
  *   projeto em "Pedido de vistoria" → avança para Monitoramento: o pedido foi
  *   aceito, não há o que fazer à mão;
  * - **Vistoria reprovada** com o projeto em "Pedido de vistoria" → volta para
  *   Execução, que é para onde a esteira manda o retrabalho.
  *
- * A aprovação do projeto (etapa 9) não move nada sozinha: ela libera o botão
- * "Gerar OS de instalação", porque a obra precisa de técnico e de dia — é ao
- * escolher os dois que o projeto anda.
+ * A aprovação do projeto (Aprovação da concessionária) não move nada sozinha:
+ * ela libera o botão "Gerar OS de instalação", porque a obra precisa de técnico
+ * e de dia — é ao escolher os dois que o projeto anda.
  */
 export function acaoNaEsteira(fase: FaseEnergisa, etapaSlug: string): "avancar" | "voltar" | null {
+  if (etapaSlug === "projeto") {
+    return viva(fase) && fase !== "desconhecida" ? "avancar" : null;
+  }
   if (etapaSlug !== "pedido_vistoria") return null;
   if (fase === "vistoria_aprovada" || fase === "conectada") return "avancar";
   if (fase === "vistoria_reprovada") return "voltar";

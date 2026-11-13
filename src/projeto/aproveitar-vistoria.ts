@@ -2,7 +2,7 @@ import { and, desc, eq, inArray, ne } from "drizzle-orm";
 
 import { db, schema } from "@/db";
 
-import { lerDadosTecnicos, lerVistoria, type DadosDaVistoria, type DadosTecnicos } from "./da-vistoria";
+import { distribuidoraDaCidade, lerDadosTecnicos, lerVistoria, type DadosDaVistoria, type DadosTecnicos } from "./da-vistoria";
 
 /**
  * Aproveita o que o técnico respondeu na vistoria: leva o tipo de telhado para
@@ -12,12 +12,6 @@ import { lerDadosTecnicos, lerVistoria, type DadosDaVistoria, type DadosTecnicos
  * está vazio**. O que o comercial ou o engenheiro já digitaram vale mais que a
  * resposta de campo, e nunca é sobrescrito. Rodar de novo não muda nada.
  */
-
-/**
- * A concessionária quando o projeto não diz qual é. A BB atende em Sergipe, e
- * lá só há a Energisa; o campo da tela do projeto traz o mesmo texto de exemplo.
- */
-const DISTRIBUIDORA_PADRAO = "Energisa Sergipe";
 
 export interface Aproveitado {
   telhado: boolean;
@@ -31,6 +25,7 @@ export async function aproveitarVistoria(empresaId: string, projetoId: string): 
   const projeto = await db.query.projeto.findFirst({
     where: and(eq(schema.projeto.id, projetoId), eq(schema.projeto.empresaId, empresaId)),
     columns: { id: true, clienteId: true, concessionaria: true, telhadoTipo: true },
+    with: { cliente: { columns: { cidade: true } } },
   });
   if (!projeto) return nada;
 
@@ -61,7 +56,9 @@ export async function aproveitarVistoria(empresaId: string, projetoId: string): 
   }
 
   if (dados.ucNumero) {
-    const concessionaria = projeto.concessionaria?.trim() || DISTRIBUIDORA_PADRAO;
+    // Sem concessionária no projeto, ela sai da cidade do cliente: Sergipe tem
+    // duas distribuidoras (Energisa e, em 12 cidades do sul, a Sulgipe).
+    const concessionaria = projeto.concessionaria?.trim() || distribuidoraDaCidade(projeto.cliente.cidade);
     const jaTem = await db.query.unidadeConsumidora.findFirst({
       where: and(
         eq(schema.unidadeConsumidora.empresaId, empresaId),

@@ -143,3 +143,37 @@ export function lerDadosTecnicos(itens: RespostaDaVistoria[]): DadosTecnicos {
 export function faltaParaOProjeto(d: DadosTecnicos): string[] {
   return ESSENCIAIS_DO_PROJETO.filter((e) => d[e.campo] === null).map((e) => e.rotulo);
 }
+
+// ------------------------------------------------------------- distribuidora
+
+/**
+ * As cidades de Sergipe atendidas pela **Sulgipe** (sede em Estância), sem
+ * acento e em minúsculas. O resto do estado é da Energisa Sergipe — inclusive
+ * Itabaiana e Lagarto (não confundir Itabaiana com Itabaianinha, que é Sulgipe).
+ */
+const CIDADES_SULGIPE = new Set([
+  "araua",
+  "boquim",
+  "cristinapolis",
+  "estancia",
+  "indiaroba",
+  "itabaianinha",
+  "pedrinhas",
+  "riachao do dantas",
+  "santa luzia do itanhy",
+  "tobias barreto",
+  "tomar do geru",
+  "umbauba",
+]);
+
+/** A distribuidora pela cidade do cliente: Sulgipe nas cidades dela, Energisa Sergipe no resto. */
+export function distribuidoraDaCidade(cidade: string | null | undefined): string {
+  const chave = (cidade ?? "")
+    .normalize("NFD")
+    .replace(/[̀-ͯ]/g, "")
+    .toLowerCase()
+    .replace(/\s*[-/]\s*se$/, "")
+    .replace(/\s+/g, " ")
+    .trim();
+  return CIDADES_SULGIPE.has(chave) ? "Sulgipe" : "Energisa Sergipe";
+}

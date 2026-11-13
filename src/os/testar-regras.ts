@@ -91,6 +91,7 @@ import { gerarContratoPdf, nomeDoContrato } from "../projeto/contrato-pdf";
 import { potenciaLegivel, rotuloDoModelo, sugestaoDeEquipamentos, textoDoKit } from "../projeto/kit";
 import { diasCorridos, fraseDoTempo, rotuloDoTempo } from "../projeto/tempo";
 import {
+  distribuidoraDaCidade,
   estruturaDoTelhado,
   faltaParaOProjeto,
   lerDadosTecnicos,
@@ -297,6 +298,12 @@ async function testarRetrace() {
   igual(acaoNaEsteira("vistoria_reprovada", "pedido_vistoria"), "voltar", "vistoria reprovada volta para execução");
   igual(acaoNaEsteira("conectada", "execucao"), null, "fora do pedido de vistoria, a esteira não se mexe sozinha");
   igual(acaoNaEsteira("aprovado", "aprovacao_concessionaria"), null, "aprovação não move: libera o botão da OS");
+  igual(acaoNaEsteira("analise", "projeto"), "avancar", "projeto registrado na Energisa (em análise): sai da etapa Projeto");
+  igual(acaoNaEsteira("aprovado", "projeto"), "avancar", "projeto já aprovado e ainda na etapa Projeto: avança");
+  igual(acaoNaEsteira("indeferido", "projeto"), null, "projeto indeferido não avança: volta para correção");
+  igual(acaoNaEsteira("cancelado", "projeto"), null, "projeto cancelado no portal não avança");
+  igual(acaoNaEsteira("desconhecida", "projeto"), null, "situação desconhecida não avança às cegas");
+  igual(acaoNaEsteira("analise", "documentacao"), null, "fora de Projeto e Pedido de vistoria, a esteira não se mexe");
 
   const d = (iso: string) => new Date(`${iso}T12:00:00Z`);
   const v = vigente([
@@ -936,6 +943,15 @@ igual(rotuloDoTempo(0), "hoje", "rótulo de hoje");
 igual(rotuloDoTempo(12), "12 d", "rótulo curto do cartão");
 igual(fraseDoTempo(1), "há 1 dia", "frase no singular");
 igual(fraseDoTempo(12), "há 12 dias", "frase no plural");
+
+
+// --- Distribuidora pela cidade (Sergipe tem Energisa e Sulgipe) -----------------------
+igual(distribuidoraDaCidade("Itabaiana"), "Energisa Sergipe", "Itabaiana é Energisa");
+igual(distribuidoraDaCidade("Lagarto"), "Energisa Sergipe", "Lagarto é Energisa");
+igual(distribuidoraDaCidade("Itabaianinha"), "Sulgipe", "Itabaianinha é Sulgipe (não confundir com Itabaiana)");
+igual(distribuidoraDaCidade("ESTÂNCIA"), "Sulgipe", "Estância, em maiúscula e com acento, é Sulgipe");
+igual(distribuidoraDaCidade("Umbaúba - SE"), "Sulgipe", "cidade com '- SE' no fim");
+igual(distribuidoraDaCidade(null), "Energisa Sergipe", "sem cidade, Energisa");
 
 /** O PDF do contrato sai de verdade, com e sem logo. */
 async function testarContratoPdf(): Promise<void> {

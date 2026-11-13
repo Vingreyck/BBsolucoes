@@ -209,12 +209,15 @@ export async function reagirNaEsteira(empresaId: string): Promise<string[]> {
     const situacao = v.descricaoSituacao ?? ROTULO_FASE[v.fase];
     let texto = `Energisa (projeto ${v.numero}): ${situacao}.`;
     if (acao) {
+      // O projeto saindo da etapa "Projeto": a Energisa registrou o pedido, ou seja, foi submetido.
+      const submetido = acao === "avancar" && p.etapa.slug === "projeto";
       const nova = await moverNaEsteira({
         empresaId,
         projetoId: p.id,
         direcao: acao,
-        observacao:
-          acao === "avancar"
+        observacao: submetido
+          ? `Automático: a Energisa registrou o projeto (${v.numero}, ${situacao}): foi submetido.`
+          : acao === "avancar"
             ? `Automático: a Energisa aprovou o pedido de vistoria (projeto ${v.numero}, ${situacao}).`
             : `Automático: a Energisa reprovou a vistoria (projeto ${v.numero}) — corrigir e pedir de novo.`,
       });
@@ -224,9 +227,14 @@ export async function reagirNaEsteira(empresaId: string): Promise<string[]> {
         avisos.push({
           para: destinatarios(p),
           projetoId: p.id,
-          titulo: acao === "avancar" ? `Vistoria aprovada: ${p.cliente.nome}` : `Vistoria reprovada: ${p.cliente.nome}`,
-          corpo:
-            acao === "avancar"
+          titulo: submetido
+            ? `Projeto na Energisa: ${p.cliente.nome}`
+            : acao === "avancar"
+              ? `Vistoria aprovada: ${p.cliente.nome}`
+              : `Vistoria reprovada: ${p.cliente.nome}`,
+          corpo: submetido
+            ? `A Energisa registrou o projeto (${situacao}). Foi para ${nova.nome} sozinho: acompanhe a análise.`
+            : acao === "avancar"
               ? `A Energisa aceitou o pedido de vistoria (${situacao}). O projeto foi para ${nova.nome} sozinho.`
               : `O projeto voltou para ${nova.nome}. Corrija e peça a vistoria de novo.`,
         });

@@ -327,7 +327,10 @@ async function main() {
     });
     confere(os.status === "concluida" && os.resultado === "resolvido", "concluída e resolvida");
     confere((os.relatorioToken?.length ?? 0) >= 30, "link do relatório gerado", os.relatorioToken);
-    confere(projetoDepois?.etapa.slug !== "execucao", `esteira andou sozinha (agora em "${projetoDepois?.etapa.nome}")`);
+    confere(
+      projetoDepois?.etapa.slug === "pedido_vistoria",
+      `instalação concluída: da Execução o projeto foi para o Pedido de vistoria (agora em "${projetoDepois?.etapa.nome}")`,
+    );
     confere(concluida.avisos.some((a) => a.includes("avançou")), "o app é avisado de que o projeto avançou", concluida.avisos);
     confere(os.eventos.some((e) => e.tipo === "esteira" && e.origem === "sistema"), "o avanço fica no histórico da OS");
     const tempo = tempoEmCampo(os.eventos);
