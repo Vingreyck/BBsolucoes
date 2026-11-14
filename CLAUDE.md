@@ -24,7 +24,7 @@ Next 15 (App Router, server actions), Postgres com Drizzle, Docker em produção
 
 - O repositório do site é **público**. Nunca colocar no git: segredo, `.env`, exportação dos portais, dado de cliente, chave, endereço interno. O que for sensível vai para a memória, não para o código.
 - A política de segurança (CSP) usa `nonce` (`src/middleware.ts`): script escrito no HTML precisa levar o `nonce` do cabeçalho `x-nonce`.
-- **Usina arquivada** (`usina.arquivada_em` preenchido, depois do recomeço) segue coletando só para análise. Toda tela ou consulta que liste usina ou alerta deve filtrar `arquivada_em is null`. Só o filtro "Arquivadas" de Usinas as mostra.
+- **Usina arquivada** (`usina.arquivada_em` preenchido, depois do recomeço) segue coletando só para análise. Toda tela ou consulta que liste usina ou alerta deve filtrar `arquivada_em is null`. Só o filtro "Arquivadas" de Usinas as mostra, **com uma exceção pedida pelo dono (13/11): "Relatórios do mês" (`relatoriosDoMes`) inclui as arquivadas, marcadas como "antiga"**, porque o relatório é histórico.
 - Quem recebe OS é quem usa o app do técnico (sessão com `origem = 'app'` ou aparelho de push). Ver `quemUsaOApp` em `src/os/consultas.ts`.
 - Tema claro/escuro: `data-tema` na página (script no `<head>`, `src/app/tema.ts`). A paleta escura está escrita em **dois lugares** do `globals.css` (`@media` e `:root[data-tema="escuro"]`); mudou um, mude o outro.
 - Energisa: o portal recusa servidor (Akamai). A leitura vem da extensão no Chrome do usuário, logado por ele. Sem stealth, sem trocar de IP, sem cliques automáticos para driblar bloqueio, sem login automático, sem ler SMS.

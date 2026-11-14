@@ -10106,3 +10106,79 @@ button.link-acao {
 .sugestoes-venda button {
   border-color: var(--accent);
 }
+
+/* Tabela da tela "Sem dono": busca do cliente escrevendo, sugestões e linha já ligada */
+.tabela-sem-dono td {
+  vertical-align: middle;
+  white-space: normal;
+}
+.tabela-sem-dono .sugestoes {
+  max-width: 28rem;
+}
+.tabela-sem-dono .sugestao-venda {
+  border-color: var(--accent);
+}
+.tabela-sem-dono .linha-ligada td {
+  background: color-mix(in srgb, var(--ok) 8%, transparent);
+}
+.tabela-sem-dono .linha-ligada .celula-dupla {
+  opacity: 0.7;
+}
+.erro-linha {
+  margin: 0.25rem 0 0;
+  font-size: 0.74rem;
+  color: var(--crit);
+}
+.lista-mais {
+  margin: 0;
+  padding: 0.75rem;
+  text-align: center;
+  border-top: 1px solid var(--line-soft);
+}
+.busca-cliente input {
+  font: inherit;
+  font-size: 0.82rem;
+  width: 100%;
+  min-width: 12rem;
+  padding: 0.38rem 0.55rem;
+  color: var(--ink);
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--raio-p);
+}
+.busca-cliente input:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -1px;
+}
+.busca-cliente-lista {
+  position: fixed;
+  z-index: 60;
+  margin: 0;
+  padding: 0.25rem;
+  list-style: none;
+  max-height: 18rem;
+  overflow-y: auto;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--raio);
+  box-shadow: 0 8px 24px rgb(0 0 0 / 0.18);
+}
+.busca-cliente-lista li {
+  display: grid;
+  gap: 0.1rem;
+  padding: 0.4rem 0.55rem;
+  border-radius: var(--raio-p);
+  cursor: pointer;
+  font-size: 0.84rem;
+}
+.busca-cliente-lista li small {
+  color: var(--ink-3);
+  font-size: 0.72rem;
+}
+.busca-cliente-lista li[aria-selected="true"] {
+  background: var(--accent-soft);
+}
+.busca-cliente-lista .busca-cliente-vazio {
+  cursor: default;
+  color: var(--ink-3);
+}

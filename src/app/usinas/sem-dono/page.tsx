@@ -1,5 +1,5 @@
 import { asc, eq, sql } from "drizzle-orm";
-import { CheckCircle2, Hourglass, Info, Sun } from "lucide-react";
+import { CheckCircle2, Hourglass, Info } from "lucide-react";
 
 import { exigirUsuario } from "@/auth/sessao";
 import { db, schema } from "@/db";
@@ -8,8 +8,7 @@ import { instalacoesSemUsina, projetosSemUsina } from "@/geracao/pendencias-de-u
 import { sugerirVendasParaUsina } from "@/geracao/sugestao-dono";
 
 import { Cabecalho, Cartao, Vazio } from "../../_ui";
-import { endereco, paginar, Paginacao } from "../../_ui/paginacao";
-import { Ligar } from "./ligar";
+import { TabelaSemDono, type UsinaSemDono } from "./tabela";
 
 export const dynamic = "force-dynamic";
 
@@ -26,11 +25,7 @@ export const dynamic = "force-dynamic";
  * encontrar o contrato e o telefone no dossiê.
  */
 
-/** Cada cartão leva a lista de clientes para escolher: poucos por página deixam a tela leve. */
-const POR_PAGINA = 12;
-
-export default async function SemDono({ searchParams }: { searchParams: Promise<{ pagina?: string }> }) {
-  const { pagina: paginaPedida } = await searchParams;
+export default async function SemDono() {
   const usuario = await exigirUsuario();
 
   const orfas = await db.query.usina.findMany({
@@ -49,7 +44,7 @@ export default async function SemDono({ searchParams }: { searchParams: Promise<
 
   const clientes = await db.query.cliente.findMany({
     where: eq(schema.cliente.empresaId, usuario.empresaId),
-    columns: { id: true, nome: true },
+    columns: { id: true, nome: true, cidade: true },
     orderBy: asc(schema.cliente.nome),
   });
 
@@ -132,7 +127,23 @@ export default async function SemDono({ searchParams }: { searchParams: Promise<
     );
   }
 
-  const pagina = paginar(orfas, paginaPedida, POR_PAGINA);
+  // Uma linha por usina órfã; os clientes vão uma vez só para a tabela inteira.
+  const linhas: UsinaSemDono[] = orfas.map((u) => {
+    const vendas = vendasSugeridas(u);
+    return {
+      id: u.id,
+      nome: u.nome,
+      portal: u.vinculosPortal[0]?.contaPortal?.fabricante ?? "—",
+      cidade: u.cidade,
+      instaladaEm: u.dataInstalacao ? u.dataInstalacao.toISOString().slice(0, 10) : null,
+      vendas: vendas.map((v) => ({ projetoId: v.projetoId, clienteNome: v.clienteNome, motivos: v.motivos })),
+      parecidos: sugerir(u.nome)
+        .filter((c) => !vendas.some((v) => v.clienteId === c.id))
+        .map((c) => ({ id: c.id, nome: c.nome, cidade: c.cidade, docs: c.docs })),
+    };
+  });
+  // Todos os clientes, novos e antigos: a usina pode ser de quem comprou há anos.
+  const todosOsClientes = clientes.map((c) => ({ id: c.id, nome: c.nome, cidade: c.cidade, docs: docsPor.get(c.id) ?? 0 }));
   const selos = (
     <>
       {orfas.length > 0 && <span className="pilula sev-atencao">{orfas.length} esperando dono</span>}
@@ -198,33 +209,7 @@ export default async function SemDono({ searchParams }: { searchParams: Promise<
         </div>
       )}
 
-      <div className="cartoes" id="lista">
-        {pagina.itens.map((u) => {
-          const portal = u.vinculosPortal[0]?.contaPortal?.fabricante ?? "—";
-          return (
-            <div key={u.id} className="cartao cartao-orfa">
-              <h3>
-                <Sun size={16} aria-hidden /> {u.nome}
-              </h3>
-              <p className="fraco">
-                {portal}
-                {u.cidade ? ` · ${u.cidade}` : ""}
-              </p>
-              <Ligar
-                usinaId={u.id}
-                sugestoes={sugerir(u.nome).filter((c) => !vendasSugeridas(u).some((v) => v.clienteId === c.id))}
-                vendas={vendasSugeridas(u)}
-                clientes={clientes.map((c) => ({
-                  id: c.id,
-                  nome: c.nome,
-                  docs: docsPor.get(c.id) ?? 0,
-                }))}
-              />
-            </div>
-          );
-        })}
-      </div>
-      <Paginacao {...pagina} rotulo="usinas sem dono" href={(n) => endereco("/usinas/sem-dono", {}, { pagina: n })} />
+      {linhas.length > 0 && <TabelaSemDono usinas={linhas} clientes={todosOsClientes} />}
     </main>
   );
 }

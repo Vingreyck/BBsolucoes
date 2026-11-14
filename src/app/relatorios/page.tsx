@@ -208,6 +208,11 @@ export default async function Relatorios({
                   <tr key={l.usinaId}>
                     <td className="forte">
                       {l.cliente}
+                      {l.arquivada && (
+                        <span className="pilula sev-info" title="Usina de antes do recomeço: segue coletando e entra no relatório do mês">
+                          antiga
+                        </span>
+                      )}
                       <div className="fraco">
                         {l.usina}
                         {l.potenciaKwp ? ` · ${numeroBr(l.potenciaKwp, 2)} kWp` : ""}

@@ -135,6 +135,8 @@ export async function tarifaVigente(empresaId: string, mes: string): Promise<num
 export interface LinhaRelatorio {
   usinaId: string;
   usina: string;
+  /** Usina de antes do recomeço (arquivada): continua no relatório do mês, marcada como antiga. */
+  arquivada: boolean;
   potenciaKwp: number | null;
   clienteId: string;
   cliente: string;
@@ -153,11 +155,13 @@ export interface LinhaRelatorio {
  * link do relatório (criado aqui na primeira vez que a lista abre).
  */
 export async function relatoriosDoMes(empresaId: string, mes: string): Promise<LinhaRelatorio[]> {
-  // Usina arquivada no recomeço não recebe mais relatório: segue coletando só para análise.
+  // Esta é a **única** lista que mostra também as usinas arquivadas no recomeço: o
+  // relatório do mês é histórico e todo cliente com geração no mês entra, novo ou
+  // antigo (pedido de 13/11). Nada é enviado sozinho: cada envio é um clique.
   const usinas = await db.query.usina.findMany({
-    where: and(eq(schema.usina.empresaId, empresaId), isNotNull(schema.usina.clienteId), isNull(schema.usina.arquivadaEm)),
+    where: and(eq(schema.usina.empresaId, empresaId), isNotNull(schema.usina.clienteId)),
     with: { cliente: { columns: { id: true, nome: true, telefone: true } } },
-    columns: { id: true, nome: true, potenciaKwp: true },
+    columns: { id: true, nome: true, potenciaKwp: true, arquivadaEm: true },
   });
   if (!usinas.length) return [];
   const ids = usinas.map((u) => u.id);
@@ -181,6 +185,7 @@ export async function relatoriosDoMes(empresaId: string, mes: string): Promise<L
     return {
       usinaId: u.id,
       usina: u.nome,
+      arquivada: u.arquivadaEm !== null,
       potenciaKwp: potencia,
       clienteId: u.cliente!.id,
       cliente: u.cliente!.nome,
