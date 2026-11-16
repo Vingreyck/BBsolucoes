@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 
-import { exigirUsuario } from "@/auth/sessao";
+import { exigirGestaoWeb } from "@/os/acesso";
 import { avancarPorDocumentos } from "@/projeto/automatico";
 import { moverNaEsteira } from "@/projeto/esteira";
 
@@ -18,7 +18,9 @@ export async function moverProjeto(
   projetoId: string,
   direcao: "avancar" | "voltar",
 ): Promise<void> {
-  const usuario = await exigirUsuario();
+  // Só a gestão (adm, engenheiro, vendedor) mexe na esteira de vendas: técnico e
+  // estoque veem o projeto, mas as setas não são deles.
+  const usuario = await exigirGestaoWeb();
   await moverNaEsteira({
     empresaId: usuario.empresaId,
     projetoId,

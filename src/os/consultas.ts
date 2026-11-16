@@ -6,6 +6,7 @@ import {
   eq,
   gte,
   inArray,
+  isNotNull,
   lt,
   or,
   sql,
@@ -14,6 +15,7 @@ import {
 } from "drizzle-orm";
 
 import { ehUuid } from "@/app-movel/http";
+import { PAPEIS_APP } from "@/app-movel/permissoes";
 import { db, schema } from "@/db";
 
 import { ErroOs, podeVer, type Ator } from "./acesso";
@@ -270,31 +272,57 @@ export async function vistoriaDoProjeto(empresaId: string, projetoId: string) {
   return vistorias.find((v) => v.status === "concluida") ?? vistorias[0] ?? null;
 }
 
-/** Quem pode ser responsável por uma OS: técnicos primeiro. */
 /**
- * Quem pode receber OS: quem já entrou no app BB-Selebi.
+ * Quem pode receber OS: quem **pode** usar o app BB-Selebi — adm, engenheiro,
+ * técnico ou vendedor, com a conta ativa, aprovada e com CPF (o app entra por
+ * CPF e senha).
  *
- * A OS chega ao técnico pelo celular (aviso, rota, checklist, fotos). Escolher
- * alguém que nunca abriu o app é mandar trabalho para ninguém — por isso a
- * lista de "quem vai" mostra só quem tem sessão do app ou celular cadastrado
- * para aviso. A sessão do app dura muito (ninguém digita senha em cima de
- * telhado), então quem usa o app aparece aqui.
+ * Antes a lista era só de quem tinha sessão do app aberta **naquele momento**.
+ * Só que a sessão some quando a pessoa sai do app, troca a senha no site ou fica
+ * 60 dias sem abrir — e a pessoa sumia da lista sem ninguém entender por quê
+ * (foi o caso da Maria Clara, adm, em 13/11). Agora todos aparecem; quem já usa
+ * o app vem primeiro (`usaApp`), e quem ainda não entrou vem marcado. A OS fica
+ * esperando no app e aparece para a pessoa assim que ela entrar.
  */
 export async function quemUsaOApp(empresaId: string) {
-  const linhas = await db
-    .selectDistinct({ id: schema.usuario.id, nome: schema.usuario.nome, papel: schema.usuario.papel })
-    .from(schema.usuario)
-    .leftJoin(schema.sessao, and(eq(schema.sessao.usuarioId, schema.usuario.id), eq(schema.sessao.origem, "app")))
-    .leftJoin(schema.aparelhoPush, eq(schema.aparelhoPush.usuarioId, schema.usuario.id))
-    .where(
-      and(
-        eq(schema.usuario.empresaId, empresaId),
-        eq(schema.usuario.ativo, true),
-        or(sql`${schema.sessao.id} is not null`, sql`${schema.aparelhoPush.id} is not null`),
-      ),
-    );
+  const usuarios = await db.query.usuario.findMany({
+    where: and(
+      eq(schema.usuario.empresaId, empresaId),
+      eq(schema.usuario.ativo, true),
+      isNotNull(schema.usuario.aprovadoEm),
+      isNotNull(schema.usuario.cpf),
+      inArray(schema.usuario.papel, [...PAPEIS_APP]),
+    ),
+    columns: { id: true, nome: true, papel: true },
+  });
+  if (!usuarios.length) return [];
+  const ids = usuarios.map((u) => u.id);
+  const [sessoes, aparelhos] = await Promise.all([
+    db
+      .selectDistinct({ usuarioId: schema.sessao.usuarioId })
+      .from(schema.sessao)
+      .where(and(inArray(schema.sessao.usuarioId, ids), eq(schema.sessao.origem, "app"))),
+    db
+      .selectDistinct({ usuarioId: schema.aparelhoPush.usuarioId })
+      .from(schema.aparelhoPush)
+      .where(inArray(schema.aparelhoPush.usuarioId, ids)),
+  ]);
+  const noApp = new Set([...sessoes, ...aparelhos].map((x) => x.usuarioId));
   const peso: Record<string, number> = { tecnico: 0, vendedor: 1, engenheiro: 2, adm: 3 };
-  return linhas.sort((a, b) => (peso[a.papel] ?? 9) - (peso[b.papel] ?? 9) || a.nome.localeCompare(b.nome));
+  return usuarios
+    .map((u) => ({ ...u, usaApp: noApp.has(u.id) }))
+    .sort(
+      (a, b) =>
+        Number(b.usaApp) - Number(a.usaApp) || (peso[a.papel] ?? 9) - (peso[b.papel] ?? 9) || a.nome.localeCompare(b.nome),
+    );
+}
+
+const PAPEL_CURTO: Record<string, string> = { tecnico: "técnico", vendedor: "vendedor", engenheiro: "engenheiro", adm: "adm" };
+
+/** "Maria Clara (adm) · ainda não entrou no app" — como a pessoa aparece nas listas de quem vai. */
+export function nomeDeQuemRecebe(u: { nome: string; papel: string; usaApp: boolean }): string {
+  const papel = PAPEL_CURTO[u.papel] ?? u.papel;
+  return `${u.nome}${papel ? ` (${papel})` : ""}${u.usaApp ? "" : " · ainda não entrou no app"}`;
 }
 
 export async function responsaveisPossiveis(empresaId: string) {

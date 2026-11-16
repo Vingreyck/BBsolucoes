@@ -6,11 +6,13 @@ import { redirect } from "next/navigation";
 
 import { cpfValido, normalizarCpf } from "@/auth/cpf";
 import { exigirUsuario } from "@/auth/sessao";
+import { exigirGestaoWeb } from "@/os/acesso";
 import { db } from "@/db";
 import { sincronizarDatasheets } from "@/projeto/datasheets";
 import { OPCOES_DE_TELHADO } from "@/projeto/da-vistoria";
 import { ehFormaPagamento } from "@/projeto/pagamento";
 import { ehLigacao } from "@/proposta/calculo";
+import { lerNumeroBr } from "@/proposta/proposta";
 import { excluirProjeto } from "@/projeto/excluir";
 import {
   cliente as clienteTable,
@@ -29,11 +31,14 @@ const texto = (d: FormData, campo: string) => {
   return v === "" ? null : v;
 };
 
+/**
+ * Número digitado como no Brasil ("3,76", "12.490,00") ou com ponto decimal
+ * ("3.76"). Antes, todo ponto era tratado como milhar: o "3.760" que o banco
+ * devolve virava 3760 ao salvar de novo, e "4.1" virava 41.
+ */
 const numero = (d: FormData, campo: string) => {
-  const v = texto(d, campo);
-  if (v === null) return null;
-  const n = Number(v.replace(/\./g, "").replace(",", "."));
-  return Number.isFinite(n) ? String(n) : null;
+  const n = lerNumeroBr(texto(d, campo) ?? "");
+  return n === null ? null : String(n);
 };
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -145,8 +150,11 @@ function doProjetoDaEmpresa(projetoId: string, empresaId: string) {
  * orçamento ainda não, e obrigar a cadastrar antes só faria o vendedor desistir
  * e voltar para o WhatsApp.
  */
+// Criar e editar a venda (valor, pagamento, cliente, kit) é da gestão: adm,
+// engenheiro e vendedor. Técnico e estoque comentam e anotam serial, mas não mexem
+// no que vai para a proposta e o contrato.
 export async function criarProjeto(dados: FormData): Promise<void> {
-  const usuario = await exigirUsuario();
+  const usuario = await exigirGestaoWeb();
 
   const clienteExistente = texto(dados, "clienteId");
   const usinaEscolhida = texto(dados, "usinaId");
@@ -273,9 +281,14 @@ export async function criarProjeto(dados: FormData): Promise<void> {
   }
 
   const agora = new Date();
-  const titulo = texto(dados, "titulo") ?? "Projeto novo";
   // O que a proposta comercial usa já entra aqui: consumo, ligação, kit, potência e telhado.
   const kit = await kitDoFormulario(dados, usuario.empresaId);
+  // Sem título digitado, "3,76 kWp · Itabaiana" diz mais na OS e na lista do que "Projeto novo".
+  const kwp = kit.potenciaKwp ? Number(kit.potenciaKwp) : null;
+  const titulo =
+    texto(dados, "titulo") ??
+    ([kwp ? `${kwp.toLocaleString("pt-BR", { maximumFractionDigits: 2 })} kWp` : null, contato.cidade].filter(Boolean).join(" · ") ||
+      "Projeto novo");
 
   const [projeto] = await db
     .insert(projetoTable)
@@ -293,6 +306,8 @@ export async function criarProjeto(dados: FormData): Promise<void> {
       ligacao: ligacaoDoFormulario(dados),
       concessionaria: texto(dados, "concessionaria"),
       observacoes: texto(dados, "observacoes"),
+      // O kit em texto, para quando o catálogo ainda não tem os modelos (a proposta e o contrato leem daqui).
+      equipamentos: texto(dados, "equipamentos")?.slice(0, 1000) ?? null,
       ...kit,
       ...pagamentoDoFormulario(dados),
     })
@@ -327,7 +342,7 @@ export async function salvarInformacoes(
   projetoId: string,
   dados: FormData,
 ): Promise<void> {
-  const usuario = await exigirUsuario();
+  const usuario = await exigirGestaoWeb();
   await db
     .update(projetoTable)
     .set({
@@ -371,7 +386,7 @@ export async function salvarProjetoTecnico(
   projetoId: string,
   dados: FormData,
 ): Promise<void> {
-  const usuario = await exigirUsuario();
+  const usuario = await exigirGestaoWeb();
 
   // O texto do contrato só é gravado se alguém digitou. Em branco, ele é sugerido
   // na hora de gerar o contrato (kit + telhado), para o telhado da vistoria
@@ -399,7 +414,7 @@ export async function salvarProjetoTecnico(
 
 /** A forma de pagamento que o cliente aceitou no Lead. Pode mudar depois. */
 export async function salvarPagamento(projetoId: string, dados: FormData): Promise<void> {
-  const usuario = await exigirUsuario();
+  const usuario = await exigirGestaoWeb();
   await db
     .update(projetoTable)
     .set({ ...pagamentoDoFormulario(dados), atualizadoEm: new Date() })
@@ -414,7 +429,7 @@ export async function salvarPagamento(projetoId: string, dados: FormData): Promi
  * que só completa. O endereço é o que o app do técnico usa para a rota.
  */
 export async function salvarCliente(projetoId: string, dados: FormData): Promise<void> {
-  const usuario = await exigirUsuario();
+  const usuario = await exigirGestaoWeb();
   const projeto = await db.query.projeto.findFirst({
     where: doProjetoDaEmpresa(projetoId, usuario.empresaId),
     columns: { clienteId: true },

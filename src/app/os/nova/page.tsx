@@ -13,7 +13,7 @@ import Link from "next/link";
 
 import { db, schema } from "@/db";
 import { exigirGestaoWeb } from "@/os/acesso";
-import { quemUsaOApp } from "@/os/consultas";
+import { nomeDeQuemRecebe, quemUsaOApp } from "@/os/consultas";
 import { garantirModelos } from "@/os/modelos";
 import { PRIORIDADE_ROTULO, TIPO_ROTULO } from "@/os/tipos";
 
@@ -40,13 +40,6 @@ function iniciais(nome: string): string {
   const p = nome.trim().split(/\s+/);
   return ((p[0]?.[0] ?? "") + (p.length > 1 ? p[p.length - 1][0] : "")).toUpperCase();
 }
-
-const PAPEL: Record<string, string> = {
-  tecnico: "técnico",
-  vendedor: "vendedor",
-  engenheiro: "engenheiro",
-  adm: "adm",
-};
 
 export default async function NovaOs({
   searchParams,
@@ -285,7 +278,7 @@ export default async function NovaOs({
                     <option value="">Definir depois</option>
                     {pessoas.map((u) => (
                       <option key={u.id} value={u.id}>
-                        {u.nome} ({PAPEL[u.papel] ?? u.papel})
+                        {nomeDeQuemRecebe(u)}
                       </option>
                     ))}
                   </select>

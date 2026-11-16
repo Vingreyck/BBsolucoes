@@ -27,7 +27,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 
 import { ErroOs, exigirAtorWeb, podeExecutar } from "@/os/acesso";
-import { carregarOs, comentariosDaOs, quemUsaOApp, tempoEmCampo } from "@/os/consultas";
+import { carregarOs, comentariosDaOs, nomeDeQuemRecebe, quemUsaOApp, tempoEmCampo } from "@/os/consultas";
 import { destinoDaOs, linkDaRota } from "@/os/destino";
 import {
   formatarDuracao,
@@ -67,7 +67,6 @@ import Trajeto from "./trajeto";
 
 export const dynamic = "force-dynamic";
 
-const PAPEL: Record<string, string> = { tecnico: "técnico", vendedor: "vendedor", engenheiro: "engenheiro", adm: "adm" };
 
 function soDigitos(t: string | null | undefined): string {
   return (t ?? "").replace(/\D/g, "");
@@ -105,10 +104,10 @@ export default async function DetalheOs({
     // Quem pode voltar na visita de volta também precisa da lista, mesmo sem ser gestão.
     ator.gestao || os.checklist.some((i) => i.agendar) ? quemUsaOApp(ator.empresaId) : Promise.resolve([]),
   ]);
-  // Quem já responde pela OS continua na lista, mesmo que tenha saído do app.
-  const pessoas: { id: string; nome: string; papel: string }[] = [...daApp];
+  // Quem já responde pela OS continua na lista, mesmo que a conta tenha mudado de papel.
+  const pessoas: { id: string; nome: string; papel: string; usaApp: boolean }[] = [...daApp];
   if (os.responsavel && !pessoas.some((p) => p.id === os.responsavel!.id)) {
-    pessoas.push({ id: os.responsavel.id, nome: os.responsavel.nome, papel: "" });
+    pessoas.push({ id: os.responsavel.id, nome: os.responsavel.nome, papel: "", usaApp: true });
   }
 
   const fechada = encerrada(os.status);
@@ -222,12 +221,12 @@ export default async function DetalheOs({
       <input type="hidden" name="acao" value="atribuir" />
       <label>
         Quem atende
-        <small className="fraco">Só aparece quem já entrou no app BB-Selebi.</small>
+        <small className="fraco">Quem ainda não entrou no app recebe a OS assim que entrar.</small>
         <select name="responsavelId" defaultValue={os.responsavel?.id ?? ""}>
           <option value="">Ninguém</option>
           {pessoas.map((u) => (
             <option key={u.id} value={u.id}>
-              {u.nome}{PAPEL[u.papel] ? ` (${PAPEL[u.papel]})` : ""}
+              {nomeDeQuemRecebe(u)}
             </option>
           ))}
         </select>
@@ -244,11 +243,11 @@ export default async function DetalheOs({
       {gestao && (
         <label className="entrada">
           <span className="entrada-rotulo">Quem vai</span>
-          <select name="responsavelId" defaultValue={os.responsavel?.id ?? ""} title="Só aparece quem já entrou no app BB-Selebi">
-            <option value="">{pessoas.length ? "Ninguém ainda" : "Ninguém entrou no app ainda"}</option>
+          <select name="responsavelId" defaultValue={os.responsavel?.id ?? ""} title="Quem ainda não entrou no app recebe a OS assim que entrar">
+            <option value="">{pessoas.length ? "Ninguém ainda" : "Ninguém pode usar o app ainda"}</option>
             {pessoas.map((u) => (
               <option key={u.id} value={u.id}>
-                {u.nome}{PAPEL[u.papel] ? ` (${PAPEL[u.papel]})` : ""}
+                {nomeDeQuemRecebe(u)}
               </option>
             ))}
           </select>
@@ -930,7 +929,7 @@ function CamposVisitaDeVolta({
   obrigatorio,
 }: {
   deixados: string[];
-  pessoas: { id: string; nome: string }[];
+  pessoas: { id: string; nome: string; papel: string; usaApp: boolean }[];
   padrao: string | null;
   obrigatorio: boolean;
 }) {
@@ -946,7 +945,7 @@ function CamposVisitaDeVolta({
           <option value="">{obrigatorio ? "Escolha…" : "Decidir depois (o escritório agenda)"}</option>
           {pessoas.map((p) => (
             <option key={p.id} value={p.id}>
-              {p.nome}
+              {nomeDeQuemRecebe(p)}
             </option>
           ))}
         </select>

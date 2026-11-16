@@ -24,7 +24,7 @@ import { numeroWhatsapp } from "@/documentos/cobranca";
 import { ROTULO_DOCUMENTO } from "@/documentos/rotulos";
 import { liberaOsDeInstalacao, tomDaFase, vigente, type FaseEnergisa } from "@/energisa/situacoes";
 import { ehGestaoWeb } from "@/os/acesso";
-import { quemUsaOApp } from "@/os/consultas";
+import { nomeDeQuemRecebe, quemUsaOApp } from "@/os/consultas";
 import { formatarRelogio } from "@/os/relogio";
 import { encerrada, numeroOs, STATUS_ROTULO, TIPO_ROTULO } from "@/os/tipos";
 import { dadosTecnicosDosProjetos } from "@/projeto/aproveitar-vistoria";
@@ -521,15 +521,15 @@ export default async function Esteira({
                                   <span className="entrada-rotulo">Técnico</span>
                                   <select name="responsavelId" required defaultValue="">
                                     <option value="" disabled>
-                                      {tecnicos.length ? "Escolha quem instala…" : "Ninguém entrou no app ainda"}
+                                      {tecnicos.length ? "Escolha quem instala…" : "Ninguém pode usar o app ainda"}
                                     </option>
                                     {tecnicos.map((t) => (
                                       <option key={t.id} value={t.id}>
-                                        {t.nome}
+                                        {nomeDeQuemRecebe(t)}
                                       </option>
                                     ))}
                                   </select>
-                                  <small className="entrada-ajuda">Só aparece quem já entrou no app BB-Selebi.</small>
+                                  <small className="entrada-ajuda">Quem ainda não entrou no app recebe a OS assim que entrar.</small>
                                 </label>
                                 <label className="entrada">
                                   <span className="entrada-rotulo">Dia e hora</span>
@@ -617,6 +617,7 @@ export default async function Esteira({
                         {dias === 0 ? "hoje" : `${dias} d`}
                         <span className="sr-only"> nesta etapa{estourou ? ", prazo estourado" : ""}</span>
                       </span>
+{gestao && (
                       <div className="mover">
                         <form action={moverProjeto.bind(null, p.id, "voltar")}>
                           <button type="submit" title="Voltar uma etapa" aria-label={`Voltar ${p.cliente.nome} uma etapa`}>
@@ -629,6 +630,7 @@ export default async function Esteira({
                           </button>
                         </form>
                       </div>
+                      )}
                       {p.responsavel ? (
                         <span className="avatar-mini" title={p.responsavel.nome}>
                           {iniciais(p.responsavel.nome)}

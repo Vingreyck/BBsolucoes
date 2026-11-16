@@ -1,7 +1,7 @@
 import { and, asc, eq, sql } from "drizzle-orm";
 import { Check, FileText, Sun, UserRound, Wallet } from "lucide-react";
 
-import { exigirUsuario } from "@/auth/sessao";
+import { exigirGestaoWeb } from "@/os/acesso";
 import { db, schema } from "@/db";
 import { cliente as clienteTable, etapa as etapaTable } from "@/db/schema";
 import { OPCOES_DE_TELHADO } from "@/projeto/da-vistoria";
@@ -40,7 +40,8 @@ export default async function NovoProjeto({
 }: {
   searchParams: Promise<{ erro?: string }>;
 }) {
-  const usuario = await exigirUsuario();
+  // Venda nova é da gestão (adm, engenheiro, vendedor), como a ação que cria.
+  const usuario = await exigirGestaoWeb();
   const { erro } = await searchParams;
 
   // Da empresa de quem pede, como tudo: o sistema é multiempresa.

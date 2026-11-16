@@ -86,6 +86,18 @@ function duracao(horas: number | null): string {
   return `${dias} ${dias === 1 ? "dia" : "dias"}`;
 }
 
+/**
+ * O número do banco ("3.760", "12490.00") no campo como se digita no Brasil
+ * ("3,76", "12.490,00"). Com o ponto do banco no campo, salvar de novo lia o
+ * ponto como milhar e multiplicava o valor por mil.
+ */
+function numeroNoCampo(valor: string | number | null, casas: number, centavos = false): string {
+  if (valor === null || valor === "") return "";
+  const n = Number(valor);
+  if (!Number.isFinite(n)) return "";
+  return n.toLocaleString("pt-BR", { minimumFractionDigits: centavos ? casas : 0, maximumFractionDigits: casas });
+}
+
 function reais(valor: string | number | null): string | null {
   if (valor === null || valor === "") return null;
   const n = Number(valor);
@@ -349,6 +361,7 @@ export default async function DetalheProjeto({
                 <Plus size={15} aria-hidden /> Nova OS
               </Link>
             )}
+            {ator.gestao && (
             <span className="grupo-botoes">
               <form action={moverProjeto.bind(null, projeto.id, "voltar")}>
                 <button type="submit" className="botao secundario" disabled={primeira} title="Voltar uma etapa">
@@ -362,6 +375,7 @@ export default async function DetalheProjeto({
                 </button>
               </form>
             </span>
+            )}
           </>
         }
       />
@@ -587,7 +601,7 @@ export default async function DetalheProjeto({
               <div className="dupla">
                 <label>
                   Consumo médio (kWh/mês)
-                  <input name="consumoMedioKwh" inputMode="decimal" defaultValue={projeto.consumoMedioKwh ?? ""} placeholder="632" />
+                  <input name="consumoMedioKwh" inputMode="decimal" defaultValue={numeroNoCampo(projeto.consumoMedioKwh, 2)} placeholder="632" />
                 </label>
                 <label>
                   Tipo de ligação
@@ -647,7 +661,7 @@ export default async function DetalheProjeto({
                 </label>
                 <label>
                   Valor total (R$)
-                  <input name="valor" inputMode="decimal" defaultValue={projeto.valor ?? ""} />
+                  <input name="valor" inputMode="decimal" defaultValue={numeroNoCampo(projeto.valor, 2, true)} />
                 </label>
               </div>
               <label>
@@ -803,7 +817,7 @@ export default async function DetalheProjeto({
                   <input
                     name="potenciaKwp"
                     inputMode="decimal"
-                    defaultValue={projeto.potenciaKwp ?? ""}
+                    defaultValue={numeroNoCampo(projeto.potenciaKwp, 3)}
                     placeholder="em branco: módulos × potência"
                   />
                 </label>

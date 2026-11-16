@@ -69,6 +69,8 @@ export default async function RootLayout({
 
   // O número da vez, sorteado no `middleware.ts`: sem ele a política de conteúdo
   // barraria os scripts abaixo, como barra qualquer script escrito no HTML.
+  // O navegador esconde o `nonce` depois de usar (segurança), e o React acusava
+  // "diferença na hidratação" — daí o `suppressHydrationWarning` nesses scripts.
   const nonce = (await headers()).get("x-nonce") ?? undefined;
 
   // Sem sessão não há menu: login e páginas públicas ficam limpas. O tema
@@ -77,7 +79,7 @@ export default async function RootLayout({
     return (
       <html lang="pt-BR" className={fontes} suppressHydrationWarning>
         <head>
-          <script nonce={nonce} dangerouslySetInnerHTML={{ __html: SCRIPT_TEMA }} />
+          <script nonce={nonce} suppressHydrationWarning dangerouslySetInnerHTML={{ __html: SCRIPT_TEMA }} />
         </head>
         <body>{children}</body>
       </html>
@@ -153,11 +155,12 @@ export default async function RootLayout({
     <html lang="pt-BR" className={fontes} suppressHydrationWarning>
       <head>
         {/* Antes de pintar: aplica o tema claro/escuro (a escolha guardada ou o do sistema). */}
-        <script nonce={nonce} dangerouslySetInnerHTML={{ __html: SCRIPT_TEMA }} />
+        <script nonce={nonce} suppressHydrationWarning dangerouslySetInnerHTML={{ __html: SCRIPT_TEMA }} />
         {/* Antes de pintar: aplica o menu recolhido, se a pessoa deixou assim. Sem isto
             a tela abriria com o menu largo e encolheria logo depois, piscando. */}
         <script
           nonce={nonce}
+          suppressHydrationWarning
           dangerouslySetInnerHTML={{
             __html: `try{if(localStorage.getItem("${CHAVE_MENU}")==="recolhido")document.documentElement.dataset.menu="recolhido"}catch(e){}`,
           }}
@@ -170,7 +173,7 @@ export default async function RootLayout({
             usuario={{ nome: usuario.nome, papel: PAPEL_ROTULO[usuario.papel] ?? usuario.papel }}
           />
           <div className="conteudo">
-            <BarraSuperior podeCriarOs={gestao} podeCriarProjeto />
+            <BarraSuperior podeCriarOs={gestao} podeCriarProjeto={gestao} />
             {children}
           </div>
         </div>

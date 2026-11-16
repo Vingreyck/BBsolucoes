@@ -13,7 +13,7 @@ import { diasDesde, type CandidatoDeProjeto } from "./sugestao-dono";
 export const DIAS_PARA_AVISAR = 3;
 
 /** Etapas em que a venda já foi instalada (ou está sendo): a usina deveria existir. */
-const ETAPAS_DEPOIS_DA_INSTALACAO = ["execucao", "pedido_vistoria", "monitoramento", "pos-venda"];
+const ETAPAS_DEPOIS_DA_INSTALACAO = ["execucao", "pedido_vistoria", "monitoramento", "pos_venda"];
 
 export interface ProjetoSemUsina extends CandidatoDeProjeto {
   titulo: string;

@@ -125,18 +125,24 @@ export async function salvarPasso1(dados: FormData): Promise<void> {
         .onConflictDoNothing();
     }
 
-    // O projeto entra na primeira etapa ativa da esteira (o Lead).
-    const primeira = await tx.query.etapa.findFirst({
+    /**
+     * O projeto entra em **Monitoramento**: esta ficha é de usina que já existe
+     * no portal e já gera. Antes entrava no Lead, como se fosse venda nova — o
+     * vendedor via um falso cliente, e um "Reprovada" ali apagaria o projeto.
+     * Sem a etapa Monitoramento ativa, vai para a última etapa ativa.
+     */
+    const etapas = await tx.query.etapa.findMany({
       where: and(eq(etapaTable.empresaId, usuario.empresaId), eq(etapaTable.ativa, true)),
       orderBy: asc(etapaTable.ordem),
     });
+    const etapaDaUsina = etapas.find((e) => e.slug === "monitoramento") ?? etapas[etapas.length - 1];
 
-    if (primeira) {
+    if (etapaDaUsina) {
       await tx.insert(projetoTable).values({
         empresaId: usuario.empresaId,
         clienteId: cliente.id,
         usinaId: usina.id,
-        etapaId: primeira.id,
+        etapaId: etapaDaUsina.id,
         titulo: nomeUsina,
         potenciaKwp: potencia !== null ? String(potencia) : null,
         responsavelId: usuario.id,

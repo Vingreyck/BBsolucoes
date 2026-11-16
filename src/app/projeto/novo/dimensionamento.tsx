@@ -52,6 +52,7 @@ export function Dimensionamento({
   const [potenciaDigitada, setPotenciaDigitada] = useState(false);
 
   const modulo = modulos.find((m) => m.id === moduloId) ?? null;
+  const semCatalogo = modulos.length === 0 && inversores.length === 0;
   const qtd = Number.parseInt(moduloQtd, 10);
   // A potência acompanha os módulos até alguém digitar outra.
   const potenciaDoKit = modulo?.potenciaW && qtd > 0 ? (qtd * modulo.potenciaW) / 1000 : null;
@@ -117,6 +118,9 @@ export function Dimensionamento({
           Quantos
           <input name="moduloQtd" type="number" min={1} max={9999} value={moduloQtd} onChange={(e) => setModuloQtd(e.target.value)} />
         </label>
+      </div>
+
+      <div className="dupla">
         <label>
           Inversor
           <select name="inversorModeloId" defaultValue="">
@@ -180,6 +184,22 @@ export function Dimensionamento({
           <small className="entrada-ajuda">A vistoria do técnico confirma ou corrige.</small>
         </label>
       </div>
+
+      <label>
+        Equipamentos do kit{" "}
+        <span className="fraco">{semCatalogo ? "(é daqui que a proposta tira o kit)" : "(opcional)"}</span>
+        <textarea
+          name="equipamentos"
+          rows={2}
+          maxLength={1000}
+          placeholder="1 inversor Growatt MIN 4200TL-X, 7 módulos Jinko 585 W, estrutura para fibrocimento"
+        />
+        <small className="entrada-ajuda">
+          {semCatalogo
+            ? "O catálogo de equipamentos está vazio: escreva o kit aqui para a proposta sair, ou cadastre os modelos em Administração → Equipamentos."
+            : "Em branco, a proposta e o contrato usam o módulo e o inversor escolhidos acima."}
+        </small>
+      </label>
     </div>
   );
 }

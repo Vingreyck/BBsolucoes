@@ -10182,3 +10182,74 @@ button.link-acao {
   cursor: default;
   color: var(--ink-3);
 }
+
+/* ---- Nada passa da largura da tela (auditoria de 14/11) -----------------------
+   Um <select> cresce até o tamanho da opção mais comprida ("Fulano (técnico) ·
+   ainda não entrou no app") e, dentro de flex/grid, empurrava a tela da OS e as
+   janelinhas para fora do celular, com rolagem para o lado. Campo nenhum passa
+   da caixa onde está, e as caixas de formulário podem encolher. */
+select,
+input,
+textarea {
+  max-width: 100%;
+}
+
+.entrada,
+.form-ficha label,
+.dupla > * {
+  min-width: 0;
+}
+
+.form-agendar .entrada {
+  min-width: min(200px, 100%);
+}
+
+/* A janelinha nunca passa da tela: a trilha da grade do fundo não cresce com o conteúdo. */
+.dialogo-fundo {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.dialogo {
+  max-width: 100%;
+  min-width: 0;
+  justify-self: center;
+}
+
+.dialogo-largo {
+  overflow-x: hidden;
+}
+
+/* Itens de grade e de flex podem encolher até a largura da tela (o padrão do
+   navegador é não encolher abaixo do conteúdo, e um nome comprido empurrava tudo). */
+.itens-os > li,
+.agora-acoes > *,
+.registro-principal > *,
+.ui-cartao,
+.ui-cartao-corpo {
+  min-width: 0;
+}
+
+.form-agendar {
+  min-width: 0;
+  max-width: 100%;
+}
+
+.item-nome {
+  overflow-wrap: anywhere;
+}
+
+/* No celular o balão de ajuda "?" abria preso ao ícone e saía pela direita da
+   tela, com o texto cortado. Lá ele vira uma folha presa embaixo, na largura da tela. */
+@media (max-width: 640px) {
+  .ui-ajuda-texto {
+    position: fixed;
+    top: auto;
+    left: 0.75rem;
+    right: 0.75rem;
+    bottom: 0.75rem;
+    width: auto;
+    max-height: 60dvh;
+    overflow-y: auto;
+    z-index: 1500;
+  }
+}
