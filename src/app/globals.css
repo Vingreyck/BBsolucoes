@@ -10253,3 +10253,266 @@ textarea {
     z-index: 1500;
   }
 }
+
+/* ---- Escolher quem vai (src/app/_ui/escolher-pessoa.tsx) ---------------------- */
+.pessoa-escolha {
+  position: relative;
+  display: grid;
+  gap: 0.4rem;
+  min-width: 0;
+  width: 100%;
+}
+
+/* O campo que o formulário envia: existe para o navegador, não para a pessoa. */
+.pessoa-escolha-valor {
+  position: absolute;
+  inset: auto 0 0 0;
+  width: 100%;
+  height: 1px;
+  opacity: 0;
+  pointer-events: none;
+  border: 0;
+  padding: 0;
+}
+
+.pessoa-escolha-gatilho {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  width: 100%;
+  min-height: 46px;
+  padding: 0.4rem 0.6rem;
+  font: inherit;
+  text-align: left;
+  color: var(--ink);
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--raio-p);
+  cursor: pointer;
+  transition: border-color 0.12s, box-shadow 0.12s;
+}
+
+.pessoa-escolha-gatilho:hover,
+.pessoa-escolha-gatilho.aberto {
+  border-color: var(--accent);
+}
+
+.pessoa-escolha-gatilho:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+.pessoa-seta {
+  margin-left: auto;
+  flex: none;
+  color: var(--ink-3);
+  transition: transform 0.15s;
+}
+
+.pessoa-escolha-gatilho.aberto .pessoa-seta {
+  transform: rotate(180deg);
+}
+
+.pessoa-avatar {
+  display: inline-grid;
+  place-items: center;
+  flex: none;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  color: var(--accent);
+  background: var(--accent-soft);
+}
+
+.pessoa-avatar.sem-pessoa {
+  color: var(--ink-3);
+  background: var(--surface-2);
+}
+
+.pessoa-nome {
+  display: grid;
+  min-width: 0;
+  line-height: 1.25;
+}
+
+.pessoa-nome strong {
+  font-size: 0.88rem;
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.pessoa-nome small {
+  font-size: 0.74rem;
+  color: var(--ink-3);
+}
+
+.pessoa-escolha-painel {
+  display: grid;
+  gap: 0.55rem;
+  padding: 0.65rem;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--raio);
+  box-shadow: 0 10px 28px rgb(0 0 0 / 0.14);
+  animation: aparecer 0.12s ease-out;
+}
+
+.pessoa-busca {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.pessoa-busca > svg {
+  position: absolute;
+  left: 0.65rem;
+  color: var(--ink-3);
+  pointer-events: none;
+}
+
+.pessoa-busca input {
+  width: 100%;
+  min-height: 36px;
+  padding: 0.35rem 0.6rem 0.35rem 2rem;
+  font: inherit;
+  font-size: 0.85rem;
+  color: var(--ink);
+  background: var(--surface-2);
+  border: 1px solid var(--line-soft);
+  border-radius: var(--raio-p);
+}
+
+.pessoa-busca input:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -1px;
+}
+
+.pessoa-filtros {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.3rem;
+}
+
+.pessoa-filtros .filtro {
+  font: inherit;
+  font-size: 0.74rem;
+  cursor: pointer;
+}
+
+.pessoa-lista {
+  display: grid;
+  gap: 0.15rem;
+  max-height: 17rem;
+  margin: 0;
+  padding: 0;
+  overflow-y: auto;
+  list-style: none;
+}
+
+.pessoa-linha {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  min-width: 0;
+  padding: 0.45rem 0.5rem;
+  border-radius: var(--raio-p);
+  cursor: pointer;
+}
+
+.pessoa-linha.ativa,
+.pessoa-linha:hover {
+  background: var(--surface-2);
+}
+
+.pessoa-linha[aria-selected="true"] {
+  background: var(--accent-soft);
+}
+
+.pessoa-ninguem .pessoa-nome strong {
+  font-weight: 500;
+  color: var(--ink-2);
+}
+
+.pessoa-selos {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 0.25rem;
+  margin-left: auto;
+}
+
+.pessoa-selo {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.2rem;
+  padding: 0.05rem 0.4rem;
+  font-size: 0.68rem;
+  font-weight: 600;
+  white-space: nowrap;
+  border-radius: 999px;
+  border: 1px solid var(--line-soft);
+  color: var(--ink-2);
+}
+
+.pessoa-selo.app {
+  color: var(--ok);
+  border-color: color-mix(in srgb, var(--ok) 35%, transparent);
+  background: color-mix(in srgb, var(--ok) 10%, transparent);
+}
+
+.pessoa-selo.site {
+  color: var(--accent);
+  border-color: color-mix(in srgb, var(--accent) 35%, transparent);
+  background: var(--accent-soft);
+}
+
+.pessoa-selo.falta {
+  font-weight: 500;
+  color: var(--ink-3);
+}
+
+.pessoa-marca {
+  flex: none;
+  color: var(--accent);
+}
+
+.pessoa-vazia {
+  padding: 0.75rem 0.5rem;
+  font-size: 0.82rem;
+  color: var(--ink-3);
+}
+
+.pessoa-nota {
+  margin: 0;
+  font-size: 0.74rem;
+  color: var(--ink-3);
+}
+
+/* Dentro do formulário de agendar (flex), a escolha ocupa a linha inteira. */
+.form-agendar .entrada-pessoa {
+  flex: 1 1 100%;
+}
+
+/* Lista aberta numa linha de dois campos: o vizinho ("Agendar para") não estica junto. */
+.dupla:has(.pessoa-escolha) {
+  align-items: start;
+}
+
+/* Na lista, o nome pode quebrar linha e os selos vão embaixo dele, junto do papel. */
+.pessoa-nome-lista strong {
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
+.pessoa-info {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.3rem;
+  margin-top: 0.15rem;
+}

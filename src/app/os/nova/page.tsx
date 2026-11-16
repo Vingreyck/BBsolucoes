@@ -13,11 +13,12 @@ import Link from "next/link";
 
 import { db, schema } from "@/db";
 import { exigirGestaoWeb } from "@/os/acesso";
-import { nomeDeQuemRecebe, quemUsaOApp } from "@/os/consultas";
+import { quemUsaOApp } from "@/os/consultas";
 import { garantirModelos } from "@/os/modelos";
 import { PRIORIDADE_ROTULO, TIPO_ROTULO } from "@/os/tipos";
 
 import { Cabecalho, Caminho, Cartao, Dados, Vazio } from "../../_ui";
+import { EscolherPessoa } from "../../_ui/escolher-pessoa";
 import { criarOsAction } from "../actions";
 import { OndeDaOs } from "./onde";
 
@@ -272,17 +273,10 @@ export default async function NovaOs({
           <Cartao titulo="Quem e quando" icone={<CalendarClock size={16} />}>
             <div className="form-ficha">
               <div className="dupla">
-                <label>
-                  Responsável
-                  <select name="responsavelId" defaultValue="">
-                    <option value="">Definir depois</option>
-                    {pessoas.map((u) => (
-                      <option key={u.id} value={u.id}>
-                        {nomeDeQuemRecebe(u)}
-                      </option>
-                    ))}
-                  </select>
-                </label>
+                <div className="entrada entrada-pessoa">
+                  <span className="entrada-rotulo">Responsável</span>
+                  <EscolherPessoa name="responsavelId" pessoas={pessoas} vazio="Definir depois" rotulo="Responsável" />
+                </div>
                 <label>
                   Agendar para
                   <input type="datetime-local" name="agendadaPara" />

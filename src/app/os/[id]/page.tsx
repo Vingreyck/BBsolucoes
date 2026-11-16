@@ -60,6 +60,7 @@ import {
   renovarLinkAction,
 } from "../actions";
 import { Cabecalho, Caminho, Cartao, Dados } from "../../_ui";
+import { EscolherPessoa } from "../../_ui/escolher-pessoa";
 import { iniciais } from "../../formatar";
 import { BotaoDialogo, MenuAcoes, type AcaoDoMenu } from "./acoes";
 import { FormMotivo, Historico, ItemChecklist } from "./partes";
@@ -219,18 +220,10 @@ export default async function DetalheOs({
   const formResponsavel = (
     <form action={acaoOsAction.bind(null, os.id)} className="form-ficha compacto">
       <input type="hidden" name="acao" value="atribuir" />
-      <label>
-        Quem atende
-        <small className="fraco">Quem ainda não entrou no app recebe a OS assim que entrar.</small>
-        <select name="responsavelId" defaultValue={os.responsavel?.id ?? ""}>
-          <option value="">Ninguém</option>
-          {pessoas.map((u) => (
-            <option key={u.id} value={u.id}>
-              {nomeDeQuemRecebe(u)}
-            </option>
-          ))}
-        </select>
-      </label>
+      <div className="entrada entrada-pessoa">
+        <span className="entrada-rotulo">Quem atende</span>
+        <EscolherPessoa name="responsavelId" pessoas={pessoas} inicial={os.responsavel?.id ?? ""} vazio="Ninguém" rotulo="Quem atende" />
+      </div>
       <div className="ficha-acoes">
         <button type="submit">Salvar</button>
       </div>
@@ -241,17 +234,16 @@ export default async function DetalheOs({
   const formAgendar = (
     <form action={agendarOsAction.bind(null, os.id)} className="form-agendar">
       {gestao && (
-        <label className="entrada">
+        <div className="entrada entrada-pessoa">
           <span className="entrada-rotulo">Quem vai</span>
-          <select name="responsavelId" defaultValue={os.responsavel?.id ?? ""} title="Quem ainda não entrou no app recebe a OS assim que entrar">
-            <option value="">{pessoas.length ? "Ninguém ainda" : "Ninguém pode usar o app ainda"}</option>
-            {pessoas.map((u) => (
-              <option key={u.id} value={u.id}>
-                {nomeDeQuemRecebe(u)}
-              </option>
-            ))}
-          </select>
-        </label>
+          <EscolherPessoa
+            name="responsavelId"
+            pessoas={pessoas}
+            inicial={os.responsavel?.id ?? ""}
+            vazio={pessoas.length ? "Ninguém ainda" : "Ninguém pode usar o app ainda"}
+            rotulo="Quem vai"
+          />
+        </div>
       )}
       <label className="entrada">
         <span className="entrada-rotulo">Dia e hora</span>

@@ -8,6 +8,7 @@ import {
   inArray,
   isNotNull,
   lt,
+  ne,
   or,
   sql,
   type SQL,
@@ -297,7 +298,7 @@ export async function quemUsaOApp(empresaId: string) {
   });
   if (!usuarios.length) return [];
   const ids = usuarios.map((u) => u.id);
-  const [sessoes, aparelhos] = await Promise.all([
+  const [sessoes, aparelhos, noSite] = await Promise.all([
     db
       .selectDistinct({ usuarioId: schema.sessao.usuarioId })
       .from(schema.sessao)
@@ -306,11 +307,17 @@ export async function quemUsaOApp(empresaId: string) {
       .selectDistinct({ usuarioId: schema.aparelhoPush.usuarioId })
       .from(schema.aparelhoPush)
       .where(inArray(schema.aparelhoPush.usuarioId, ids)),
+    // Quem está com o site aberto (sessão do navegador): o filtro "No site" da escolha de quem vai.
+    db
+      .selectDistinct({ usuarioId: schema.sessao.usuarioId })
+      .from(schema.sessao)
+      .where(and(inArray(schema.sessao.usuarioId, ids), ne(schema.sessao.origem, "app"))),
   ]);
+  const usaSite = new Set(noSite.map((x) => x.usuarioId));
   const noApp = new Set([...sessoes, ...aparelhos].map((x) => x.usuarioId));
   const peso: Record<string, number> = { tecnico: 0, vendedor: 1, engenheiro: 2, adm: 3 };
   return usuarios
-    .map((u) => ({ ...u, usaApp: noApp.has(u.id) }))
+    .map((u) => ({ ...u, usaApp: noApp.has(u.id), usaSite: usaSite.has(u.id) }))
     .sort(
       (a, b) =>
         Number(b.usaApp) - Number(a.usaApp) || (peso[a.papel] ?? 9) - (peso[b.papel] ?? 9) || a.nome.localeCompare(b.nome),

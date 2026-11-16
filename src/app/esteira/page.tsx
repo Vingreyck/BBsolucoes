@@ -24,7 +24,7 @@ import { numeroWhatsapp } from "@/documentos/cobranca";
 import { ROTULO_DOCUMENTO } from "@/documentos/rotulos";
 import { liberaOsDeInstalacao, tomDaFase, vigente, type FaseEnergisa } from "@/energisa/situacoes";
 import { ehGestaoWeb } from "@/os/acesso";
-import { nomeDeQuemRecebe, quemUsaOApp } from "@/os/consultas";
+import { quemUsaOApp } from "@/os/consultas";
 import { formatarRelogio } from "@/os/relogio";
 import { encerrada, numeroOs, STATUS_ROTULO, TIPO_ROTULO } from "@/os/tipos";
 import { dadosTecnicosDosProjetos } from "@/projeto/aproveitar-vistoria";
@@ -38,6 +38,7 @@ import { montarEntrada, contextoDaProposta, responsavelPadrao, ultimasPropostas,
 
 import { Ajuda, Cabecalho } from "../_ui";
 import { BotaoDialogo } from "../_ui/dialogo";
+import { EscolherPessoa } from "../_ui/escolher-pessoa";
 import { moverProjeto } from "../actions";
 import { iniciais, kWp, semAcento } from "../formatar";
 import { origemDoSite } from "../origem";
@@ -517,20 +518,10 @@ export default async function Esteira({
                               descricao={`${p.cliente.nome} · a Energisa aprovou o projeto ${v.numero}. Escolha quem instala e quando: a OS nasce agendada, o técnico recebe o aviso no celular e o projeto vai para Execução.`}
                             >
                               <form action={gerarOsInstalacao.bind(null, p.id)} className="form-agendar form-agendar-coluna">
-                                <label className="entrada">
+                                <div className="entrada entrada-pessoa">
                                   <span className="entrada-rotulo">Técnico</span>
-                                  <select name="responsavelId" required defaultValue="">
-                                    <option value="" disabled>
-                                      {tecnicos.length ? "Escolha quem instala…" : "Ninguém pode usar o app ainda"}
-                                    </option>
-                                    {tecnicos.map((t) => (
-                                      <option key={t.id} value={t.id}>
-                                        {nomeDeQuemRecebe(t)}
-                                      </option>
-                                    ))}
-                                  </select>
-                                  <small className="entrada-ajuda">Quem ainda não entrou no app recebe a OS assim que entrar.</small>
-                                </label>
+                                  <EscolherPessoa name="responsavelId" pessoas={tecnicos} obrigatorio rotulo="Quem instala" />
+                                </div>
                                 <label className="entrada">
                                   <span className="entrada-rotulo">Dia e hora</span>
                                   <input type="datetime-local" name="agendadaPara" required />
