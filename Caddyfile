@@ -14,17 +14,24 @@
 	# para qualquer endereço; sem isto, poderia fazer o site carregar dezenas de
 	# megabytes na memória antes de ele conferir a sessão.
 	#
-	# Só três lugares recebem arquivo: o dossiê (`/documentos/…`, até 60 MB), a
-	# tela da OS (`/os/…`) e o envio de foto e vídeo do app. A lista da Energisa
-	# é texto, mas pode ter milhares de linhas. Todo o resto é formulário, e
-	# formulário não passa de alguns kilobytes.
+	# Recebem arquivo: o dossiê (`/documentos/…`, até 60 MB), a tela da OS
+	# (`/os/…`), o envio de foto e vídeo do app e a administração (datasheet e
+	# Inmetro do catálogo até 25 MB, foto da capa da proposta, logo). A lista da
+	# Energisa é texto, mas pode ter milhares de linhas. Todo o resto é
+	# formulário, e formulário não passa de alguns kilobytes.
 	#
-	# Tela nova com envio de arquivo precisa entrar aqui, senão o envio volta 413.
+	# Tela nova com envio de arquivo precisa entrar aqui, senão o envio volta 413
+	# — e o navegador mostra só "Application error", sem dizer que foi o tamanho
+	# (foi o que aconteceu no catálogo de equipamentos em 20/11).
 	@envioDeArquivo path /documentos/* /os/* /api/app/v1/ordens/*
+	@administracao path /administracao/*
 	@listaDaEnergisa path /energisa/* /api/energisa/*
-	@formularios not path /documentos/* /os/* /api/app/v1/ordens/* /energisa/* /api/energisa/*
+	@formularios not path /documentos/* /os/* /api/app/v1/ordens/* /administracao/* /energisa/* /api/energisa/*
 	request_body @envioDeArquivo {
 		max_size 70MB
+	}
+	request_body @administracao {
+		max_size 30MB
 	}
 	request_body @listaDaEnergisa {
 		max_size 8MB

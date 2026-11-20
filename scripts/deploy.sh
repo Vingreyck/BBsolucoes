@@ -113,6 +113,10 @@ docker compose run --rm --no-deps -T site npm run migrar
 echo "== 6/8 Subindo"
 mkdir -p backups estado mapeamentos anexos-pendentes
 docker compose up -d
+# O Caddyfile entra no container por um arquivo montado: o `up` não percebe
+# quando ele muda. Recarregar aplica a configuração nova sem derrubar ninguém
+# (e, se o arquivo tiver erro, o Caddy recusa e segue com a antiga).
+docker compose exec -T caddy caddy reload --config /etc/caddy/Caddyfile || echo "Aviso: o Caddy não recarregou o Caddyfile (veja: docker compose logs caddy)." >&2
 
 echo "== 7/8 Limpando o cache do Docker"
 docker builder prune -af >/dev/null

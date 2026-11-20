@@ -10516,3 +10516,42 @@ textarea {
   gap: 0.3rem;
   margin-top: 0.15rem;
 }
+
+/* Página de erro (src/app/error.tsx): no lugar da tela preta do Next. */
+.erro-pagina {
+  display: grid;
+  justify-items: center;
+  gap: 0.6rem;
+  max-width: 34rem;
+  margin: 3rem auto;
+  padding: 2rem 1.5rem;
+  text-align: center;
+  background: var(--surface);
+  border: 1px solid var(--line-soft);
+  border-radius: var(--raio);
+}
+
+.erro-pagina h1 {
+  margin: 0;
+  font-size: 1.2rem;
+}
+
+.erro-pagina p {
+  margin: 0;
+  color: var(--ink-2);
+  line-height: 1.5;
+}
+
+.erro-pagina-icone {
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  color: var(--crit);
+  background: color-mix(in srgb, var(--crit) 12%, transparent);
+}
+
+.erro-pagina .barra-enviar {
+  justify-content: center;
+}
