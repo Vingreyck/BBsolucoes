@@ -124,6 +124,8 @@ export interface ContextoDoCalculo {
   /** Distância de ida da base da equipe até a cidade, km. */
   distanciaKm: number | null;
   anoBase: number;
+  /** O que a vistoria mediu no telhado, quando já houve vistoria. */
+  vistoria?: { areaUtilM2: number | null; sombra: string | null } | null;
 }
 
 export function chaveDaTarifa(cnpj: string | null | undefined, subgrupo: Subgrupo): string {
@@ -362,6 +364,14 @@ export function calcularAssistente(e: EstadoDaProposta, ctx: ContextoDoCalculo):
   }));
   const avisosDoKit = avaliarKit({ modulos, inversores, sobre: p.sobredimensionamento, ligacao: geradora.ligacao });
   const areaM2 = e.modulo ? areaDosModulos(e.modulo.qtd, e.modulo.potenciaW, e.modulo.areaM2) : 0;
+  const util = ctx.vistoria?.areaUtilM2 ?? null;
+  if (areaM2 && util) {
+    avisosDoKit.push(
+      areaM2 > util
+        ? { nivel: "atencao", texto: `Os módulos ocupam uns ${areaM2} m² e a vistoria mediu ${util} m² de área útil no telhado: confira se cabem.` }
+        : { nivel: "ok", texto: `Cabe no telhado: uns ${areaM2} m² dos ${util} m² de área útil que a vistoria mediu.` },
+    );
+  }
 
   const custoKit = custoDoKit(e);
   const preco =
@@ -484,4 +494,71 @@ export function kitAutomatico(
   const sug = sugerirInversores({ qtd, potenciaW: modulo.potenciaW }, candidatos.filter((c) => c.tipo === e.tipoInversor), sobre, geradora?.ligacao ?? "bifasico", e.tipoInversor);
   const c = sug ? candidatos.find((x) => x.id === sug[0].inversor.id) : null;
   return { modulo: { ...modulo, qtd }, inversores: c && sug ? [{ ...c.linha, qtd: sug[0].qtd }] : [] };
+}
+
+// --------------------------------------------------------- a conta de luz lida
+
+/** O que a leitura da conta de luz devolve (ver `ler-conta.ts`). */
+export interface ContaDeLuzLida {
+  distribuidora: string | null;
+  numeroUc: string | null;
+  titular: string | null;
+  cidade: string | null;
+  classe: "residencial" | "rural" | "comercial" | "industrial" | "outra" | null;
+  ligacao: Ligacao | null;
+  /** AAAA-MM */
+  mesReferencia: string | null;
+  historico: { mes: string; kwh: number }[];
+  tarifaComImpostos: number | null;
+  valorTotal: number | null;
+  observacao: string | null;
+}
+
+/**
+ * Põe na unidade o que a conta trouxe: o consumo de cada mês (os 12 mais
+ * recentes, cada um no seu mês do ano), o número, a classe, a ligação e a
+ * distribuidora. Devolve também a lista do que mudou, para a tela dizer.
+ */
+export function ucComConta(
+  uc: UcDoAssistente,
+  c: ContaDeLuzLida,
+  acharDistribuidora: (nome: string) => { cnpj: string; nome: string } | null,
+): { uc: UcDoAssistente; mudou: string[] } {
+  const nova = { ...uc };
+  const mudou: string[] = [];
+  const porMes = new Map<string, number>();
+  for (const h of c.historico) if (/^\d{4}-\d{2}$/.test(h.mes) && h.kwh >= 0) porMes.set(h.mes, h.kwh);
+  const recentes = [...porMes.entries()].sort((a, b) => (a[0] < b[0] ? 1 : -1)).slice(0, 12);
+  if (recentes.length >= 3) {
+    const meses: (number | null)[] = Array.from({ length: 12 }, () => null);
+    for (const [mes, kwh] of recentes) meses[Number(mes.slice(5, 7)) - 1] = kwh;
+    nova.consumoModo = "mensal";
+    nova.consumoMeses = meses;
+    nova.consumoMedia = Math.round(recentes.reduce((s, [, k]) => s + k, 0) / recentes.length);
+    mudou.push(`consumo de ${recentes.length} meses (média ${nova.consumoMedia} kWh)`);
+  } else if (recentes.length) {
+    nova.consumoModo = "media";
+    nova.consumoMedia = Math.round(recentes.reduce((s, [, k]) => s + k, 0) / recentes.length);
+    mudou.push(`consumo (${nova.consumoMedia} kWh)`);
+  }
+  if (c.numeroUc && c.numeroUc !== uc.codigo) {
+    nova.codigo = c.numeroUc;
+    mudou.push("número da unidade");
+  }
+  if (c.classe) {
+    const sub: Subgrupo = c.classe === "residencial" ? "B1" : c.classe === "rural" ? "B2" : "B3";
+    if (sub !== uc.subgrupo) mudou.push("classe");
+    nova.subgrupo = sub;
+  }
+  if (c.ligacao) {
+    if (c.ligacao !== uc.ligacao) mudou.push("ligação");
+    nova.ligacao = c.ligacao;
+  }
+  const d = c.distribuidora ? acharDistribuidora(c.distribuidora) : null;
+  if (d && d.cnpj !== uc.distribuidoraCnpj) {
+    nova.distribuidoraCnpj = d.cnpj;
+    nova.distribuidoraNome = d.nome;
+    mudou.push("distribuidora");
+  }
+  return { uc: nova, mudou };
 }

@@ -31,6 +31,7 @@ import {
 } from "../documentos/cobranca";
 import { ordenarFila, type LinhaCobranca } from "../documentos/fila-cobranca";
 import { descricaoDaOs, usinasParadas } from "./usina-parada";
+import { dataBr, datasIsoNoTexto, diaMesBr } from "../datas";
 import {
   acaoNaEsteira,
   faseDe,
@@ -1245,6 +1246,31 @@ testarPropostaCompleta(confere, igual);
   confere(link.startsWith("https://www.google.com/maps/dir/?api=1&destination="), "o link é de rota (dir), não de busca (search)");
   confere(link.includes("travelmode=driving") && link.includes("Itabaiana%2C%20SE"), "de carro, com o destino codificado");
   igual(linkDaRota(null), null, "sem destino, sem link");
+}
+
+// --- Datas na tela: dd/mm/aaaa, nunca AAAA-MM-DD ----------------------------------------
+{
+  igual(dataBr("2026-01-01"), "01/01/2026", "coluna date vira dd/mm/aaaa");
+  igual(dataBr("2026-11-21T00:00:00.000Z"), "21/11/2026", "texto ISO com hora: vale o dia escrito, sem fuso");
+  igual(dataBr(new Date("2026-11-21T02:30:00Z")), "20/11/2026", "instante: o dia em Sergipe (23h30 do dia 20), não o do servidor em UTC");
+  igual(dataBr(new Date("2026-11-21T12:00:00Z")), "21/11/2026", "instante ao meio-dia");
+  igual(dataBr(null), "—", "sem data: travessão");
+  igual(dataBr(""), "—", "texto vazio: travessão");
+  igual(dataBr(new Date("x")), "—", "data inválida: travessão");
+  igual(dataBr("21/11/2026"), "21/11/2026", "o que já está em português fica como está");
+  igual(diaMesBr("2026-10-28"), "28/10", "curta: dd/mm");
+  igual(diaMesBr(new Date("2026-01-01T02:00:00Z")), "31/12", "curta de instante também no fuso de Sergipe");
+  igual(
+    datasIsoNoTexto("Não gerou nada em 2026-11-21, quando o esperado era 12.3 kWh"),
+    "Não gerou nada em 21/11/2026, quando o esperado era 12.3 kWh",
+    "mensagem antiga de alerta ganha a data em português",
+  );
+  igual(
+    datasIsoNoTexto("Praticamente sem geração: não gerou em nenhum dos 30 dias entre 2026-10-01 e 2026-10-30"),
+    "Praticamente sem geração: não gerou em nenhum dos 30 dias entre 01/10/2026 e 30/10/2026",
+    "as duas datas do período mudam",
+  );
+  igual(datasIsoNoTexto("Inversor AB2026-11-21X e código 2026-13-40"), "Inversor AB2026-11-21X e código 2026-13-40", "serial e número que não é data ficam como estão");
 }
 
 // --- Sugestão de dono da usina ---------------------------------------------------------

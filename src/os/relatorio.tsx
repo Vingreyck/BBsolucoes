@@ -4,6 +4,7 @@ import React from "react";
 
 type ReactPdf = typeof import("@react-pdf/renderer");
 
+import { datasIsoNoTexto } from "../datas";
 import { bytesDoAnexo } from "./anexos";
 import { numeroBr, textoDaResposta } from "./formatar";
 import { tempoEmCampo, type OsCompleta } from "./consultas";
@@ -277,7 +278,7 @@ function montar(R: ReactPdf) {
           </View>
 
           <Text style={s.secao}>Solicitação</Text>
-          <Text style={s.paragrafo}>{os.descricao}</Text>
+          <Text style={s.paragrafo}>{datasIsoNoTexto(os.descricao)}</Text>
 
           {secoes.map((secao) => (
             <View key={secao.nome}>

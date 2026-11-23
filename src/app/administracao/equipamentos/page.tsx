@@ -3,6 +3,7 @@ import { Check, Cpu, Database, FileSpreadsheet, FileText, Plus, Search, SunMediu
 import { redirect } from "next/navigation";
 
 import { exigirUsuario } from "@/auth/sessao";
+import { dataBr } from "@/datas";
 import { db, schema } from "@/db";
 import { driveConfigurado } from "@/documentos/drive";
 import { baseDeEquipamentos, procurarNaBase } from "@/equipamentos/base";
@@ -176,7 +177,7 @@ export default async function Equipamentos({
           titulo="Base de equipamentos"
           icone={<Database size={16} />}
           contador={base.itens.length.toLocaleString("pt-BR")}
-          ajuda={`Os módulos, inversores e microinversores instalados no Brasil, dos cadastros públicos da ANEEL (licença ODbL), com a potência, as fases, quantos módulos cada micro recebe e quantas usinas usam cada um (desde 2023). Gerada em ${base.geradoEm.split("-").reverse().join("/")}. O assistente da proposta busca aqui sozinho; adicionar ao catálogo serve para guardar o preço de custo, o datasheet e o Inmetro.`}
+          ajuda={`Os módulos, inversores e microinversores instalados no Brasil, dos cadastros públicos da ANEEL (licença ODbL), com a potência, as fases, quantos módulos cada micro recebe e quantas usinas usam cada um (desde 2023). Gerada em ${dataBr(base.geradoEm)}. O assistente da proposta busca aqui sozinho; adicionar ao catálogo serve para guardar o preço de custo, o datasheet e o Inmetro.`}
         >
           <form className="form-ficha" method="get">
             <div className="dupla">

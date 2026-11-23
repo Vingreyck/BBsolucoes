@@ -2,16 +2,20 @@
 
 import { randomBytes } from "node:crypto";
 
-import { and, eq } from "drizzle-orm";
+import { and, desc, eq, isNotNull } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 
 import { db, schema } from "@/db";
+import { tipoDoDocumento } from "@/documentos/conteudo";
+import { baixarArquivo, driveConfigurado, idDoLink } from "@/documentos/drive";
 import type { TipoDeEquipamento } from "@/equipamentos/regras";
 import { itemDaBase } from "@/equipamentos/base";
 import { exigirGestaoWeb } from "@/os/acesso";
+import { dadosTecnicosDosProjetos } from "@/projeto/aproveitar-vistoria";
 import { sincronizarDatasheets } from "@/projeto/datasheets";
-import { calcularAssistente, consumoMedioTotal, lerEstado, type LinhaDoKit } from "@/proposta/assistente";
+import { calcularAssistente, consumoMedioTotal, lerEstado, type ContaDeLuzLida, type LinhaDoKit } from "@/proposta/assistente";
+import { lerContaDeLuz } from "@/proposta/ler-conta";
 import {
   catalogoDaEmpresa,
   contextoDoAssistente,
@@ -173,6 +177,8 @@ export async function gerarPropostaDoAssistente(projetoId: string, origem: strin
   if (!premissas) return { erro: "Faltam as premissas da proposta (Administração → Proposta comercial)." };
 
   const montado = await contextoDoAssistente(estado, premissas, "buscar");
+  const tecnicos = (await dadosTecnicosDosProjetos(ator.empresaId, [projeto.id])).get(projeto.id)?.dados;
+  montado.ctx.vistoria = tecnicos ? { areaUtilM2: tecnicos.areaUtilM2, sombra: tecnicos.sombra } : null;
   const r = calcularAssistente(estado, montado.ctx);
   if (r.falta.length) return { erro: `Ainda falta: ${r.falta.join(", ")}.` };
 
@@ -278,3 +284,83 @@ export async function recomecarProposta(projetoId: string): Promise<void> {
   redirect(`/projeto/${projetoId}/proposta`);
 }
 
+
+// --------------------------------------------------------- a conta de luz
+
+/** 15 MB: a foto da conta tirada no celular, ou o PDF da segunda via. */
+const CONTA_MAXIMA = 15 * 1024 * 1024;
+
+async function lerFluxo(corpo: ReadableStream<Uint8Array>): Promise<Uint8Array | null> {
+  const leitor = corpo.getReader();
+  const partes: Uint8Array[] = [];
+  let total = 0;
+  for (;;) {
+    const { done, value } = await leitor.read();
+    if (done) break;
+    total += value.byteLength;
+    if (total > CONTA_MAXIMA) {
+      await leitor.cancel();
+      return null;
+    }
+    partes.push(value);
+  }
+  return Buffer.concat(partes);
+}
+
+/**
+ * Lê a conta de luz que já está no dossiê do cliente (a foto que o técnico
+ * tirou na vistoria, ou a que subiu depois): da geradora, ou de uma
+ * beneficiária. O download fica na trilha de acesso, como qualquer outro.
+ */
+export async function lerContaDoDossie(projetoId: string, daGeradora: boolean): Promise<{ conta: ContaDeLuzLida; arquivo: string } | { erro: string }> {
+  const ator = await exigirGestaoWeb();
+  const projeto = await projetoDaEmpresa(projetoId, ator.empresaId);
+  if (!projeto) return { erro: "Projeto não encontrado." };
+  if (!driveConfigurado()) return { erro: "O Drive não está conectado: envie a foto da conta aqui." };
+  const [doc] = await db
+    .select({ id: schema.documento.id, nomeArquivo: schema.documento.nomeArquivo, linkDrive: schema.documento.linkDrive })
+    .from(schema.documento)
+    .where(
+      and(
+        eq(schema.documento.empresaId, ator.empresaId),
+        eq(schema.documento.clienteId, projeto.cliente.id),
+        eq(schema.documento.tipo, daGeradora ? "uc_geradora" : "uc_beneficiaria"),
+        isNotNull(schema.documento.linkDrive),
+      ),
+    )
+    .orderBy(desc(schema.documento.criadoEm))
+    .limit(1);
+  const fileId = doc ? idDoLink(doc.linkDrive) : null;
+  if (!doc || !fileId) return { erro: "Ainda não há conta de luz no dossiê deste cliente. Envie a foto ou o PDF aqui." };
+  await db.insert(schema.documentoAcesso).values({
+    empresaId: ator.empresaId,
+    documentoId: doc.id,
+    descricao: `${doc.nomeArquivo} (${projeto.cliente.nome}) — lida para a proposta`,
+    usuarioId: ator.id,
+    acao: "baixou",
+  });
+  try {
+    const { corpo } = await baixarArquivo(fileId);
+    const conteudo = await lerFluxo(corpo);
+    if (!conteudo) return { erro: "A conta do dossiê passa de 15 MB." };
+    const tipo = tipoDoDocumento(conteudo, doc.nomeArquivo);
+    if (!tipo) return { erro: "O arquivo da conta no dossiê não é foto nem PDF." };
+    const lida = await lerContaDeLuz(conteudo, tipo.mime);
+    return "erro" in lida ? lida : { conta: lida.conta, arquivo: doc.nomeArquivo };
+  } catch {
+    return { erro: "O Drive não entregou a conta agora. Tente de novo ou envie a foto aqui." };
+  }
+}
+
+/** Lê a conta de luz enviada agora na tela (foto do celular ou PDF). */
+export async function lerContaEnviada(dados: FormData): Promise<{ conta: ContaDeLuzLida; arquivo: string } | { erro: string }> {
+  await exigirGestaoWeb();
+  const arquivo = dados.get("conta");
+  if (!(arquivo instanceof File) || arquivo.size === 0) return { erro: "Escolha a foto ou o PDF da conta." };
+  if (arquivo.size > CONTA_MAXIMA) return { erro: "A conta passa de 15 MB." };
+  const conteudo = new Uint8Array(await arquivo.arrayBuffer());
+  const tipo = tipoDoDocumento(conteudo, arquivo.name);
+  if (!tipo) return { erro: "A conta precisa ser foto (JPEG, PNG) ou PDF." };
+  const lida = await lerContaDeLuz(conteudo, tipo.mime);
+  return "erro" in lida ? lida : { conta: lida.conta, arquivo: arquivo.name };
+}

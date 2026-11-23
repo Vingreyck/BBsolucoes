@@ -4,6 +4,7 @@ import { and, eq } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 
+import { datasIsoNoTexto } from "@/datas";
 import { db, schema } from "@/db";
 import { ErroOs, exigirAtorWeb, exigirGestaoWeb } from "@/os/acesso";
 import { anexar, removerAnexo, type CategoriaAnexo } from "@/os/anexos";
@@ -343,7 +344,8 @@ export async function abrirOsDoAlerta(alertaId: string): Promise<void> {
     usinaId: alerta.usinaId,
     tipo: "corretiva",
     prioridade: prioridadeDe(alerta.severidade),
-    descricao: alerta.mensagem,
+    // alerta antigo traz a data em ISO; a OS já nasce com dd/mm/aaaa
+    descricao: datasIsoNoTexto(alerta.mensagem),
     origem: "alerta",
   });
   await db

@@ -16,7 +16,8 @@
 	#
 	# Recebem arquivo: o dossiê (`/documentos/…`, até 60 MB), a tela da OS
 	# (`/os/…`), o envio de foto e vídeo do app e a administração (datasheet e
-	# Inmetro do catálogo até 25 MB, foto da capa da proposta, logo). A lista da
+	# Inmetro do catálogo até 25 MB, foto da capa da proposta, logo). A tela da
+	# proposta recebe a foto ou o PDF da conta de luz (até 15 MB). A lista da
 	# Energisa é texto, mas pode ter milhares de linhas. Todo o resto é
 	# formulário, e formulário não passa de alguns kilobytes.
 	#
@@ -26,7 +27,8 @@
 	@envioDeArquivo path /documentos/* /os/* /api/app/v1/ordens/*
 	@administracao path /administracao/*
 	@listaDaEnergisa path /energisa/* /api/energisa/*
-	@formularios not path /documentos/* /os/* /api/app/v1/ordens/* /administracao/* /energisa/* /api/energisa/*
+	@contaDeLuz path /projeto/*/proposta
+	@formularios not path /documentos/* /os/* /api/app/v1/ordens/* /administracao/* /energisa/* /api/energisa/* /projeto/*/proposta
 	request_body @envioDeArquivo {
 		max_size 70MB
 	}
@@ -35,6 +37,9 @@
 	}
 	request_body @listaDaEnergisa {
 		max_size 8MB
+	}
+	request_body @contaDeLuz {
+		max_size 20MB
 	}
 	request_body @formularios {
 		max_size 2MB

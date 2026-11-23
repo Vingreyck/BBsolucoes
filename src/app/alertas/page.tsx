@@ -3,6 +3,7 @@ import { BellOff, Repeat, Sun } from "lucide-react";
 import Link from "next/link";
 
 import { exigirUsuario } from "@/auth/sessao";
+import { dataBr, datasIsoNoTexto } from "@/datas";
 import { db } from "@/db";
 import { alerta as alertaTable } from "@/db/schema";
 
@@ -152,7 +153,8 @@ export default async function Alertas({ searchParams }: { searchParams: Promise<
              */
             const porFalha = new Map<string, typeof grupo>();
             for (const a of grupo) {
-              const chave = `${a.tipo}|${a.codigoFabricante ?? ""}|${a.mensagem}`;
+              // A data da mensagem antiga (ISO) e a da nova (dd/mm/aaaa) contam como o mesmo texto.
+              const chave = `${a.tipo}|${a.codigoFabricante ?? ""}|${datasIsoNoTexto(a.mensagem)}`;
               const lista = porFalha.get(chave) ?? [];
               lista.push(a);
               porFalha.set(chave, lista);
@@ -190,7 +192,7 @@ export default async function Alertas({ searchParams }: { searchParams: Promise<
                             {TIPO_ROTULO[recente.tipo] ?? recente.tipo}
                             {recente.codigoFabricante ? ` · código ${recente.codigoFabricante}` : ""}
                           </span>
-                          <span className="oc-msg">{recente.mensagem}</span>
+                          <span className="oc-msg">{datasIsoNoTexto(recente.mensagem)}</span>
                           <span className="oc-quando">
                             {falha.length > 1 ? (
                               <span className="oc-repete">
@@ -198,8 +200,8 @@ export default async function Alertas({ searchParams }: { searchParams: Promise<
                               </span>
                             ) : null}
                             {falha.length > 1
-                              ? `desde ${antiga.abertoEm.toLocaleDateString("pt-BR")} · último ${quando(recente.abertoEm)}`
-                              : `${recente.abertoEm.toLocaleDateString("pt-BR")} · ${quando(recente.abertoEm)}`}
+                              ? `desde ${dataBr(antiga.abertoEm)} · último ${quando(recente.abertoEm)}`
+                              : `${dataBr(recente.abertoEm)} · ${quando(recente.abertoEm)}`}
                             {todosReconhecidos ? " · reconhecido" : ""}
                           </span>
                         </div>

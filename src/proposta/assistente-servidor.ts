@@ -228,6 +228,8 @@ export function estadoInicialDoProjeto(p: {
   catalogo: ModeloDoCatalogoCompleto[];
   premissas: Premissas;
   ligacaoDaVistoria: Ligacao | null;
+  /** O que o técnico respondeu sobre sombra no telhado ("Sim, parcial", "Não"…). */
+  sombraDaVistoria?: string | null;
   responsavelId: string | null;
 }): EstadoDaProposta {
   const e = lerEstado({})!;
@@ -250,7 +252,9 @@ export function estadoInicialDoProjeto(p: {
       consumoMedia: Number.isFinite(media) && media > 0 ? media : null,
     }),
   ];
-  const perfilD = p.premissas.perfisDesempenho[0];
+  // Sombra na vistoria: já começa no perfil "com sombra", se a empresa tiver um.
+  const temSombra = Boolean(p.sombraDaVistoria && !/^(n[aã]o|sem|nenhuma)/i.test(p.sombraDaVistoria.trim()));
+  const perfilD = (temSombra && p.premissas.perfisDesempenho.find((x) => /sombra/i.test(x.nome))) || p.premissas.perfisDesempenho[0];
   const perfilS = p.premissas.perfisSimultaneidade[0];
   e.perfilDesempenho = perfilD?.nome ?? null;
   e.desempenho = perfilD?.valor ?? p.premissas.desempenho;

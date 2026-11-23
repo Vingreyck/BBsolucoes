@@ -26,6 +26,7 @@ import {
   Zap,
   X,
   type LucideIcon,
+  SlidersHorizontal,
 } from "lucide-react";
 import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
@@ -63,6 +64,7 @@ export type IconeMenu =
   | "modelos"
   | "empresa"
   | "proposta"
+  | "propostas"
   | "equipamentos";
 
 const ICONES: Record<IconeMenu, LucideIcon> = {
@@ -83,7 +85,8 @@ const ICONES: Record<IconeMenu, LucideIcon> = {
   usuarios: Users,
   modelos: ListChecks,
   empresa: Building2,
-  proposta: FileText,
+  proposta: SlidersHorizontal,
+  propostas: FileText,
   equipamentos: Cpu,
 };
 

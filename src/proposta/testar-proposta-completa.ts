@@ -7,7 +7,7 @@
 import { baseDeEquipamentos, itemDaBase, procurarNaBase } from "../equipamentos/base";
 import { lerPlanilhaDePrecos, lerPreco, linhasDoCsv } from "../equipamentos/planilha";
 import { ehMicroinversor, fasesDoNome, limparModelo, modeloInvalido, nomeDoFabricante, potenciaDoNome } from "../equipamentos/regras";
-import { calcularAssistente, kitAutomatico, lerEstado, novaUc, type ContextoDoCalculo, type EstadoDaProposta } from "./assistente";
+import { calcularAssistente, kitAutomatico, lerEstado, novaUc, ucComConta, type ContaDeLuzLida, type ContextoDoCalculo, type EstadoDaProposta } from "./assistente";
 import { calcular } from "./calculo";
 import { avaliarKit, modulosParaPotencia, potenciaNecessariaKwp, sugerirInversores, type InversorCandidato } from "./dimensionamento";
 import { distanciaKm, distribuidoraPorNome, municipio, procurarMunicipios } from "./municipios";
@@ -246,6 +246,41 @@ export function testarPropostaCompleta(confere: Confere, igual: Igual): void {
   igual(autoMicro?.inversores[0]?.qtd, Math.ceil(autoMicro!.modulo.qtd / 4), "kit automático com micro: um para cada 4 módulos");
   igual(kitAutomatico({ ...est, modulo: null }, null, candAuto, est.modulo, SUGESTAO.sobredimensionamento), null, "sem consumo, sem kit automático");
   confere(lerEstado({})!.kitAutomatico === true && lerEstado({ kitAutomatico: false })!.kitAutomatico === false, "o kit nasce automático; desligado à mão fica desligado");
+
+  // A conta de luz lida pelo Claude vira campos da unidade (mês do calendário, classe, ligação, distribuidora).
+  const conta: ContaDeLuzLida = {
+    distribuidora: "ENERGISA SERGIPE - DISTRIBUIDORA DE ENERGIA S.A.",
+    numeroUc: "123456",
+    titular: "Cliente Exemplo",
+    cidade: "Itabaiana",
+    classe: "rural",
+    ligacao: "trifasico",
+    mesReferencia: "2026-10",
+    historico: [
+      { mes: "2025-09", kwh: 999 },
+      ...[410, 420, 430, 440, 450, 460, 470, 480, 490, 500, 510, 520].map((kwh, i) => ({ mes: `${i < 2 ? 2025 : 2026}-${String(((i + 10) % 12) + 1).padStart(2, "0")}`, kwh })),
+    ],
+    tarifaComImpostos: 1.12,
+    valorTotal: 600,
+    observacao: null,
+  };
+  const energisa = (nome: string) => (/energisa/i.test(nome) ? { cnpj: "13017462000163", nome: "Energisa Sergipe" } : null);
+  const comConta = ucComConta(novaUc(1, { geradora: true }), conta, energisa);
+  igual(comConta.uc.consumoModo, "mensal", "conta lida: consumo mês a mês");
+  igual(comConta.uc.consumoMeses[10], 410, "conta lida: novembro de 2025 cai em novembro");
+  igual(comConta.uc.consumoMeses[9], 520, "conta lida: outubro de 2026 (o mais novo) cai em outubro");
+  confere(!comConta.uc.consumoMeses.includes(999), "conta lida: só os 12 meses mais novos (setembro de 2025 fica de fora)");
+  igual(comConta.uc.consumoMedia, 465, "conta lida: média dos 12 meses");
+  confere(comConta.uc.subgrupo === "B2" && comConta.uc.ligacao === "trifasico" && comConta.uc.codigo === "123456", "conta lida: rural vira B2, trifásico e o número da unidade");
+  confere(comConta.uc.distribuidoraCnpj === "13017462000163" && comConta.mudou.includes("distribuidora"), "conta lida: a distribuidora pelo nome da conta");
+  const poucaConta = ucComConta(novaUc(1, {}), { ...conta, historico: [{ mes: "2026-10", kwh: 300 }], classe: null, ligacao: null, distribuidora: null }, energisa);
+  confere(poucaConta.uc.consumoModo === "media" && poucaConta.uc.consumoMedia === 300 && poucaConta.uc.subgrupo === "B1", "conta com um mês só: vira a média, sem mexer na classe");
+
+  // A área útil que a vistoria mediu entra nos avisos do kit.
+  const apertado = calcularAssistente(est, { ...ctx, vistoria: { areaUtilM2: 5, sombra: null } });
+  confere(apertado.avisosDoKit.some((a) => a.nivel === "atencao" && /área útil/.test(a.texto)), "vistoria com pouca área: avisa que talvez não caiba");
+  const folgado = calcularAssistente(est, { ...ctx, vistoria: { areaUtilM2: 500, sombra: null } });
+  confere(folgado.avisosDoKit.some((a) => a.nivel === "ok" && /Cabe no telhado/.test(a.texto)), "vistoria com área de sobra: diz que cabe");
 
   const lixo = lerEstado({ ucs: [{ nome: 123, consumoMedia: "abc", subgrupo: "Z9" }], modulo: { tipo: "inversor" }, precoFinal: -5 });
   confere(lixo !== null && lixo.ucs[0].geradora && lixo.ucs[0].subgrupo === "B1" && lixo.modulo === null && lixo.precoFinal === null, "estado com lixo vira estado em branco, sem quebrar");

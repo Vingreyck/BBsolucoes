@@ -103,6 +103,7 @@ export default async function RootLayout({
       titulo: "Comercial",
       itens: [
         { href: "/esteira", rotulo: "Esteira de projetos", icone: "esteira" },
+        ...(gestao ? [{ href: "/propostas", rotulo: "Propostas", icone: "propostas" as const }] : []),
         ...(temDocumentos
           ? [
               { href: "/documentos", rotulo: "Documentos", icone: "documentos" as const },
@@ -144,7 +145,7 @@ export default async function RootLayout({
               { href: "/administracao/modelos", rotulo: "Modelos de OS", icone: "modelos" as const },
               { href: "/administracao/equipamentos", rotulo: "Equipamentos", icone: "equipamentos" as const },
               { href: "/administracao/empresa", rotulo: "Dados da empresa", icone: "empresa" as const },
-              { href: "/administracao/proposta", rotulo: "Proposta comercial", icone: "proposta" as const },
+              { href: "/administracao/proposta", rotulo: "Padrões da proposta", icone: "proposta" as const },
             ],
           },
         ]

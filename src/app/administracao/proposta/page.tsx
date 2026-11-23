@@ -61,8 +61,8 @@ export default async function PremissasDaProposta({
   return (
     <main>
       <Cabecalho
-        titulo="Proposta comercial"
-        meta="O que o cálculo da proposta assume, como a empresa forma o preço e as formas de pagamento. Vale para as próximas propostas."
+        titulo="Padrões da proposta"
+        meta="O que vale para toda proposta da empresa: impostos da conta, perfis, custos e margem, pagamentos e garantias. Cada proposta é montada para um cliente, em Comercial → Propostas."
       />
 
       {ok && (

@@ -2,13 +2,28 @@
 
 import {
   ArrowDown,
+  ArrowLeft,
   ArrowUp,
+  Camera,
+  ChartColumn,
   ChevronDown,
+  CircleCheck,
+  Clock,
   FileCheck2,
+  FolderOpen,
+  House,
+  MapPin,
+  Phone,
   Plus,
   RefreshCw,
+  ScanLine,
+  Send,
   Sparkles,
+  SunMedium,
   Trash2,
+  UserRound,
+  Users,
+  Wallet,
 } from "lucide-react";
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from "react";
@@ -18,6 +33,8 @@ import {
   chaveDaTarifa,
   kitAutomatico,
   novaUc,
+  ucComConta,
+  type ContaDeLuzLida,
   type EstadoDaProposta,
   type LinhaDoKit,
   type UcDoAssistente,
@@ -32,6 +49,8 @@ import {
   buscarEquipamentos,
   dadosDaCidade,
   gerarPropostaDoAssistente,
+  lerContaDoDossie,
+  lerContaEnviada,
   recalcularContexto,
   salvarRascunhoDaProposta,
 } from "./actions";
@@ -44,6 +63,41 @@ const br = (n: number | null | undefined, casas = 0) =>
     : n.toLocaleString("pt-BR", { minimumFractionDigits: casas, maximumFractionDigits: casas });
 const pct = (f: number | null | undefined, casas = 0) => (f === null || f === undefined || !Number.isFinite(f) ? "—" : `${br(f * 100, casas)}%`);
 const kwh = (n: number | null | undefined) => (n === null || n === undefined ? "—" : `${br(n)} kWh`);
+const moedaCurta = (n: number) => (n >= 1e6 ? `R$ ${br(n / 1e6, 1)} mi` : n >= 1e4 ? `R$ ${br(n / 1e3)} mil` : moeda(n));
+
+/** "Maria José da Silva" → "MS". */
+function iniciais(nome: string): string {
+  const p = nome.trim().split(/\s+/).filter((x) => !/^(da|de|do|das|dos|e)$/i.test(x));
+  return ((p[0]?.[0] ?? "") + (p.length > 1 ? (p[p.length - 1][0] ?? "") : "")).toUpperCase();
+}
+
+/**
+ * A foto do celular (3 a 8 MB) encolhida antes de subir: até 2.000 px no lado
+ * maior, em JPEG. Os números da conta continuam legíveis, o envio fica rápido
+ * no 4G e cabe no limite de 5 MB por imagem da API. PDF e o que não der para
+ * desenhar seguem como vieram.
+ */
+async function fotoMenor(arquivo: File): Promise<File> {
+  if (!/^image\/(jpeg|png|webp)$/.test(arquivo.type) || arquivo.size < 1.5 * 1024 * 1024) return arquivo;
+  try {
+    const imagem = await createImageBitmap(arquivo, { imageOrientation: "from-image" });
+    const escala = Math.min(1, 2000 / Math.max(imagem.width, imagem.height));
+    const tela = document.createElement("canvas");
+    tela.width = Math.round(imagem.width * escala);
+    tela.height = Math.round(imagem.height * escala);
+    tela.getContext("2d")?.drawImage(imagem, 0, 0, tela.width, tela.height);
+    imagem.close();
+    const blob = await new Promise<Blob | null>((ok) => tela.toBlob(ok, "image/jpeg", 0.85));
+    return blob && blob.size < arquivo.size ? new File([blob], arquivo.name.replace(/\.\w+$/, "") + ".jpg", { type: "image/jpeg" }) : arquivo;
+  } catch {
+    return arquivo;
+  }
+}
+
+/** Sem acento e em minúsculas, para comparar nomes (cidade, distribuidora). */
+function simples(t: string): string {
+  return t.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().trim();
+}
 
 /** "1.234,5", "0,8", "12" → número; vazio ou inválido → nulo. Aceita zero. */
 function lerNumero(texto: string): number | null {
@@ -293,6 +347,33 @@ function GraficoGeracaoConsumo({ geracao, consumo }: { geracao: number[]; consum
   );
 }
 
+/** As 12 barras do cartão escuro: geração (sol) contra consumo (traço claro). */
+function MiniBarras({ geracao, consumo }: { geracao: number[]; consumo: number[] }) {
+  const W = 264;
+  const H = 64;
+  const topo = Math.max(1, ...geracao, ...consumo);
+  const grupo = W / 12;
+  return (
+    <svg className="pc-mini" viewBox={`0 0 ${W} ${H + 12}`} role="img" aria-label="Geração e consumo de cada mês">
+      {MESES.map((mes, i) => {
+        const g = ((geracao[i] ?? 0) / topo) * H;
+        const c = ((consumo[i] ?? 0) / topo) * H;
+        const x = i * grupo + grupo * 0.2;
+        const larg = grupo * 0.6;
+        return (
+          <g key={mes}>
+            <rect className="pc-mini-geracao" x={x} y={H - g} width={larg} height={g} rx={2} />
+            <line className="pc-mini-consumo" x1={x - 1} x2={x + larg + 1} y1={H - c} y2={H - c} />
+            <text x={x + larg / 2} y={H + 10} textAnchor="middle">
+              {mes[0]}
+            </text>
+          </g>
+        );
+      })}
+    </svg>
+  );
+}
+
 // -------------------------------------------------------------- o assistente
 
 type Candidato = InversorCandidato & { linha: LinhaDoKit };
@@ -300,14 +381,18 @@ type Bloco = "consumo" | "unidades" | "sistema" | "preco" | "envio" | "resumo";
 
 /** Um bloco que abre e fecha; fechado, mostra numa linha o que já está decidido. */
 function Bloco({
+  id,
   titulo,
+  icone,
   resumo,
   aberto,
   alternar,
   alerta,
   children,
 }: {
+  id: string;
   titulo: string;
+  icone: React.ReactNode;
   resumo?: React.ReactNode;
   aberto: boolean;
   alternar: () => void;
@@ -315,13 +400,18 @@ function Bloco({
   children: React.ReactNode;
 }) {
   return (
-    <section className={`ap-secao ap-bloco${aberto ? " ap-bloco-aberto" : ""}`}>
+    <section id={`bloco-${id}`} className={`ap-bloco${aberto ? " ap-bloco-aberto" : ""}`}>
       <button type="button" className="ap-bloco-topo" aria-expanded={aberto} onClick={alternar}>
-        <span className="ap-bloco-titulo">
-          {titulo}
-          {alerta && <span className="ap-bloco-alerta">{alerta}</span>}
+        <span className="ap-bloco-icone" aria-hidden>
+          {icone}
         </span>
-        {!aberto && resumo && <span className="ap-bloco-resumo">{resumo}</span>}
+        <span className="ap-bloco-textos">
+          <span className="ap-bloco-titulo">
+            {titulo}
+            {alerta && <span className="ap-bloco-alerta">{alerta}</span>}
+          </span>
+          {!aberto && resumo && <span className="ap-bloco-resumo">{resumo}</span>}
+        </span>
         <ChevronDown size={18} aria-hidden className="ap-bloco-seta" />
       </button>
       {aberto && <div className="ap-bloco-corpo">{children}</div>}
@@ -329,10 +419,35 @@ function Bloco({
   );
 }
 
+interface ClienteDaProposta {
+  nome: string;
+  tipo: string;
+  cidade: string | null;
+  uf: string | null;
+  telefone: string | null;
+  etapa: string | null;
+  responsavel: string | null;
+  projeto: string;
+}
+
+interface VistoriaDaProposta {
+  areaUtilM2: number | null;
+  sombra: string | null;
+  osNumero: number;
+  concluida: boolean;
+  ligacao: Ligacao | null;
+}
+
 export function AssistenteDaProposta({
   projetoId,
   origem,
   cliente,
+  ultima,
+  continuando,
+  vistoria,
+  leituraLigada,
+  contaNoDossie,
+  temContaDeBeneficiaria,
   estadoInicial,
   contextoInicial,
   distribuidoras,
@@ -345,7 +460,13 @@ export function AssistenteDaProposta({
 }: {
   projetoId: string;
   origem: "esteira" | "projeto";
-  cliente: string;
+  cliente: ClienteDaProposta;
+  ultima: { numero: number; visualizacoes: number; enviada: boolean } | null;
+  continuando: boolean;
+  vistoria: VistoriaDaProposta | null;
+  leituraLigada: boolean;
+  contaNoDossie: { nome: string; em: string } | null;
+  temContaDeBeneficiaria: boolean;
   estadoInicial: EstadoDaProposta;
   contextoInicial: ContextoMontado;
   distribuidoras: { cnpj: string; nome: string; sigla: string }[];
@@ -358,7 +479,7 @@ export function AssistenteDaProposta({
 }) {
   const [e, setE] = useState<EstadoDaProposta>(estadoInicial);
   const [contexto, setContexto] = useState<ContextoMontado>(contextoInicial);
-  const [abertos, setAbertos] = useState<Set<Bloco>>(() => new Set<Bloco>(["consumo"]));
+  const [abertos, setAbertos] = useState<Set<Bloco>>(() => new Set<Bloco>(estadoInicial.ucs.some((u) => u.consumoMedia || u.consumoMeses.some((m) => m)) ? [] : ["consumo"]));
   const [salvoEm, setSalvoEm] = useState<string | null>(null);
   const [buscandoTarifa, setBuscandoTarifa] = useState(false);
   const [erro, setErro] = useState<string | null>(null);
@@ -369,7 +490,11 @@ export function AssistenteDaProposta({
   estadoRef.current = e;
 
   const p = contexto.ctx.premissas;
-  const r = useMemo(() => calcularAssistente(e, contexto.ctx), [e, contexto]);
+  const ctxComVistoria = useMemo(
+    () => ({ ...contexto.ctx, vistoria: vistoria ? { areaUtilM2: vistoria.areaUtilM2, sombra: vistoria.sombra } : null }),
+    [contexto, vistoria],
+  );
+  const r = useMemo(() => calcularAssistente(e, ctxComVistoria), [e, ctxComVistoria]);
   const mudar = (parcial: Partial<EstadoDaProposta>) => setE((v) => ({ ...v, ...parcial }));
   const mudarUc = (i: number, parcial: Partial<UcDoAssistente>) => setE((v) => ({ ...v, ucs: v.ucs.map((u, j) => (j === i ? { ...u, ...parcial } : u)) }));
   const aberto = (b: Bloco) => abertos.has(b);
@@ -467,6 +592,65 @@ export function AssistenteDaProposta({
   }, [contexto.municipio, distribuidoras]);
 
   const infoTarifa = (u: UcDoAssistente) => contexto.tarifas.find((t) => t.chave === chaveDaTarifa(u.distribuidoraCnpj, u.subgrupo))?.tarifa ?? null;
+
+  // ------------------------------------------------------------ conta de luz
+  const [lendo, setLendo] = useState<string | null>(null);
+  const [leitura, setLeitura] = useState<{ arquivo: string; mudou: string[]; conta: ContaDeLuzLida } | null>(null);
+  const [erroConta, setErroConta] = useState<string | null>(null);
+  const [arrastando, setArrastando] = useState(false);
+  const entradaDaConta = useRef<HTMLInputElement>(null);
+
+  function acharDistribuidora(nome: string): { cnpj: string; nome: string } | null {
+    const n = simples(nome);
+    const daCidade = contexto.municipio?.distribuidoras.map((d) => d.cnpj) ?? [];
+    const candidatas = distribuidoras.filter((d) => {
+      const nn = simples(d.nome);
+      return nn.includes(n) || n.includes(nn) || simples(d.sigla) === n || n.split(/\s+/).every((p) => nn.includes(p));
+    });
+    return candidatas.find((d) => daCidade.includes(d.cnpj)) ?? candidatas[0] ?? null;
+  }
+
+  async function aplicarConta(conta: ContaDeLuzLida, arquivo: string) {
+    const atual = estadoRef.current;
+    const { uc, mudou } = ucComConta(atual.ucs[iGer], conta, acharDistribuidora);
+    setE((v) => ({ ...v, ucs: v.ucs.map((u, j) => (j === iGer ? uc : u)) }));
+    // A cidade da conta, quando ainda não há cidade: escolhe sozinha se o nome bate.
+    if (!atual.uf && conta.cidade) {
+      const achadas = await buscarCidades(conta.cidade);
+      const igual = achadas.find((c) => simples(c.nome) === simples(conta.cidade!)) ?? (achadas.length === 1 ? achadas[0] : null);
+      if (igual) {
+        await escolherCidade(igual);
+        mudou.push("cidade");
+      }
+    }
+    setLeitura({ arquivo, mudou, conta });
+  }
+
+  async function lerDoDossie() {
+    setErroConta(null);
+    setLendo(contaNoDossie?.nome ?? "a conta do dossiê");
+    const resposta = await lerContaDoDossie(projetoId, true);
+    setLendo(null);
+    if ("erro" in resposta) setErroConta(resposta.erro);
+    else await aplicarConta(resposta.conta, resposta.arquivo);
+  }
+
+  async function enviarConta(original: File) {
+    setErroConta(null);
+    setLendo(original.name);
+    const arquivo = await fotoMenor(original);
+    if (arquivo.size > 15 * 1024 * 1024) {
+      setLendo(null);
+      setErroConta("A conta passa de 15 MB. Tire uma foto mais leve ou envie o PDF.");
+      return;
+    }
+    const dados = new FormData();
+    dados.set("conta", arquivo);
+    const resposta = await lerContaEnviada(dados);
+    setLendo(null);
+    if ("erro" in resposta) setErroConta(resposta.erro);
+    else await aplicarConta(resposta.conta, resposta.arquivo);
+  }
 
   function gerar() {
     setErro(null);
@@ -630,12 +814,174 @@ export function AssistenteDaProposta({
 
   const beneficiarias = e.ucs.map((u, i) => ({ u, i })).filter(({ u }) => !u.geradora);
 
+  const tarifaGeradora = r.tarifas[iGer];
+  const aneelGeradora = infoTarifa(geradora);
+  const consumoGeradora = r.consumos[iGer] ? r.consumos[iGer]!.reduce((a, b) => a + b, 0) / 12 : null;
+  const sozinhos: { texto: string; titulo?: string }[] = [];
+  if (leitura) sozinhos.push({ texto: "Consumo da conta de luz", titulo: leitura.arquivo });
+  if (contexto.municipio) sozinhos.push({ texto: `Sol de ${e.cidade}`, titulo: contexto.fonteIrradiacao ?? "Atlas Brasileiro de Energia Solar (INPE)" });
+  if (geradora.distribuidoraNome) sozinhos.push({ texto: geradora.distribuidoraNome, titulo: "A distribuidora que atende a cidade" });
+  if (tarifaGeradora?.origem === "aneel" && aneelGeradora) sozinhos.push({ texto: `Tarifa ${resolucaoCurta(aneelGeradora.resolucao)}`, titulo: "Tarifa e Fio B da ANEEL, com os impostos" });
+  if (vistoria?.areaUtilM2) sozinhos.push({ texto: `Telhado: ${br(vistoria.areaUtilM2)} m² úteis`, titulo: `Vistoria nº ${vistoria.osNumero}` });
+  if (vistoria?.sombra) sozinhos.push({ texto: vistoria.sombra, titulo: `Vistoria nº ${vistoria.osNumero}` });
+  if (e.kitAutomatico && e.modulo && r.kwpNecessario) sozinhos.push({ texto: "Kit dimensionado", titulo: "Módulos que zeram as contas e o inversor pela relação CC/CA" });
+  if (r.custoKit !== null && e.custoKitManual === null && r.precoFinal) sozinhos.push({ texto: "Preço pelo catálogo", titulo: "Custos do catálogo, da empresa, margem e imposto" });
+  const voltar = origem === "esteira" ? "/esteira" : `/projeto/${projetoId}`;
+  const lugar = [cliente.cidade, cliente.uf].filter(Boolean).join("/");
+
   return (
-    <div className="ap2">
+    <>
+      <header className="pc-heroi">
+        <nav className="pc-heroi-nav" aria-label="Voltar">
+          <Link href={voltar} className="pc-voltar">
+            <ArrowLeft size={15} aria-hidden /> {origem === "esteira" ? "Esteira" : cliente.projeto}
+          </Link>
+          <Link href="/propostas" className="pc-voltar">
+            Todas as propostas
+          </Link>
+        </nav>
+        <div className="pc-heroi-corpo">
+          <span className="pc-avatar" aria-hidden>
+            {iniciais(cliente.nome)}
+          </span>
+          <div className="pc-heroi-texto">
+            <span className="pc-sobrancelha">Proposta comercial para</span>
+            <h1>{cliente.nome}</h1>
+            <ul className="pc-chips">
+              {lugar && (
+                <li>
+                  <MapPin size={14} aria-hidden /> {lugar}
+                </li>
+              )}
+              {cliente.telefone && (
+                <li>
+                  <Phone size={14} aria-hidden /> {cliente.telefone}
+                </li>
+              )}
+              {cliente.etapa && (
+                <li>
+                  <Clock size={14} aria-hidden /> {cliente.etapa}
+                </li>
+              )}
+              {cliente.responsavel && (
+                <li>
+                  <UserRound size={14} aria-hidden /> {cliente.responsavel}
+                </li>
+              )}
+            </ul>
+          </div>
+          <div className="pc-heroi-estado">
+            <span className={`pc-pilula${ultima && ultima.visualizacoes > 0 ? " pc-pilula-ok" : ""}`}>
+              {ultima
+                ? `Nº ${ultima.numero} · ${ultima.visualizacoes > 0 ? `cliente abriu ${ultima.visualizacoes}×` : ultima.enviada ? "enviada" : "ainda não enviada"}`
+                : "Primeira proposta"}
+            </span>
+            <span className="pc-salvo">
+              <CircleCheck size={13} aria-hidden />
+              {salvoEm ? `Guardado às ${salvoEm}` : continuando ? "Continuando de onde parou" : "Guarda sozinho"}
+            </span>
+          </div>
+        </div>
+      </header>
+
+      <div className="ap2">
       <div className="ap-conteudo">
+        <section
+          className={`pc-conta${consumoGeradora ? " pc-conta-compacta" : ""}${arrastando ? " pc-conta-arrastando" : ""}`}
+          onDragOver={(ev) => {
+            if (!leituraLigada) return;
+            ev.preventDefault();
+            setArrastando(true);
+          }}
+          onDragLeave={() => setArrastando(false)}
+          onDrop={(ev) => {
+            if (!leituraLigada) return;
+            ev.preventDefault();
+            setArrastando(false);
+            const f = ev.dataTransfer.files[0];
+            if (f) enviarConta(f);
+          }}
+        >
+          <span className="pc-conta-icone" aria-hidden>
+            <ScanLine size={22} />
+          </span>
+          <div className="pc-conta-texto">
+            <h2>{consumoGeradora ? "Ler de novo da conta de luz" : "Comece pela conta de luz"}</h2>
+            <p>
+              {leituraLigada
+                ? "O sistema lê o histórico de consumo, o número da unidade, a classe, a ligação e a distribuidora. O resto sai sozinho."
+                : ehAdm
+                  ? "A leitura automática está desligada: ponha ANTHROPIC_API_KEY no .env do servidor e faça o deploy. Por ora, digite o consumo."
+                  : "A leitura automática está desligada (o administrador liga). Por ora, digite o consumo."}
+            </p>
+          </div>
+          {leituraLigada && (
+            <div className="pc-conta-acoes">
+              {contaNoDossie && (
+                <button type="button" className="botao" disabled={Boolean(lendo)} onClick={lerDoDossie} title={contaNoDossie.nome}>
+                  <FolderOpen size={15} aria-hidden /> Ler a do dossiê <small>({contaNoDossie.em})</small>
+                </button>
+              )}
+              <button type="button" className={`botao${contaNoDossie ? " secundario" : ""}`} disabled={Boolean(lendo)} onClick={() => entradaDaConta.current?.click()}>
+                <Camera size={15} aria-hidden /> Foto ou PDF da conta
+              </button>
+              <input
+                ref={entradaDaConta}
+                type="file"
+                accept="image/jpeg,image/png,image/webp,application/pdf"
+                hidden
+                onChange={(ev) => {
+                  const f = ev.target.files?.[0];
+                  ev.target.value = "";
+                  if (f) enviarConta(f);
+                }}
+              />
+            </div>
+          )}
+          {lendo && (
+            <p className="pc-conta-lendo" role="status">
+              <span className="pc-girando" aria-hidden /> Lendo {lendo}… leva uns 15 segundos.
+            </p>
+          )}
+          {erroConta && (
+            <p className="ap-aviso ap-aviso-erro pc-conta-recado" role="alert">
+              {erroConta}
+            </p>
+          )}
+          {leitura && !lendo && (
+            <div className="pc-conta-lida pc-conta-recado" role="status">
+              <CircleCheck size={16} aria-hidden />
+              <span>
+                <strong>{leitura.mudou.length ? `Preenchido da conta: ${leitura.mudou.join(", ")}.` : "A conta bate com o que já estava preenchido."}</strong>
+                {leitura.conta.tarifaComImpostos && tarifaGeradora
+                  ? ` A conta cobra ${moeda(leitura.conta.tarifaComImpostos)}/kWh (com bandeira e impostos); a proposta usa a tarifa da ANEEL, ${moeda(tarifaGeradora.tarifa)}/kWh.`
+                  : ""}
+                {temContaDeBeneficiaria && beneficiarias.length === 0 ? " O dossiê tem conta de outra unidade: dá para pôr no rateio." : ""}
+              </span>
+            </div>
+          )}
+        </section>
+
+        {sozinhos.length > 0 && (
+          <div className="pc-sozinhos">
+            <span className="pc-sozinhos-titulo">
+              <Sparkles size={14} aria-hidden /> Preenchido sozinho
+            </span>
+            <ul>
+              {sozinhos.map((x) => (
+                <li key={x.texto} title={x.titulo}>
+                  <CircleCheck size={13} aria-hidden /> {x.texto}
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
+
         {/* ------------------------------------------- 1. consumo e local */}
         <Bloco
-          titulo="1. Consumo e local"
+          id="consumo"
+          titulo="Consumo e local"
+          icone={<House size={18} />}
           aberto={aberto("consumo")}
           alternar={() => alternar("consumo")}
           resumo={`${e.cidade ? `${e.cidade}${e.uf ? `/${e.uf}` : ""}` : "sem cidade"} · ${r.consumos[iGer] ? kwh(r.consumos[iGer]!.reduce((a, b) => a + b, 0) / 12) + "/mês" : "sem consumo"} · ${geradora.distribuidoraNome || "sem distribuidora"}`}
@@ -686,7 +1032,9 @@ export function AssistenteDaProposta({
         {/* ------------------------------------------- unidades que recebem */}
         {beneficiarias.length > 0 && (
           <Bloco
+            id="unidades"
             titulo="Unidades que recebem os créditos"
+            icone={<Users size={18} />}
             aberto={aberto("unidades")}
             alternar={() => alternar("unidades")}
             resumo={`${beneficiarias.length} ${beneficiarias.length === 1 ? "unidade" : "unidades"} · ${e.rateio === "percentual" ? "por porcentagem" : "por fila de prioridade"}`}
@@ -783,7 +1131,9 @@ export function AssistenteDaProposta({
 
         {/* ------------------------------------------- 2. sistema */}
         <Bloco
-          titulo="2. Sistema"
+          id="sistema"
+          titulo="Sistema"
+          icone={<SunMedium size={18} />}
           aberto={aberto("sistema")}
           alternar={() => alternar("sistema")}
           alerta={erroNoKit ? "ajustar" : null}
@@ -1031,7 +1381,9 @@ export function AssistenteDaProposta({
 
         {/* ------------------------------------------- 3. preço */}
         <Bloco
-          titulo="3. Preço"
+          id="preco"
+          titulo="Preço"
+          icone={<Wallet size={18} />}
           aberto={aberto("preco")}
           alternar={() => alternar("preco")}
           alerta={!r.precoFinal ? "falta o custo" : r.margemFinal !== null && r.margemFinal < 0.05 ? "margem baixa" : null}
@@ -1148,7 +1500,9 @@ export function AssistenteDaProposta({
 
         {/* ------------------------------------------- 4. envio */}
         <Bloco
-          titulo="4. Pagamento e envio"
+          id="envio"
+          titulo="Pagamento e envio"
+          icone={<Send size={18} />}
           aberto={aberto("envio")}
           alternar={() => alternar("envio")}
           resumo={`${responsaveis.find((x) => x.id === e.responsavelId)?.nome ?? "responsável"} · válida por ${e.validadeDias ?? p.validadeDias} dias${e.observacoes ? " · com observação" : ""}`}
@@ -1201,7 +1555,12 @@ export function AssistenteDaProposta({
 
         {/* ------------------------------------------- resumo completo */}
         {s && (
-          <Bloco titulo="Geração, consumo e conta de cada unidade" aberto={aberto("resumo")} alternar={() => alternar("resumo")} resumo={`${kwh(s.geracaoMediaMes)}/mês gerados · ${pct(s.cobertura)} do consumo`}>
+          <Bloco
+            id="resumo"
+            titulo="Geração, consumo e conta de cada unidade"
+            icone={<ChartColumn size={18} />}
+            aberto={aberto("resumo")}
+            alternar={() => alternar("resumo")} resumo={`${kwh(s.geracaoMediaMes)}/mês gerados · ${pct(s.cobertura)} do consumo`}>
             {s.cobertura > 1.25 && (
               <p className="ap-aviso ap-aviso-atencao">
                 A usina gera {pct(s.cobertura)} do que dá para compensar: sobram {kwh(s.sobraCreditosAno1)} de crédito no primeiro ano (vencem em 60
@@ -1246,53 +1605,64 @@ export function AssistenteDaProposta({
       </div>
 
       {/* ------------------------------------------- o resultado, sempre à vista */}
-      <aside className="ap-resultado" aria-live="polite">
-        <span className="ap-vivo-titulo">{cliente}</span>
-        {s ? (
-          <>
-            <div className="ap-grande">
-              <span>Economia</span>
-              <strong>{moeda(s.economiaMes)}/mês</strong>
-              <small>
-                conta de {moeda(s.contaSemMes)} → {moeda(s.contaComMes)}
-              </small>
-            </div>
-            <div className="ap-vivo-linha">
-              Retorno
-              <strong>{rotuloDoPayback(s.paybackMeses)}</strong>
-            </div>
-            <div className="ap-vivo-linha">
-              Rendimento (TIR)
-              <strong>{s.tir === null ? "—" : `${pct(s.tir, 1)} ao ano`}</strong>
-            </div>
-            <div className="ap-vivo-linha">
-              Economia em 25 anos
-              <strong>{moeda(s.economia25)}</strong>
-            </div>
-          </>
-        ) : (
-          <p className="ap-explica">
-            {r.consumos[iGer] ? "Falta pouco: veja abaixo." : "Digite o consumo da conta de luz: o sistema monta o resto sozinho."}
-          </p>
-        )}
-        <div className="ap-vivo-linha">
-          Sistema
-          <strong>{r.kwp ? kwpTexto(r.kwp) : "—"}</strong>
+      <aside className="pc-resultado" aria-live="polite" id="resultado">
+        <div className="pc-res-topo">
+          <span className="pc-res-sobrancelha">
+            <SunMedium size={14} aria-hidden /> Economia na conta de luz
+          </span>
+          {s ? (
+            <>
+              <strong className="pc-res-economia">
+                {moeda(s.economiaMes)}
+                <small>/mês</small>
+              </strong>
+              <span className="pc-res-conta">
+                de <s>{moeda(s.contaSemMes)}</s> para <b>{moeda(s.contaComMes)}</b> por mês
+              </span>
+              <MiniBarras geracao={s.geracaoMes} consumo={s.consumoMes} />
+              <span className="pc-res-legenda">
+                <i className="pc-leg-geracao" /> geração <i className="pc-leg-consumo" /> consumo · cobre {pct(s.cobertura)}
+              </span>
+            </>
+          ) : (
+            <p className="pc-res-vazio">
+              {consumoGeradora ? "Falta pouco: veja o que falta abaixo." : "Leia a conta de luz ou digite o consumo: o resto sai sozinho."}
+            </p>
+          )}
         </div>
-        {e.modulo && <small className="ap-explica">{textoDoKit}</small>}
-        <div className="ap-vivo-linha">
-          Preço
-          <strong>{r.precoFinal ? moeda(r.precoFinal) : "—"}</strong>
-        </div>
-        {r.margemFinal !== null && (
-          <div className="ap-vivo-linha">
-            Margem
-            <strong style={{ color: r.margemFinal < 0.05 ? "var(--crit)" : undefined }}>{pct(r.margemFinal, 1)}</strong>
+
+        <dl className="pc-res-kpis">
+          <div>
+            <dt>Retorno</dt>
+            <dd>{s ? rotuloDoPayback(s.paybackMeses) : "—"}</dd>
           </div>
-        )}
+          <div>
+            <dt>Rendimento</dt>
+            <dd>{s && s.tir !== null ? `${pct(s.tir, 1)} a.a.` : "—"}</dd>
+          </div>
+          <div>
+            <dt>Em 25 anos</dt>
+            <dd>{s ? moedaCurta(s.economia25) : "—"}</dd>
+          </div>
+          <div>
+            <dt>Sistema</dt>
+            <dd>{r.kwp ? kwpTexto(r.kwp) : "—"}</dd>
+          </div>
+        </dl>
+
+        <div className="pc-res-preco">
+          <span>Preço</span>
+          <strong>{r.precoFinal ? moeda(r.precoFinal) : "—"}</strong>
+          {r.precoFinal ? (
+            <small>
+              {r.margemFinal !== null && <em className={r.margemFinal < 0.05 ? "pc-res-baixa" : undefined}>margem {pct(r.margemFinal, 1)}</em>}
+              {r.kwp ? ` · ${moeda(r.precoFinal / (r.kwp * 1000))}/Wp` : ""}
+            </small>
+          ) : null}
+        </div>
 
         {!r.precoFinal && r.custoKit === null && e.modulo && (
-          <label className="ap-campo">
+          <label className="pc-res-campo">
             Custo do kit (R$)
             <CampoNumero valor={e.custoKitManual} placeholder="Total do distribuidor" aoMudar={(n) => mudar({ custoKitManual: n })} />
             <small>É o que falta para o preço sair sozinho.</small>
@@ -1300,40 +1670,46 @@ export function AssistenteDaProposta({
         )}
 
         {r.falta.length > 0 && (
-          <ul className="ap-falta">
+          <ul className="pc-res-falta">
             {r.falta.map((f) => (
               <li key={f}>
                 <button
                   type="button"
-                  className="link-acao"
                   onClick={() => {
                     const b = blocoDaFalta(f);
                     abrir(b);
-                    setTimeout(() => document.querySelector(".ap-bloco-aberto:last-of-type")?.scrollIntoView({ behavior: "smooth", block: "start" }), 50);
+                    setTimeout(() => document.getElementById(`bloco-${b}`)?.scrollIntoView({ behavior: "smooth", block: "start" }), 50);
                   }}
                 >
-                  Falta {f}
+                  Falta {f} →
                 </button>
               </li>
             ))}
           </ul>
         )}
         {erro && (
-          <p className="aviso erro" role="alert">
+          <p className="pc-res-erro" role="alert">
             {erro}
           </p>
         )}
-        <button type="button" className="botao ap-gerar" disabled={gerando || r.falta.length > 0} onClick={gerar}>
-          <FileCheck2 size={16} aria-hidden /> {gerando ? "Gerando…" : "Gerar a proposta"}
+        <button type="button" className="pc-gerar" disabled={gerando || r.falta.length > 0} onClick={gerar}>
+          <FileCheck2 size={17} aria-hidden /> {gerando ? "Gerando o PDF…" : "Gerar a proposta"}
         </button>
-        <div className="ap-secao-topo">
-          <span className="ap-salvo">{salvoEm ? `Rascunho guardado às ${salvoEm}` : "O rascunho é guardado sozinho."}</span>
-          <Link href={origem === "esteira" ? "/esteira" : `/projeto/${projetoId}`} className="link-acao">
-            Sair
-          </Link>
-        </div>
+        {e.modulo && <small className="pc-res-kit">{textoDoKit}</small>}
       </aside>
-    </div>
+      </div>
+
+      {/* No celular, o resultado e o botão ficam presos embaixo. */}
+      <div className="pc-barra">
+        <a href="#resultado" className="pc-barra-numero">
+          <span>Economia</span>
+          <strong>{s ? `${moeda(s.economiaMes)}/mês` : "—"}</strong>
+        </a>
+        <button type="button" className="pc-gerar" disabled={gerando || r.falta.length > 0} onClick={gerar}>
+          <FileCheck2 size={16} aria-hidden /> {gerando ? "Gerando…" : "Gerar"}
+        </button>
+      </div>
+    </>
   );
 }
 

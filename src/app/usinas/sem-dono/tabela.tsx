@@ -4,6 +4,8 @@ import { Check, Search, SearchX, Sun } from "lucide-react";
 import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { createPortal } from "react-dom";
 
+import { dataBr } from "@/datas";
+
 import { ligarAoCliente, ligarAoProjeto } from "./actions";
 
 export interface ClienteParaLigar {
@@ -38,12 +40,6 @@ function sem(texto: string): string {
     .normalize("NFD")
     .replace(/[̀-ͯ]/g, "")
     .toLowerCase();
-}
-
-function dataCurta(iso: string | null): string {
-  if (!iso) return "—";
-  const [a, m, d] = iso.slice(0, 10).split("-");
-  return `${d}/${m}/${a}`;
 }
 
 /** Quantas linhas aparecem antes do "mostrar mais". */
@@ -170,7 +166,7 @@ export function TabelaSemDono({ usinas, clientes }: { usinas: UsinaSemDono[]; cl
                       </td>
                       <td>{u.portal}</td>
                       <td>{u.cidade ?? <span className="fraco">—</span>}</td>
-                      <td className="num">{dataCurta(u.instaladaEm)}</td>
+                      <td className="num">{dataBr(u.instaladaEm)}</td>
                       {pronta ? (
                         <td colSpan={2}>
                           <span className="status-ok">

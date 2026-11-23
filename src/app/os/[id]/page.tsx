@@ -26,6 +26,7 @@ import {
 import Link from "next/link";
 import { notFound } from "next/navigation";
 
+import { datasIsoNoTexto } from "@/datas";
 import { ErroOs, exigirAtorWeb, podeExecutar } from "@/os/acesso";
 import { carregarOs, comentariosDaOs, nomeDeQuemRecebe, quemUsaOApp, tempoEmCampo } from "@/os/consultas";
 import { destinoDaOs, linkDaRota } from "@/os/destino";
@@ -691,7 +692,7 @@ export default async function DetalheOs({
       <div className="registro-grade">
         <div className="registro-principal">
           <Cartao titulo="Solicitação" icone={<FileText size={16} />}>
-            <p className="descricao-os">{os.descricao}</p>
+            <p className="descricao-os">{datasIsoNoTexto(os.descricao)}</p>
           </Cartao>
 
           <Cartao

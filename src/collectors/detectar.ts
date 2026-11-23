@@ -2,6 +2,7 @@ import "dotenv/config";
 
 import { and, eq, isNull, sql } from "drizzle-orm";
 
+import { dataBr } from "../datas";
 import { db, schema } from "../db";
 
 /**
@@ -288,9 +289,9 @@ async function main() {
           usinaId: s.usinaId,
           tipo: "offline",
           severidade: "critico",
-          mensagem: `Praticamente sem geração: ${rotulo} entre ${diasUnicos[0]} e ${
-            diasUnicos[diasUnicos.length - 1]
-          }`,
+          mensagem: `Praticamente sem geração: ${rotulo} entre ${dataBr(diasUnicos[0])} e ${dataBr(
+            diasUnicos[diasUnicos.length - 1],
+          )}`,
           abertoEm: new Date(`${diasUnicos[diasUnicos.length - 1]}T12:00:00Z`),
         })
         .onConflictDoNothing()
@@ -318,8 +319,8 @@ async function main() {
         severidade: a.tipo === "offline" ? "critico" : "atencao",
         mensagem:
           a.tipo === "offline"
-            ? `Não gerou nada em ${a.dia}, quando o esperado era ${a.esperado.toFixed(1)} kWh`
-            : `Gerou ${a.gerado.toFixed(1)} kWh em ${a.dia}, ${Math.round(
+            ? `Não gerou nada em ${dataBr(a.dia)}, quando o esperado era ${a.esperado.toFixed(1)} kWh`
+            : `Gerou ${a.gerado.toFixed(1)} kWh em ${dataBr(a.dia)}, ${Math.round(
                 (1 - a.gerado / a.esperado) * 100,
               )}% abaixo dos ${a.esperado.toFixed(1)} kWh esperados`,
         abertoEm: quando,
