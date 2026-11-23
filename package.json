@@ -58,7 +58,7 @@
     "dados:tarifas": "tsx src/proposta/gerar-tarifas.ts"
   },
   "dependencies": {
-    "@anthropic-ai/sdk": "^1.12.0",
+    "@napi-rs/canvas": "~1.1.1",
     "@react-pdf/renderer": "^4.9.0",
     "dotenv": "^17.4.2",
     "drizzle-orm": "^0.45.4",
@@ -70,6 +70,7 @@
     "qrcode-generator": "2.0.4",
     "react": "^19.1.0",
     "react-dom": "^19.1.0",
+    "unpdf": "^1.9.1",
     "zod": "^4.6.7"
   },
   "devDependencies": {

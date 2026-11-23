@@ -911,7 +911,7 @@ export function AssistenteDaProposta({
               {leituraLigada
                 ? "O sistema lê o histórico de consumo, o número da unidade, a classe, a ligação e a distribuidora. O resto sai sozinho."
                 : ehAdm
-                  ? "A leitura automática está desligada: ponha ANTHROPIC_API_KEY no .env do servidor e faça o deploy. Por ora, digite o consumo."
+                  ? "A leitura automática está desligada: ponha GROQ_API_KEY (grátis em console.groq.com) no .env do servidor e faça o deploy. Por ora, digite o consumo."
                   : "A leitura automática está desligada (o administrador liga). Por ora, digite o consumo."}
             </p>
           </div>
@@ -940,7 +940,7 @@ export function AssistenteDaProposta({
           )}
           {lendo && (
             <p className="pc-conta-lendo" role="status">
-              <span className="pc-girando" aria-hidden /> Lendo {lendo}… leva uns 15 segundos.
+              <span className="pc-girando" aria-hidden /> Lendo {lendo}… leva alguns segundos.
             </p>
           )}
           {erroConta && (

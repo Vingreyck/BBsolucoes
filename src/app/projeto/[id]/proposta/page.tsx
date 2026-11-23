@@ -28,8 +28,8 @@ export const dynamic = "force-dynamic";
 
 /**
  * A proposta comercial de um cliente, numa tela só (23/11): o que o Solarz
- * pede em sete etapas, aqui sai sozinho — o consumo da conta de luz (lida pelo
- * Claude, do dossiê ou de uma foto), a área e a sombra da vistoria, a
+ * pede em sete etapas, aqui sai sozinho — o consumo da conta de luz (lida pela
+ * Groq, do dossiê ou de uma foto), a área e a sombra da vistoria, a
  * distribuidora pela cidade, a tarifa da ANEEL, o sol do INPE, o kit (módulo
  * padrão, quantidade e inversor) e o preço pelos custos do catálogo. Os blocos
  * abrem só para ajustar. O que se preenche fica guardado no projeto.

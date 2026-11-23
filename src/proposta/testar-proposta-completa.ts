@@ -9,6 +9,7 @@ import { lerPlanilhaDePrecos, lerPreco, linhasDoCsv } from "../equipamentos/plan
 import { ehMicroinversor, fasesDoNome, limparModelo, modeloInvalido, nomeDoFabricante, potenciaDoNome } from "../equipamentos/regras";
 import { calcularAssistente, kitAutomatico, lerEstado, novaUc, ucComConta, type ContaDeLuzLida, type ContextoDoCalculo, type EstadoDaProposta } from "./assistente";
 import { calcular } from "./calculo";
+import { contaDaResposta, mesDaConta, paginaDoPdfComoImagem, textoDoPdf } from "./ler-conta";
 import { avaliarKit, modulosParaPotencia, potenciaNecessariaKwp, sugerirInversores, type InversorCandidato } from "./dimensionamento";
 import { distanciaKm, distribuidoraPorNome, municipio, procurarMunicipios } from "./municipios";
 import { formasDePagamento, parcelaPrice } from "./pagamentos";
@@ -276,6 +277,23 @@ export function testarPropostaCompleta(confere: Confere, igual: Igual): void {
   const poucaConta = ucComConta(novaUc(1, {}), { ...conta, historico: [{ mes: "2026-10", kwh: 300 }], classe: null, ligacao: null, distribuidora: null }, energisa);
   confere(poucaConta.uc.consumoModo === "media" && poucaConta.uc.consumoMedia === 300 && poucaConta.uc.subgrupo === "B1", "conta com um mês só: vira a média, sem mexer na classe");
 
+  // O mês como a Groq devolve (às vezes como está escrito na conta).
+  igual(mesDaConta("2026-10"), "2026-10", "mês da conta: AAAA-MM");
+  igual(mesDaConta("OUT/26"), "2026-10", "mês da conta: OUT/26");
+  igual(mesDaConta("out/2026"), "2026-10", "mês da conta: out/2026");
+  igual(mesDaConta("10/2026"), "2026-10", "mês da conta: 10/2026");
+  igual(mesDaConta("Março de 2026"), "2026-03", "mês da conta: Março de 2026");
+  igual(mesDaConta("2026-13"), null, "mês da conta: mês 13 não é mês");
+  const respostaGroq = contaDaResposta(
+    '```json\n{"legivel": true, "distribuidora": "Energisa", "numeroUc": "12.345-6", "titular": null, "cidade": "Itabaiana", "classe": "residencial", "ligacao": "monofasico", "mesReferencia": "OUT/26", "historico": [{"mes": "OUT/26", "kwh": 512}, {"mes": "SET/26", "kwh": 480}, {"mes": "xx", "kwh": 1}], "tarifaComImpostos": 1.05, "valorTotal": 540.2, "observacao": null}\n```',
+  );
+  confere(
+    "conta" in respostaGroq && respostaGroq.conta.numeroUc === "123456" && respostaGroq.conta.historico.length === 2 && respostaGroq.conta.historico[0].mes === "2026-10" && respostaGroq.conta.mesReferencia === "2026-10",
+    "resposta da Groq: número só com dígitos, meses no padrão, mês ilegível fora",
+  );
+  confere("erro" in contaDaResposta('{"legivel": false, "observacao": "foto tremida"}'), "resposta da Groq fora do formato: erro, sem quebrar");
+  confere("erro" in contaDaResposta("não é json"), "resposta da Groq que não é JSON: erro, sem quebrar");
+
   // A área útil que a vistoria mediu entra nos avisos do kit.
   const apertado = calcularAssistente(est, { ...ctx, vistoria: { areaUtilM2: 5, sombra: null } });
   confere(apertado.avisosDoKit.some((a) => a.nivel === "atencao" && /área útil/.test(a.texto)), "vistoria com pouca área: avisa que talvez não caiba");
@@ -324,6 +342,22 @@ export async function testarPdfDoAssistente(confere: Confere, igual: Igual): Pro
     confere(Boolean(lido.premissas.fonteTarifa?.includes("3.575")), `proposta (${nome}) cita a resolução da ANEEL`);
     const pdf = await gerarPropostaPdf(lido, { logo: null });
     confere(pdf.subarray(0, 5).toString("latin1") === "%PDF-", `PDF do assistente (${nome})`);
+    if (nome === "uma unidade") {
+      // O mesmo caminho do PDF da conta de luz: a Groq não lê PDF, sai o texto.
+      const texto = await textoDoPdf(new Uint8Array(pdf));
+      confere(texto.includes("Cliente Exemplo"), "texto tirado de um PDF (o da conta vai assim para a Groq)");
+      const pagina = await paginaDoPdfComoImagem(new Uint8Array(pdf));
+      confere(Boolean(pagina && pagina[0] === 0xff && pagina[1] === 0xd8 && pagina.length > 20_000), `primeira página do PDF desenhada em JPEG (${pagina?.length ?? 0} bytes)`);
+      if (pagina) {
+        // Um "PDF escaneado": só a foto da página, sem texto nenhum.
+        const { Document, Image, Page, renderToBuffer } = await import("@react-pdf/renderer");
+        const { createElement: h } = await import("react");
+        const escaneado = await renderToBuffer(h(Document, null, h(Page, { size: "A4" }, h(Image, { src: Buffer.from(pagina), style: { width: "100%" } }))));
+        const textoEscaneado = await textoDoPdf(new Uint8Array(escaneado));
+        const paginaEscaneada = await paginaDoPdfComoImagem(new Uint8Array(escaneado));
+        confere(textoEscaneado.replace(/\s/g, "").length < 80 && Boolean(paginaEscaneada && paginaEscaneada[0] === 0xff), "PDF escaneado: sem texto, mas a página sai como imagem para a Groq");
+      }
+    }
     const paginas = (pdf.toString("latin1").match(/\/Type\s*\/Page[^s]/g) ?? []).length;
     igual(paginas, 7, `PDF do assistente (${nome}) com 7 páginas (${paginas})`);
     if (process.env.PROPOSTA_AMOSTRA2 && nome !== "uma unidade") {

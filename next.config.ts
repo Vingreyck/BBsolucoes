@@ -15,7 +15,15 @@ const nextConfig: NextConfig = {
    * arquivos e quebra só em produção; fora do pacote, o Node a carrega como
    * qualquer dependência.
    */
-  serverExternalPackages: ["@react-pdf/renderer"],
+  serverExternalPackages: [
+    "@react-pdf/renderer",
+    // O texto e a imagem da primeira página do PDF da conta de luz (proposta):
+    // o pdf.js dentro do unpdf usa `import.meta` de um jeito que o empacotador
+    // do Next não entende, e o canvas é binário nativo (o do Linux vem pelo
+    // `npm ci` do Docker).
+    "unpdf",
+    "@napi-rs/canvas",
+  ],
 
   /**
    * Sem o cabeçalho `X-Powered-By: Next.js`. Dizer de graça qual é o framework
