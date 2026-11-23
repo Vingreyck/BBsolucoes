@@ -15,7 +15,7 @@ import { ehLigacao, type Ligacao } from "./calculo";
 import type { InversorCandidato } from "./dimensionamento";
 import { distanciaKm, distribuidoraPorNome, municipio, type Municipio } from "./municipios";
 import type { Premissas } from "./premissas";
-import { tarifaDaDistribuidora, type TarifaBuscada } from "./tarifas-aneel";
+import { tarifaDaDistribuidora, tarifaSemBuscar, type TarifaBuscada } from "./tarifas-aneel";
 import type { Subgrupo } from "./tarifas";
 
 /** A estrada não é linha reta: a distância de carro fica perto de 1,25 vez a do mapa. */
@@ -73,24 +73,9 @@ export async function contextoDoAssistente(e: EstadoDaProposta, premissas: Premi
   };
 }
 
-/** Só o que já foi buscado alguma vez (sem ir à ANEEL). */
+/** Sem ir à ANEEL: a guardada no banco ou a da tabela que vai junto com o sistema. */
 export async function tarifaGuardada(cnpj: string, subgrupo: Subgrupo): Promise<TarifaBuscada | null> {
-  const linhas = await db
-    .select()
-    .from(schema.tarifaDistribuidora)
-    .where(and(eq(schema.tarifaDistribuidora.cnpj, cnpj), eq(schema.tarifaDistribuidora.subgrupo, subgrupo)));
-  if (!linhas.length) return null;
-  const l = linhas.sort((a, b) => (a.vigenciaInicio < b.vigenciaInicio ? 1 : -1))[0];
-  return {
-    te: Number(l.te),
-    tusd: Number(l.tusd),
-    fioB: l.fioB === null ? null : Number(l.fioB),
-    vigenciaInicio: l.vigenciaInicio,
-    vigenciaFim: l.vigenciaFim,
-    resolucao: l.resolucao,
-    guardada: true,
-    buscadaEm: l.buscadoEm.toISOString(),
-  };
+  return tarifaSemBuscar(cnpj, subgrupo);
 }
 
 // ------------------------------------------------------------------ catálogo
@@ -200,6 +185,24 @@ export function candidatosDeInversor(catalogo: ModeloDoCatalogoCompleto[]): (Inv
   return lista;
 }
 
+/**
+ * O módulo que o kit automático usa quando ninguém escolheu: o do catálogo com
+ * preço que mais se instala em Sergipe; sem preço, o do catálogo mais
+ * instalado; sem catálogo, o mais instalado em Sergipe com 540 W ou mais.
+ */
+export function moduloPadrao(catalogo: ModeloDoCatalogoCompleto[]): LinhaDoKit | null {
+  const peso = (baseId: string | null) => {
+    const b = itemDaBase(baseId);
+    return b ? b.uso.sergipe * 8 + b.uso.brasil : 0;
+  };
+  const modulos = catalogo.filter((m) => m.tipo === "modulo" && Number(m.potenciaW) > 0);
+  const comPreco = modulos.filter((m) => m.precoCusto !== null).sort((a, b) => peso(b.baseId) - peso(a.baseId));
+  const escolhido = comPreco[0] ?? [...modulos].sort((a, b) => peso(b.baseId) - peso(a.baseId))[0];
+  if (escolhido) return linhaDoCatalogo(escolhido, 0);
+  const daBase = procurarNaBase("", ["modulo"], 60).find((i) => (i.potenciaW ?? 0) >= 540);
+  return daBase ? linhaDaBase(daBase, 0) : null;
+}
+
 // ------------------------------------------------------------ estado inicial
 
 /**
@@ -255,11 +258,17 @@ export function estadoInicialDoProjeto(p: {
   e.simultaneidade = perfilS?.valor ?? p.premissas.simultaneidade;
   e.telhado = p.projeto.telhadoTipo;
   const mod = p.catalogo.find((m) => m.id === p.projeto.moduloModeloId);
-  if (mod) e.modulo = linhaDoCatalogo(mod, p.projeto.moduloQtd ?? 0);
   const inv = p.catalogo.find((m) => m.id === p.projeto.inversorModeloId);
-  if (inv) {
+  if (mod && p.projeto.moduloQtd && inv) {
+    // O projeto já tem kit fechado: vale ele, e o automático fica desligado.
+    e.modulo = linhaDoCatalogo(mod, p.projeto.moduloQtd);
     e.inversores = [linhaDoCatalogo(inv, p.projeto.inversorQtd ?? 1)];
     e.tipoInversor = inv.tipo === "microinversor" ? "microinversor" : "inversor";
+    e.kitAutomatico = false;
+  } else {
+    // Sem kit: o módulo do projeto (ou o padrão da empresa) e o resto automático.
+    e.modulo = mod ? linhaDoCatalogo(mod, 0) : moduloPadrao(p.catalogo);
+    e.kitAutomatico = true;
   }
   const valor = Number(p.projeto.valor);
   e.precoFinal = Number.isFinite(valor) && valor > 0 ? valor : null;

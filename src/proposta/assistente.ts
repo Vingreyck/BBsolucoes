@@ -19,7 +19,16 @@
  */
 
 import { DISPONIBILIDADE_KWH, ehLigacao, percentualFioB, type Ligacao } from "./calculo";
-import { areaDosModulos, avaliarKit, potenciaNecessariaKwp, relacaoCcCa, type AvisoDoKit } from "./dimensionamento";
+import {
+  areaDosModulos,
+  avaliarKit,
+  modulosParaPotencia,
+  potenciaNecessariaKwp,
+  relacaoCcCa,
+  sugerirInversores,
+  type AvisoDoKit,
+  type InversorCandidato,
+} from "./dimensionamento";
 import { formasDePagamento, type FormasDePagamento } from "./pagamentos";
 import { calcularPreco, margemDoPreco, type ResultadoDoPreco } from "./precificacao";
 import type { Premissas } from "./premissas";
@@ -83,6 +92,12 @@ export interface EstadoDaProposta {
   perfilSimultaneidade: string | null;
   simultaneidade: number;
   telhado: string | null;
+  /**
+   * O kit se refaz sozinho quando o consumo, a cidade ou o perfil mudam: a
+   * quantidade de módulos que zera as contas e o inversor que combina. Mexer à
+   * mão na quantidade ou no inversor desliga; "Voltar ao automático" religa.
+   */
+  kitAutomatico: boolean;
   tipoInversor: "inversor" | "microinversor";
   modulo: LinhaDoKit | null;
   inversores: LinhaDoKit[];
@@ -231,6 +246,7 @@ export function lerEstado(bruto: unknown): EstadoDaProposta | null {
     perfilSimultaneidade: txt(b.perfilSimultaneidade, 60) || null,
     simultaneidade: num(b.simultaneidade, 0, 1) ?? 0.3,
     telhado: txt(b.telhado, 40) || null,
+    kitAutomatico: b.kitAutomatico !== false,
     tipoInversor: b.tipoInversor === "microinversor" ? "microinversor" : "inversor",
     modulo: lerLinha(b.modulo, ["modulo"]),
     inversores: (Array.isArray(b.inversores) ? b.inversores.slice(0, 10) : [])
@@ -447,3 +463,25 @@ export function fioBDoAno(ano: number): number {
 }
 
 export { DISPONIBILIDADE_KWH };
+
+/**
+ * O kit automático: o módulo escolhido (ou o padrão da empresa) na quantidade
+ * que zera as contas, e o inversor que combina (relação CC/CA, fases da
+ * ligação da geradora, preferência pelo catálogo e pelo que mais se instala).
+ * Nulo quando ainda não dá (sem consumo ou sem módulo).
+ */
+export function kitAutomatico(
+  e: Pick<EstadoDaProposta, "modulo" | "tipoInversor" | "ucs">,
+  kwpNecessario: number | null,
+  candidatos: (InversorCandidato & { linha: LinhaDoKit })[],
+  moduloPadrao: LinhaDoKit | null,
+  sobre: { alvo: number; maximo: number },
+): { modulo: LinhaDoKit; inversores: LinhaDoKit[] } | null {
+  const modulo = e.modulo ?? moduloPadrao;
+  if (!kwpNecessario || !modulo || !(modulo.potenciaW > 0)) return null;
+  const qtd = modulosParaPotencia(kwpNecessario, modulo.potenciaW);
+  const geradora = e.ucs.find((u) => u.geradora) ?? e.ucs[0];
+  const sug = sugerirInversores({ qtd, potenciaW: modulo.potenciaW }, candidatos.filter((c) => c.tipo === e.tipoInversor), sobre, geradora?.ligacao ?? "bifasico", e.tipoInversor);
+  const c = sug ? candidatos.find((x) => x.id === sug[0].inversor.id) : null;
+  return { modulo: { ...modulo, qtd }, inversores: c && sug ? [{ ...c.linha, qtd: sug[0].qtd }] : [] };
+}

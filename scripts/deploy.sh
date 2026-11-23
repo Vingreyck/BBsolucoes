@@ -31,19 +31,28 @@ dominio() {
   grep -E '^DOMINIO=' .env | head -1 | cut -d= -f2- | tr -d '"' | tr -d "'" | tr -d '\r'
 }
 
+# 0 = tudo certo; 2 = o site está de pé, mas alguma verificação pede atenção
+# (o 503 com o banco respondendo: coletor, backup, Drive); 1 = não respondeu.
 conferir_saude() {
   local url="https://$(dominio)/api/saude"
+  local saida codigo
   echo "Conferindo ${url} ..."
   for tentativa in 1 2 3 4 5 6; do
     sleep 5
-    if saida=$(curl -fsS --max-time 15 "$url" 2>/dev/null); then
+    # O corpo, uma linha "|", e o código HTTP no fim.
+    saida=$(curl -sS --max-time 15 -w '|%{http_code}' "$url" 2>/dev/null) || saida="|000"
+    codigo="${saida##*|}"
+    saida="${saida%|*}"
+    if [[ "$codigo" == "200" ]]; then
       echo "$saida" | head -c 600; echo
       return 0
     fi
+    if [[ "$codigo" == "503" && "$saida" == *'"nome":"banco","ok":true'* ]]; then
+      echo "$saida" | head -c 900; echo
+      return 2
+    fi
     echo "  ainda não respondeu (tentativa ${tentativa}/6)"
   done
-  # O 503 também é resposta: o site está de pé, só alguma verificação pede atenção.
-  curl -sS --max-time 15 "$url" || true; echo
   return 1
 }
 
@@ -139,7 +148,14 @@ docker builder prune -af >/dev/null
 docker image prune -f >/dev/null
 
 echo "== 8/8 Saúde e disco"
-if conferir_saude; then
+saude=0
+conferir_saude || saude=$?
+if [[ "$saude" == "2" ]]; then
+  df -h / | tail -1
+  echo "Deploy concluído. O site está no ar, mas uma verificação acima pede atenção (ok:false). Não precisa voltar a versão."
+  exit 0
+fi
+if [[ "$saude" == "0" ]]; then
   if [[ "${LIMPAR_ANTERIOR:-}" == "1" ]]; then
     for s in "${SERVICOS[@]}"; do docker image rm "bbsolucoes-${s}:anterior" >/dev/null 2>&1 || true; done
   fi

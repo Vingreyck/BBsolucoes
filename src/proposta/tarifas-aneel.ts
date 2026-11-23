@@ -13,6 +13,9 @@
  * premissas. Só são enviados à ANEEL o CNPJ da distribuidora e o subgrupo.
  */
 
+import { readFileSync } from "node:fs";
+import path from "node:path";
+
 import { and, desc, eq } from "drizzle-orm";
 
 import { db, schema } from "@/db";
@@ -122,9 +125,72 @@ function hojeEmSergipe(): string {
 }
 
 export interface TarifaBuscada extends TarifaSemImpostos {
-  /** Veio do cache porque a ANEEL não respondeu agora. */
+  /** Não veio da ANEEL agora: é a guardada no banco ou a da tabela do sistema. */
   guardada: boolean;
+  /** Veio da tabela que vai junto com o sistema (`tarifas-aneel.json`). */
+  daTabela?: boolean;
   buscadaEm: string;
+}
+
+/** A tabela de reserva, gerada por `npm run dados:tarifas` (ver `gerar-tarifas.ts`). */
+export interface TabelaDeTarifas {
+  fonte: string;
+  geradoEm: string;
+  tarifas: {
+    cnpj: string;
+    subgrupo: Subgrupo;
+    te: number;
+    tusd: number;
+    fioB: number | null;
+    inicio: string;
+    fim: string | null;
+    resolucao: string | null;
+  }[];
+}
+
+let tabela: TabelaDeTarifas | null = null;
+
+function tabelaDeTarifas(): TabelaDeTarifas {
+  if (!tabela) {
+    try {
+      tabela = JSON.parse(readFileSync(path.join(process.cwd(), "src", "proposta", "tarifas-aneel.json"), "utf8")) as TabelaDeTarifas;
+    } catch {
+      tabela = { fonte: "", geradoEm: "", tarifas: [] };
+    }
+  }
+  return tabela;
+}
+
+/** A tarifa da tabela do sistema: a resolução em vigor hoje (ou a última que já começou). */
+export function tarifaDaTabela(cnpjBruto: string, subgrupo: Subgrupo, hoje = hojeEmSergipe()): TarifaBuscada | null {
+  const cnpj = cnpjBruto.replace(/\D/g, "");
+  const t = tabelaDeTarifas();
+  const lista = t.tarifas
+    .filter((x) => x.cnpj === cnpj && x.subgrupo === subgrupo)
+    .map((x) => ({ ...x, DatInicioVigencia: x.inicio, DatFimVigencia: x.fim }));
+  const v = vigenteEm(lista, hoje);
+  if (!v) return null;
+  return {
+    te: v.te,
+    tusd: v.tusd,
+    fioB: v.fioB,
+    vigenciaInicio: v.inicio,
+    vigenciaFim: v.fim,
+    resolucao: v.resolucao,
+    guardada: true,
+    daTabela: true,
+    buscadaEm: `${t.geradoEm}T12:00:00.000Z`,
+  };
+}
+
+/** Entre a guardada no banco e a da tabela, a que vale hoje e é mais nova. */
+function melhorReserva(guardada: TarifaBuscada | null, daTabela: TarifaBuscada | null, hoje: string): TarifaBuscada | null {
+  const vale = (t: TarifaBuscada | null) => Boolean(t && t.vigenciaInicio <= hoje && (!t.vigenciaFim || t.vigenciaFim >= hoje));
+  const candidatas = [guardada, daTabela].filter((t): t is TarifaBuscada => t !== null);
+  if (!candidatas.length) return null;
+  const emVigor = candidatas.filter((t) => vale(t));
+  const lista = emVigor.length ? emVigor : candidatas;
+  return lista.sort((a, b) => (a.vigenciaInicio < b.vigenciaInicio ? 1 : -1))[0];
 }
 
 function daLinha(l: typeof schema.tarifaDistribuidora.$inferSelect, guardada: boolean): TarifaBuscada {
@@ -158,9 +224,10 @@ export async function tarifaDaDistribuidora(cnpjBruto: string, subgrupo: Subgrup
   if (!forcar && ultima && emVigor && Date.now() - ultima.buscadoEm.getTime() < VALIDADE_DO_CACHE_MS) {
     return daLinha(ultima, false);
   }
+  const reserva = () => melhorReserva(ultima ? daLinha(ultima, true) : null, tarifaDaTabela(cnpj, subgrupo, hoje), hoje);
   try {
     const t = await buscarNaAneel(cnpj, subgrupo, hoje);
-    if (!t) return ultima ? daLinha(ultima, true) : null;
+    if (!t) return reserva();
     // O Fio B pode falhar sozinho: vale o guardado da mesma resolução.
     const fioB = t.fioB ?? (ultima?.vigenciaInicio === t.vigenciaInicio && ultima.fioB !== null ? Number(ultima.fioB) : null);
     const valores = {
@@ -180,6 +247,20 @@ export async function tarifaDaDistribuidora(cnpjBruto: string, subgrupo: Subgrup
       .returning();
     return daLinha(linha, false);
   } catch {
-    return ultima ? daLinha(ultima, true) : null;
+    return reserva();
   }
+}
+
+/** Sem ir à ANEEL: a guardada no banco ou a da tabela do sistema, a que valer hoje. */
+export async function tarifaSemBuscar(cnpjBruto: string, subgrupo: Subgrupo): Promise<TarifaBuscada | null> {
+  const cnpj = cnpjBruto.replace(/\D/g, "");
+  const hoje = hojeEmSergipe();
+  const [ultima] = await db
+    .select()
+    .from(schema.tarifaDistribuidora)
+    .where(and(eq(schema.tarifaDistribuidora.cnpj, cnpj), eq(schema.tarifaDistribuidora.subgrupo, subgrupo)))
+    .orderBy(desc(schema.tarifaDistribuidora.vigenciaInicio))
+    .limit(1);
+  const guardada = ultima ? daLinha(ultima, Date.now() - ultima.buscadoEm.getTime() >= VALIDADE_DO_CACHE_MS) : null;
+  return melhorReserva(guardada, tarifaDaTabela(cnpj, subgrupo, hoje), hoje);
 }

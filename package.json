@@ -54,7 +54,8 @@
     "testar:rastreamento": "tsx src/rastreamento/testar-rastreamento.ts",
     "dados:equipamentos": "tsx src/equipamentos/gerar-base.ts",
     "dados:municipios": "tsx src/proposta/gerar-municipios.ts",
-    "tarifa:conferir": "tsx src/proposta/conferir-aneel.ts"
+    "tarifa:conferir": "tsx src/proposta/conferir-aneel.ts",
+    "dados:tarifas": "tsx src/proposta/gerar-tarifas.ts"
   },
   "dependencies": {
     "@react-pdf/renderer": "^4.9.0",

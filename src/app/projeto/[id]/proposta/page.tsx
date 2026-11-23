@@ -13,6 +13,7 @@ import {
   catalogoDaEmpresa,
   contextoDoAssistente,
   estadoInicialDoProjeto,
+  moduloPadrao,
   procurarEquipamentos,
 } from "@/proposta/assistente-servidor";
 import { ligacaoDosPolos } from "@/proposta/calculo";
@@ -25,9 +26,11 @@ import { AssistenteDaProposta } from "./assistente";
 export const dynamic = "force-dynamic";
 
 /**
- * O assistente da proposta comercial, em sete etapas (as do Solarz, e o que ele
- * não tem): cliente, unidades consumidoras, dimensionamento, kit, custos,
- * resumo e gerar. O que se preenche fica guardado no projeto a cada etapa.
+ * A proposta comercial numa tela só (23/11): o que o Solarz pede em sete
+ * etapas, aqui sai sozinho a partir do consumo e da cidade — distribuidora,
+ * tarifa da ANEEL, sol do INPE, kit (módulo padrão, quantidade e inversor) e
+ * preço pelos custos do catálogo. Os blocos abrem só para ajustar. O que se
+ * preenche fica guardado no projeto.
  */
 export default async function PaginaDoAssistente({
   params,
@@ -115,6 +118,7 @@ export default async function PaginaDoAssistente({
         responsaveis={responsaveis.map((r) => ({ id: r.id, nome: r.nome }))}
         candidatos={candidatosDeInversor(catalogo)}
         modulosSugeridos={procurarEquipamentos(catalogo, "", ["modulo"], 12)}
+        moduloPadrao={moduloPadrao(catalogo)}
         telhados={OPCOES_DE_TELHADO}
         ehAdm={ator.papel === "adm"}
       />

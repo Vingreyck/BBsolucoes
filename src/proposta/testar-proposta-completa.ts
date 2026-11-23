@@ -7,7 +7,7 @@
 import { baseDeEquipamentos, itemDaBase, procurarNaBase } from "../equipamentos/base";
 import { lerPlanilhaDePrecos, lerPreco, linhasDoCsv } from "../equipamentos/planilha";
 import { ehMicroinversor, fasesDoNome, limparModelo, modeloInvalido, nomeDoFabricante, potenciaDoNome } from "../equipamentos/regras";
-import { calcularAssistente, lerEstado, novaUc, type ContextoDoCalculo, type EstadoDaProposta } from "./assistente";
+import { calcularAssistente, kitAutomatico, lerEstado, novaUc, type ContextoDoCalculo, type EstadoDaProposta } from "./assistente";
 import { calcular } from "./calculo";
 import { avaliarKit, modulosParaPotencia, potenciaNecessariaKwp, sugerirInversores, type InversorCandidato } from "./dimensionamento";
 import { distanciaKm, distribuidoraPorNome, municipio, procurarMunicipios } from "./municipios";
@@ -234,6 +234,19 @@ export function testarPropostaCompleta(confere: Confere, igual: Igual): void {
   confere(comDesconto.margemFinal! < r.margemFinal!, "dar desconto diminui a margem");
   const semConsumo = calcularAssistente({ ...est, ucs: [novaUc(1)] }, ctx);
   confere(semConsumo.falta.some((f) => f.includes("consumo")), "sem consumo, falta o consumo");
+  // O kit automático: o módulo padrão na quantidade que zera e o inversor que combina.
+  const candAuto = [
+    { id: "36", nome: "Growatt MIN 3600TL-X", tipo: "inversor" as const, potenciaW: 3600, fases: 1 as const, linha: { ...est.inversores[0], modelo: "MIN 3600TL-X", potenciaW: 3600, qtd: 1 } },
+    { id: "10", nome: "Growatt MID 10KTL3-X", tipo: "inversor" as const, potenciaW: 10000, fases: 3 as const, linha: { ...est.inversores[0], modelo: "MID 10KTL3-X", potenciaW: 10000, qtd: 1, fases: 3 as const } },
+    { id: "m", nome: "Deye SUN-M225G4", tipo: "microinversor" as const, potenciaW: 2250, modulosPorUnidade: 4, fases: 1 as const, linha: { ...est.inversores[0], tipo: "microinversor" as const, modelo: "SUN-M225G4", potenciaW: 2250, modulosPorUnidade: 4, qtd: 1 } },
+  ];
+  const auto = kitAutomatico({ ...est, modulo: null }, r.kwpNecessario, candAuto, est.modulo, SUGESTAO.sobredimensionamento);
+  confere(auto !== null && auto.modulo.qtd === Math.ceil((r.kwpNecessario! * 1000) / 585 - 1e-9) && auto.inversores[0]?.modelo === "MIN 3600TL-X", `kit automático: ${auto?.modulo.qtd} módulos e o MIN 3600 numa casa bifásica`);
+  const autoMicro = kitAutomatico({ ...est, tipoInversor: "microinversor" }, r.kwpNecessario, candAuto, null, SUGESTAO.sobredimensionamento);
+  igual(autoMicro?.inversores[0]?.qtd, Math.ceil(autoMicro!.modulo.qtd / 4), "kit automático com micro: um para cada 4 módulos");
+  igual(kitAutomatico({ ...est, modulo: null }, null, candAuto, est.modulo, SUGESTAO.sobredimensionamento), null, "sem consumo, sem kit automático");
+  confere(lerEstado({})!.kitAutomatico === true && lerEstado({ kitAutomatico: false })!.kitAutomatico === false, "o kit nasce automático; desligado à mão fica desligado");
+
   const lixo = lerEstado({ ucs: [{ nome: 123, consumoMedia: "abc", subgrupo: "Z9" }], modulo: { tipo: "inversor" }, precoFinal: -5 });
   confere(lixo !== null && lixo.ucs[0].geradora && lixo.ucs[0].subgrupo === "B1" && lixo.modulo === null && lixo.precoFinal === null, "estado com lixo vira estado em branco, sem quebrar");
 }
