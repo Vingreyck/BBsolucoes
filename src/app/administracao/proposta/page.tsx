@@ -99,22 +99,23 @@ export default async function PremissasDaProposta({
 
       <form action={salvarPremissas} className="pagina-estreita">
         <Cartao
-          titulo="Tarifa e impostos da conta"
+          titulo="Impostos da conta"
           icone={<Receipt size={16} />}
-          ajuda="A tarifa de cada unidade vem sozinha da ANEEL (TE, TUSD e Fio B da resolução em vigor da distribuidora), sem impostos. Os impostos daqui são somados por dentro, como na conta de luz. A tarifa manual só vale quando a ANEEL não responde."
+          ajuda="A tarifa e o Fio B de cada distribuidora vêm sozinhos da ANEEL, sem impostos. Os impostos daqui são somados por dentro, como na conta de luz."
         >
           <div className="form-ficha">
-            {referencias.length > 0 && (
-              <p className="nota">
-                {referencias.map(({ nome, t }) => (
-                  <span key={nome} style={{ display: "block" }}>
-                    <strong>{nome}</strong> (residencial, ANEEL desde {t.vigenciaInicio.split("-").reverse().join("/")}): TE + TUSD {reais(t.te + t.tusd)} →
-                    com os impostos abaixo {reais(comImpostos(t.te + t.tusd, p.tributos))}/kWh
-                    {t.fioB ? `; Fio B ${reais(t.fioB)} → ${reais(comImpostos(t.fioB, p.tributos))}/kWh` : ""}.
-                  </span>
-                ))}
-              </p>
-            )}
+            <div className="faixa-info" style={{ display: "block" }}>
+              <strong style={{ display: "block", marginBottom: "0.3rem" }}>Automático, não precisa mexer</strong>
+              {referencias.map(({ nome, t }) => (
+                <span key={nome} style={{ display: "block" }}>
+                  {nome}: tarifa {reais(comImpostos(t.te + t.tusd, p.tributos))}/kWh
+                  {t.fioB ? ` · Fio B ${reais(comImpostos(t.fioB, p.tributos))}/kWh` : ""} (ANEEL, desde {t.vigenciaInicio.split("-").reverse().join("/")}, com os impostos abaixo)
+                </span>
+              ))}
+              <span style={{ display: "block" }}>
+                Quanto do Fio B se paga em cada ano (60% em 2026, 75% em 2027, 90% em 2028) segue a lei sozinho. O sol de cada mês vem do Atlas do INPE pela cidade do cliente.
+              </span>
+            </div>
             <div className="dupla">
               <label>
                 ICMS na conta (%)
@@ -126,31 +127,36 @@ export default async function PremissasDaProposta({
                 <input name="pisCofins" inputMode="decimal" required defaultValue={pct(p.tributos.pisCofins)} />
                 <small className="entrada-ajuda">Muda todo mês; a conta traz a alíquota. Uma média de 4% a 6% serve.</small>
               </label>
-              <label>
-                Tarifa manual, com impostos (R$/kWh)
-                <input name="tarifaKwh" inputMode="decimal" required defaultValue={num(p.tarifaKwh)} />
-                <small className="entrada-ajuda">Só quando a ANEEL não responder. Total da conta ÷ kWh consumidos.</small>
-              </label>
-              <label>
-                Fio B manual, com impostos (R$/kWh)
-                <input name="fioBKwh" inputMode="decimal" required defaultValue={num(p.fioBKwh)} />
-                <small className="entrada-ajuda">Idem. A lei cobra 60% dele em 2026, 75% em 2027 e 90% em 2028.</small>
-              </label>
             </div>
+            <details className="dobra-limpa">
+              <summary>Avançado: valores de reserva</summary>
+              <p className="nota">Só valem se a ANEEL e a tabela guardada no sistema não tiverem a distribuidora, ou se a cidade não estiver no Atlas do INPE.</p>
+              <div className="dupla">
+                <label>
+                  Tarifa de reserva, com impostos (R$/kWh)
+                  <input name="tarifaKwh" inputMode="decimal" required defaultValue={num(p.tarifaKwh)} />
+                  <small className="entrada-ajuda">Total da conta ÷ kWh consumidos.</small>
+                </label>
+                <label>
+                  Fio B de reserva, com impostos (R$/kWh)
+                  <input name="fioBKwh" inputMode="decimal" required defaultValue={num(p.fioBKwh)} />
+                </label>
+                <label>
+                  Sol de reserva (kWh/m² por dia)
+                  <input name="irradiacaoDia" inputMode="decimal" required defaultValue={num(p.irradiacaoDia)} />
+                </label>
+              </div>
+            </details>
           </div>
         </Cartao>
 
         <Cartao
           titulo="Cálculo da economia"
           icone={<Calculator size={16} />}
-          ajuda="Propostas já geradas não mudam: guardam os números do dia em que foram feitas. O sol de cada mês vem do Atlas do INPE pela cidade; a irradiação daqui só vale para cidade que não está no Atlas."
+          ajuda="Propostas já geradas não mudam: guardam os números do dia em que foram feitas."
         >
           <div className="form-ficha">
             <div className="dupla">
-              <label>
-                Irradiação de reserva (kWh/m² por dia)
-                <input name="irradiacaoDia" inputMode="decimal" required defaultValue={num(p.irradiacaoDia)} />
-              </label>
               <label>
                 Reajuste anual da tarifa (%)
                 <input name="reajusteAnual" inputMode="decimal" required defaultValue={pct(p.reajusteAnual)} />
