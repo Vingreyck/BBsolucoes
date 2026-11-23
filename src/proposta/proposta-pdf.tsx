@@ -5,7 +5,10 @@ import path from "node:path";
 import React from "react";
 
 import { kwhTexto, kwpTexto, MESES, moeda, rotuloDoPayback } from "./calculo";
+import type { FormasDePagamento } from "./pagamentos";
 import type { DadosProposta } from "./proposta";
+
+type TipoDePagamento = "cartao" | "pix" | "banco";
 
 type ReactPdf = typeof import("@react-pdf/renderer");
 
@@ -886,11 +889,12 @@ function montar(R: ReactPdf) {
 
   // ------------------------------------------------------------------- gráficos
 
-  function GraficoGeracao({ geracao, consumo }: { geracao: number[]; consumo: number }) {
+  function GraficoGeracao({ geracao, consumo, altura = 178 }: { geracao: number[]; consumo: number | number[]; altura?: number }) {
     const W = LARGURA;
-    const H = 178;
+    const H = altura;
     const area = { x: 30, y: 16, w: W - 34, h: H - 38 };
-    const { topo, passo } = eixoBonito(Math.max(...geracao, consumo) * 1.04, 7);
+    const consumoDoMes = (i: number) => (Array.isArray(consumo) ? (consumo[i] ?? 0) : consumo);
+    const { topo, passo } = eixoBonito(Math.max(...geracao, ...geracao.map((_, i) => consumoDoMes(i))) * 1.04, 7);
     const y = (v: number) => area.y + area.h - (v / topo) * area.h;
     const grupo = area.w / 12;
     const largura = grupo * 0.32;
@@ -918,7 +922,7 @@ function montar(R: ReactPdf) {
           return (
             <G key={MESES[i]}>
               <Path d={barra(x0, y(v), largura, base - y(v), 2.5)} fill="url(#ger)" />
-              <Path d={barra(x0 + largura + 1.5, y(consumo), largura, base - y(consumo), 2.5)} fill={COR.cinzaBarra} />
+              <Path d={barra(x0 + largura + 1.5, y(consumoDoMes(i)), largura, base - y(consumoDoMes(i)), 2.5)} fill={COR.cinzaBarra} />
               <Text x={x0 + largura / 2} y={y(v) - 3.5} fill={COR.azul} style={ts(700, 5.8)} textAnchor="middle">
                 {String(Math.round(v))}
               </Text>
@@ -1140,6 +1144,38 @@ function montar(R: ReactPdf) {
   }
 
   const anos = (n: number) => `${n} ${n === 1 ? "ano" : "anos"}`;
+
+  /** Os cartões de pagamento com as parcelas já calculadas (propostas de 23/11 em diante). */
+  function formasComParcelas(fp: FormasDePagamento): [TipoDePagamento, string, string][] {
+    const cartoes: [TipoDePagamento, string, string][] = [];
+    if (fp.cartao && fp.cartao.opcoes.length) {
+      const ultima = fp.cartao.opcoes[fp.cartao.opcoes.length - 1];
+      const outras = fp.cartao.opcoes.slice(0, -1).map((o) => `${o.parcelas}x de ${moeda(o.valorParcela)}`);
+      cartoes.push([
+        "cartao",
+        "Cartão de crédito",
+        `Em até ${ultima.parcelas}x de ${moeda(ultima.valorParcela)}${outras.length ? `, ou ${outras.join(", ")}` : ""} (juros de ${percentual(fp.cartao.taxaMes)} ao mês).`,
+      ]);
+    }
+    cartoes.push([
+      "pix",
+      "À vista no PIX",
+      fp.aVista.desconto > 0
+        ? `${moeda(fp.aVista.valor)} à vista, com ${percentual(fp.aVista.desconto, 0)} de desconto. Você garante o menor preço e a instalação mais rápida.`
+        : `${moeda(fp.aVista.valor)} à vista. Você garante o menor preço e a instalação mais rápida.`,
+    ]);
+    for (const fin of fp.financiamentos.slice(0, 2)) {
+      if (!fin.opcoes.length) continue;
+      const longa = fin.opcoes[fin.opcoes.length - 1];
+      const meio = fin.opcoes.length > 2 ? fin.opcoes[Math.floor(fin.opcoes.length / 2)] : null;
+      cartoes.push([
+        "banco",
+        fin.nome,
+        `Parcelas a partir de ${moeda(longa.valorParcela)} em ${longa.parcelas} meses${meio ? ` (ou ${meio.parcelas}x de ${moeda(meio.valorParcela)})` : ""}, taxa de ${percentual(fin.taxaMes)} ao mês e até ${fin.carenciaDias} dias para começar a pagar.`,
+      ]);
+    }
+    return cartoes;
+  }
   const percentual = (f: number, casas = 2) => `${(f * 100).toLocaleString("pt-BR", { minimumFractionDigits: casas, maximumFractionDigits: casas })}%`;
 
   // ------------------------------------------------------------- o documento
@@ -1152,6 +1188,7 @@ function montar(R: ReactPdf) {
     const semCatalogo = !d.sistema.modulos && !d.sistema.inversores;
     const cnpj = cnpjBonito(d.empresa.cnpj);
     const usinas = d.empresa.usinas ?? 0;
+    const variasUcs = Boolean(d.ucs && d.ucs.length > 1);
 
     return (
       <Document title={`Proposta ${d.numero} - ${d.cliente.nome}`} author={d.empresa.nome} creator="Selebi" producer="Selebi">
@@ -1281,8 +1318,8 @@ function montar(R: ReactPdf) {
           sobre="Sua economia"
           titulo="Geração e consumo"
           nota={[
-            `*Estimativa com tarifa de ${moeda(pr.tarifaKwh)}/kWh, reajuste de ${percentual(pr.reajusteAnual, 0)} ao ano, desempenho do sistema de ${percentual(pr.desempenho, 0)}, perda de ${percentual(pr.degradacaoAnual, 1)} ao ano nos módulos e Fio B de ${percentual(pr.fioBPercentual, 0)} (Lei 14.300), com ${percentual(pr.simultaneidade, 0)} do consumo atendido na hora.`,
-            "A geração e a economia reais variam com o clima, o consumo e a tarifa da distribuidora.",
+            `*Estimativa com tarifa de ${moeda(pr.tarifaKwh)}/kWh${pr.fonteTarifa ? ` (${pr.fonteTarifa})` : ""}, reajuste de ${percentual(pr.reajusteAnual, 0)} ao ano, desempenho do sistema de ${percentual(pr.desempenho, 0)}, perda de ${percentual(pr.degradacaoAnual, 1)} ao ano nos módulos e Fio B de ${percentual(pr.fioBPercentual, 0)} (Lei 14.300), com ${percentual(pr.simultaneidade, 0)} do consumo atendido na hora.`,
+            `${pr.fonteIrradiacao ? `Sol: ${pr.fonteIrradiacao}. ` : ""}A geração e a economia reais variam com o clima, o consumo e a tarifa da distribuidora.`,
           ]}
         >
           <View style={{ flexDirection: "row", justifyContent: "flex-end", marginTop: -6, marginBottom: 2 }}>
@@ -1298,7 +1335,7 @@ function montar(R: ReactPdf) {
               </View>
             ))}
           </View>
-          <GraficoGeracao geracao={e.geracaoMes} consumo={e.consumoMedio} />
+          <GraficoGeracao geracao={e.geracaoMes} consumo={e.consumoMes ?? e.consumoMedio} altura={d.metricas ? (variasUcs ? 146 : 158) : 178} />
 
           <View style={{ flexDirection: "row", justifyContent: "space-between", marginTop: 6 }}>
             {(
@@ -1314,7 +1351,7 @@ function montar(R: ReactPdf) {
             ))}
           </View>
 
-          <View style={{ alignItems: "center", marginTop: 20, marginBottom: 12 }}>
+          <View style={{ alignItems: "center", marginTop: d.metricas ? 12 : 20, marginBottom: d.metricas ? 8 : 12 }}>
             <Text style={t(800, 15, COR.azul, { textTransform: "uppercase", letterSpacing: 0.3 })}>Informações financeiras</Text>
           </View>
           <View style={{ flexDirection: "row" }}>
@@ -1341,23 +1378,50 @@ function montar(R: ReactPdf) {
             </View>
           </View>
 
+          {d.metricas && (
+            <View style={{ flexDirection: "row", justifyContent: "space-between", marginTop: 4, backgroundColor: COR.azulGelo, borderRadius: 10, paddingVertical: 7, paddingHorizontal: 12 }}>
+              {(
+                [
+                  ["Retorno descontado", rotuloDoPayback(d.metricas.paybackDescontadoMeses)],
+                  ["Rendimento (TIR)", d.metricas.tir === null ? "—" : `${percentual(d.metricas.tir, 1)} ao ano`],
+                  [`Valor presente (a ${percentual(d.metricas.tma, 0)} a.a.)`, moeda(d.metricas.vpl)],
+                  ["Custo do kWh gerado", d.metricas.custoKwh === null ? "—" : moeda(d.metricas.custoKwh)],
+                ] as [string, string][]
+              ).map(([rotulo, valor]) => (
+                <View key={rotulo} style={{ alignItems: "center", flex: 1 }}>
+                  <Text style={t(600, 6.4, COR.fraca)}>{rotulo}</Text>
+                  <Text style={t(800, 9.4, COR.navy, { marginTop: 1.5 })}>{valor}</Text>
+                </View>
+              ))}
+            </View>
+          )}
+
           <View style={{ marginTop: 12, borderRadius: 12, overflow: "hidden", borderWidth: 1, borderColor: "#dfe6f0" }}>
             <View style={{ flexDirection: "row", backgroundColor: COR.navy, paddingVertical: 7 }}>
-              <Text style={{ width: 56 }} />
+              <Text style={t(700, 7, "#ffffff", { width: variasUcs ? 120 : 56, paddingLeft: 14 })}>
+                {variasUcs ? (d.rateio === "prioridade" ? "Unidade (por prioridade)" : "Unidade (% do excedente)") : ""}
+              </Text>
               {["Conta sem solar", "Conta com solar", "Economia com solar"].map((txt) => (
                 <Text key={txt} style={t(700, 7.6, "#ffffff", { flex: 1, textAlign: "center", letterSpacing: 0.3 })}>
                   {txt}
                 </Text>
               ))}
             </View>
-            {(
-              [
-                ["mês", f.contaSemMes, f.contaComMes, f.economiaMes, "#ffffff"],
-                ["ano", f.contaSemMes * 12, f.contaComMes * 12, f.economiaAno1, COR.azulGelo],
-              ] as [string, number, number, number, string][]
+            {(variasUcs
+              ? [
+                  ...d.ucs!.map(
+                    (u, i) =>
+                      [`${u.nome}${u.percentual !== null ? ` (${percentual(u.percentual, 0)})` : ""}`, u.contaSemMes, u.contaComMes, u.economiaMes, i % 2 ? COR.azulGelo : "#ffffff"] as [string, number, number, number, string],
+                  ),
+                  ["Total por mês", f.contaSemMes, f.contaComMes, f.economiaMes, COR.azulFundo] as [string, number, number, number, string],
+                ]
+              : ([
+                  ["mês", f.contaSemMes, f.contaComMes, f.economiaMes, "#ffffff"],
+                  ["ano", f.contaSemMes * 12, f.contaComMes * 12, f.economiaAno1, COR.azulGelo],
+                ] as [string, number, number, number, string][])
             ).map(([rotulo, a, b, c, fundo]) => (
-              <View key={rotulo} style={{ flexDirection: "row", paddingVertical: 7, backgroundColor: fundo, alignItems: "center" }}>
-                <Text style={t(700, 8, COR.fraca, { width: 56, paddingLeft: 14, textTransform: "uppercase" })}>{rotulo}</Text>
+              <View key={rotulo} style={{ flexDirection: "row", paddingVertical: variasUcs ? 5 : 7, backgroundColor: fundo, alignItems: "center" }}>
+                <Text style={t(700, variasUcs ? 7 : 8, COR.fraca, { width: variasUcs ? 120 : 56, paddingLeft: 14, textTransform: variasUcs ? "none" : "uppercase" })}>{rotulo}</Text>
                 <Text style={t(700, 10.5, COR.fraca, { flex: 1, textAlign: "center" })}>{moeda(a)}</Text>
                 <Text style={t(700, 10.5, COR.azul, { flex: 1, textAlign: "center" })}>{moeda(b)}</Text>
                 <Text style={t(800, 10.5, COR.verde, { flex: 1, textAlign: "center" })}>{moeda(c)}</Text>
@@ -1469,18 +1533,26 @@ function montar(R: ReactPdf) {
             <Text style={t(800, 9.6, COR.laranja, { textAlign: "center", marginTop: 6 })}>Aproveite agora essa condição exclusiva para garantir sua economia!</Text>
           </View>
 
-          <View style={{ alignItems: "center", marginTop: 30, marginBottom: 16 }}>
+          {d.observacoes && (
+            <View style={{ marginTop: 12, borderRadius: 10, borderWidth: 1, borderColor: "#e3e9f2", paddingVertical: 9, paddingHorizontal: 14 }}>
+              <Text style={t(700, 7, COR.apagada, { textTransform: "uppercase", letterSpacing: 0.8 })}>Observações</Text>
+              <Text style={t(500, 8.6, COR.tinta, { marginTop: 3, lineHeight: 1.45 })}>{d.observacoes}</Text>
+            </View>
+          )}
+
+          <View style={{ alignItems: "center", marginTop: d.observacoes ? 14 : d.formas ? 24 : 30, marginBottom: d.formas ? 12 : 16 }}>
             <Text style={t(800, 15, COR.azul, { textTransform: "uppercase", letterSpacing: 0.3 })}>Escolha a forma de pagamento</Text>
           </View>
           <View>
-            {(
-              [
-                ["cartao", "Cartão de crédito", `Divida seu sistema em até ${d.pagamento.parcelas}x no cartão e comece a economizar, com taxas a partir de ${percentual(d.pagamento.taxaMes)} ao mês.`],
-                ["pix", "PIX", "Desconto exclusivo para pagamento à vista! Com PIX, você garante o menor preço e sua instalação mais rápida."],
-                ["banco", "Financiamento", `Troque a sua conta de energia por parcelas fixas e acessíveis. Simples e sem burocracia, com até ${d.pagamento.carenciaDias} dias para começar a pagar!`],
-              ] as const
+            {(d.formas
+              ? formasComParcelas(d.formas)
+              : ([
+                  ["cartao", "Cartão de crédito", `Divida seu sistema em até ${d.pagamento.parcelas}x no cartão e comece a economizar, com taxas a partir de ${percentual(d.pagamento.taxaMes)} ao mês.`],
+                  ["pix", "PIX", "Desconto exclusivo para pagamento à vista! Com PIX, você garante o menor preço e sua instalação mais rápida."],
+                  ["banco", "Financiamento", `Troque a sua conta de energia por parcelas fixas e acessíveis. Simples e sem burocracia, com até ${d.pagamento.carenciaDias} dias para começar a pagar!`],
+                ] as [TipoDePagamento, string, string][])
             ).map(([tipo, titulo, texto]) => (
-              <View key={titulo} style={{ flexDirection: "row", alignItems: "center", borderRadius: 12, borderWidth: 1, borderColor: "#e3e9f2", paddingVertical: 14, paddingHorizontal: 18, marginBottom: 11 }}>
+              <View key={titulo} style={{ flexDirection: "row", alignItems: "center", borderRadius: 12, borderWidth: 1, borderColor: "#e3e9f2", paddingVertical: d.formas ? 10 : 14, paddingHorizontal: 18, marginBottom: d.formas ? 8 : 11 }}>
                 <Svg width={52} height={52} viewBox="0 0 50 50">
                   <Circle cx="25" cy="25" r="25" fill={tipo === "pix" ? "#e2f6f3" : COR.azulFundo} />
                   {tipo === "cartao" && (
@@ -1512,6 +1584,11 @@ function montar(R: ReactPdf) {
                 </View>
               </View>
             ))}
+            {d.formas && (
+              <Text style={t(400, 6.8, COR.apagada, { fontStyle: "italic", textAlign: "center", marginTop: 2 })}>
+                Parcelas simuladas pela tabela Price. A taxa e o valor final são confirmados pelo banco ou pela operadora na aprovação do crédito.
+              </Text>
+            )}
           </View>
         </Pagina>
 

@@ -1,14 +1,16 @@
 import { and, asc, eq } from "drizzle-orm";
-import { Check, Cpu, FileText, Plus, SunMedium } from "lucide-react";
+import { Check, Cpu, Database, FileSpreadsheet, FileText, Plus, Search, SunMedium } from "lucide-react";
 import { redirect } from "next/navigation";
 
 import { exigirUsuario } from "@/auth/sessao";
 import { db, schema } from "@/db";
 import { driveConfigurado } from "@/documentos/drive";
+import { baseDeEquipamentos, procurarNaBase } from "@/equipamentos/base";
+import type { TipoDeEquipamento } from "@/equipamentos/regras";
 import { potenciaLegivel } from "@/projeto/kit";
 
 import { Cabecalho, Cartao, Vazio } from "../../_ui";
-import { alternarModelo, criarModelo, enviarArquivosDoModelo } from "./actions";
+import { adicionarDaBase, alternarModelo, criarModelo, enviarArquivosDoModelo, importarPlanilhaDePrecos, salvarPrecoDeCusto } from "./actions";
 
 export const dynamic = "force-dynamic";
 
@@ -28,11 +30,15 @@ const TIPO_ROTULO: Record<string, string> = {
 export default async function Equipamentos({
   searchParams,
 }: {
-  searchParams: Promise<{ ok?: string; erro?: string }>;
+  searchParams: Promise<{ ok?: string; erro?: string; q?: string; tipo?: string }>;
 }) {
   const usuario = await exigirUsuario();
   if (usuario.papel !== "adm" && usuario.papel !== "engenheiro") redirect("/sem-acesso");
-  const { ok, erro } = await searchParams;
+  const { ok, erro, q, tipo: tipoBusca } = await searchParams;
+  const tiposDaBusca: TipoDeEquipamento[] =
+    tipoBusca === "modulo" || tipoBusca === "inversor" || tipoBusca === "microinversor" ? [tipoBusca] : ["modulo", "inversor", "microinversor"];
+  const achados = procurarNaBase(q ?? "", tiposDaBusca, 25);
+  const base = baseDeEquipamentos();
   const semDrive = !driveConfigurado();
 
   const modelos = await db
@@ -51,6 +57,7 @@ export default async function Equipamentos({
         <thead>
           <tr>
             <th>Modelo</th>
+            <th>Custo (R$)</th>
             <th>Datasheet</th>
             <th>Inmetro</th>
             <th></th>
@@ -72,6 +79,21 @@ export default async function Equipamentos({
                     {pot ? ` · ${pot}` : ""}
                     {m.ativo ? "" : " · fora da lista"}
                   </small>
+                </td>
+                <td>
+                  <form action={salvarPrecoDeCusto.bind(null, m.id)} className="grupo-botoes">
+                    <input
+                      name="precoCusto"
+                      inputMode="decimal"
+                      aria-label={`Custo de ${m.fabricante} ${m.modelo}`}
+                      defaultValue={m.precoCusto ? Number(m.precoCusto).toLocaleString("pt-BR", { minimumFractionDigits: 2 }) : ""}
+                      placeholder="—"
+                      style={{ width: 100 }}
+                    />
+                    <button type="submit" className="link-acao" aria-label="Guardar o custo">
+                      <Check size={13} aria-hidden />
+                    </button>
+                  </form>
                 </td>
                 <td>
                   {m.datasheetLink ? (
@@ -151,9 +173,103 @@ export default async function Equipamentos({
 
       <div className="pagina-corpo pilha">
         <Cartao
+          titulo="Base de equipamentos"
+          icone={<Database size={16} />}
+          contador={base.itens.length.toLocaleString("pt-BR")}
+          ajuda={`Os módulos, inversores e microinversores instalados no Brasil, dos cadastros públicos da ANEEL (licença ODbL), com a potência, as fases, quantos módulos cada micro recebe e quantas usinas usam cada um (desde 2023). Gerada em ${base.geradoEm.split("-").reverse().join("/")}. O assistente da proposta busca aqui sozinho; adicionar ao catálogo serve para guardar o preço de custo, o datasheet e o Inmetro.`}
+        >
+          <form className="form-ficha" method="get">
+            <div className="dupla">
+              <label>
+                Procurar
+                <input name="q" defaultValue={q ?? ""} placeholder="jinko 585, min 5000, hms 2000, deye…" />
+              </label>
+              <label>
+                Tipo
+                <select name="tipo" defaultValue={tipoBusca ?? ""}>
+                  <option value="">Todos</option>
+                  <option value="modulo">Módulo</option>
+                  <option value="inversor">Inversor</option>
+                  <option value="microinversor">Microinversor</option>
+                </select>
+              </label>
+            </div>
+            <div className="ficha-acoes">
+              <button type="submit" className="botao secundario">
+                <Search size={15} aria-hidden /> Procurar
+              </button>
+            </div>
+          </form>
+          <div className="tabela-wrap tabela-no-cartao">
+            <table className="tabela">
+              <thead>
+                <tr>
+                  <th>Modelo</th>
+                  <th>Usinas desde 2023</th>
+                  <th></th>
+                </tr>
+              </thead>
+              <tbody>
+                {achados.map((i) => {
+                  const noCatalogo = modelos.some((m) => m.baseId === i.id);
+                  return (
+                    <tr key={i.id}>
+                      <td>
+                        <strong>
+                          {i.fabricante} {i.modelo}
+                        </strong>
+                        <small className="fraco">
+                          {" "}
+                          · {TIPO_ROTULO[i.tipo] ?? i.tipo} · {potenciaLegivel(i.potenciaW, i.tipo)}
+                          {i.fases ? ` · ${i.fases === 1 ? "monofásico" : "trifásico"}` : ""}
+                          {i.modulosPorUnidade ? ` · ${i.modulosPorUnidade} módulos por micro` : ""}
+                          {i.eletrico ? ` · Voc ${i.eletrico.vocV.toLocaleString("pt-BR")} V, Isc ${i.eletrico.iscA.toLocaleString("pt-BR")} A` : ""}
+                        </small>
+                      </td>
+                      <td>
+                        {i.uso.brasil.toLocaleString("pt-BR")} no Brasil{i.uso.sergipe ? ` · ${i.uso.sergipe.toLocaleString("pt-BR")} em SE` : ""}
+                      </td>
+                      <td>
+                        {noCatalogo ? (
+                          <span className="ap-selo ap-selo-catalogo">no catálogo</span>
+                        ) : (
+                          <form action={adicionarDaBase.bind(null, i.id)}>
+                            <button type="submit" className="link-acao">
+                              <Plus size={13} aria-hidden /> Adicionar
+                            </button>
+                          </form>
+                        )}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        </Cartao>
+
+        <Cartao
+          titulo="Importar preços do distribuidor"
+          icone={<FileSpreadsheet size={16} />}
+          ajuda="A planilha (XLSX ou CSV) com uma coluna de modelo e uma de preço no cabeçalho; fabricante, tipo e potência ajudam. O preço de cada modelo do catálogo é atualizado; o que está na base da ANEEL e ainda não está no catálogo entra nele. É o custo que o assistente usa para montar o preço."
+        >
+          <form action={importarPlanilhaDePrecos} className="form-ficha">
+            <label>
+              Planilha
+              <input type="file" name="planilha" accept=".xlsx,.csv,text/csv" required />
+            </label>
+            <div className="ficha-acoes">
+              <button type="submit" className="botao secundario">
+                <FileSpreadsheet size={15} aria-hidden /> Importar
+              </button>
+            </div>
+          </form>
+        </Cartao>
+
+        <Cartao
           titulo="Novo modelo"
           icone={<Plus size={16} />}
-          ajuda="O datasheet e o certificado do Inmetro ficam no site do fabricante (área de downloads) e no site do Inmetro. Pode cadastrar agora e subir os PDFs depois."
+          ajuda="Para o que não está na base da ANEEL (lançamento recente). O datasheet e o certificado do Inmetro ficam no site do fabricante (área de downloads) e no site do Inmetro. Pode cadastrar agora e subir os PDFs depois."
         >
           <form action={criarModelo} className="form-ficha">
             <div className="dupla">

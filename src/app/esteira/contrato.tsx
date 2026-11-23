@@ -2,7 +2,13 @@ import { FileSignature, FileText } from "lucide-react";
 import Link from "next/link";
 
 import { linkWhatsapp } from "@/documentos/cobranca";
-import { faltaDaEmpresa, faltaParaContrato, mensagemDoContrato, type EntradaContrato } from "@/projeto/contrato";
+import {
+  faltaDaEmpresa,
+  faltaParaContrato,
+  mensagemDoContrato,
+  type EntradaContrato,
+  type PagamentoCombinado,
+} from "@/projeto/contrato";
 import type { Representante } from "@/projeto/contrato-dados";
 
 import { BotaoDialogo } from "../_ui/dialogo";
@@ -40,7 +46,14 @@ export function AcoesDoContrato({
   projetoId: string;
   entrada: EntradaContrato;
   equipamentos: string | null;
-  contrato: { id: string; token: string; criadoEm: Date; enviadoEm: Date | null; representante: string | null } | null;
+  contrato: {
+    id: string;
+    token: string;
+    criadoEm: Date;
+    enviadoEm: Date | null;
+    representante: string | null;
+    combinado: PagamentoCombinado | null;
+  } | null;
   representantes: Representante[];
   whatsapp: string | null;
   origemSite: string;
@@ -58,6 +71,8 @@ export function AcoesDoContrato({
   const daEmpresa = faltaDaEmpresa(falta);
   const linkPdf = contrato ? `${origemSite}/r/c/${contrato.token}` : null;
   const naCelula = origem === "esteira";
+  const combinado = contrato?.combinado ?? null;
+  const reais = (v: number) => v.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
   return (
     <>
@@ -139,7 +154,9 @@ export function AcoesDoContrato({
                   </option>
                 ))}
               </select>
-              <small className="entrada-ajuda">O nome sai no contrato como representante da empresa.</small>
+              <small className="entrada-ajuda">
+                Fica registrado aqui no sistema. No contrato sai a razão social e o CNPJ, como no modelo da empresa.
+              </small>
             </label>
             <label className="entrada">
               <span className="entrada-rotulo">Equipamentos (objeto do contrato)</span>
@@ -156,6 +173,44 @@ export function AcoesDoContrato({
                 salvo no projeto.
               </small>
             </label>
+            <fieldset className="entrada contrato-pagamento">
+              <legend className="entrada-rotulo">Entrada (se a venda teve entrada)</legend>
+              <div className="dupla">
+                <label>
+                  Valor da entrada (R$)
+                  <input
+                    name="entrada"
+                    inputMode="decimal"
+                    placeholder="2.800,00"
+                    defaultValue={combinado ? reais(combinado.entrada) : ""}
+                  />
+                </label>
+                <label>
+                  Saldo em quantas parcelas
+                  <input
+                    name="parcelas"
+                    type="number"
+                    min={1}
+                    max={120}
+                    placeholder="2"
+                    defaultValue={combinado ? String(combinado.parcelas) : ""}
+                  />
+                </label>
+              </div>
+              <label>
+                O saldo é pago
+                <input
+                  name="saldoQuando"
+                  maxLength={200}
+                  placeholder="após a finalização do projeto"
+                  defaultValue={combinado?.quando ?? ""}
+                />
+              </label>
+              <small className="entrada-ajuda">
+                Em branco, a cláusula do pagamento sai com o valor total, a forma e as condições do projeto. Com
+                entrada, sai como no modelo: entrada, valor total, saldo e o valor de cada parcela, por extenso.
+              </small>
+            </fieldset>
             <button type="submit" className="botao">
               <FileSignature size={15} aria-hidden /> Gerar o contrato
             </button>

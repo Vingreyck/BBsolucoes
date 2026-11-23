@@ -9,7 +9,9 @@
 import { estruturaDoTelhado } from "@/projeto/da-vistoria";
 import { rotuloDoModelo, type ModeloDoKit } from "@/projeto/kit";
 
+import type { EstadoDaProposta, LinhaDoKit, ResultadoDoAssistente } from "./assistente";
 import { areaMinimaM2, calcular, percentualFioB, type Ligacao } from "./calculo";
+import type { FormasDePagamento } from "./pagamentos";
 import type { Premissas } from "./premissas";
 
 /**
@@ -94,6 +96,20 @@ export function faltaParaProposta(e: EntradaProposta): string[] {
   return falta;
 }
 
+/** Uma unidade consumidora como a proposta mostra (propostas de 23/11 em diante). */
+export interface UcDaProposta {
+  nome: string;
+  codigo: string | null;
+  geradora: boolean;
+  distribuidora: string | null;
+  consumoMedio: number;
+  contaSemMes: number;
+  contaComMes: number;
+  economiaMes: number;
+  /** Rateio por porcentagem: a fração do excedente; nulo na geradora e no rateio por prioridade. */
+  percentual: number | null;
+}
+
 export interface DadosProposta {
   numero: number;
   criadaEm: string;
@@ -116,6 +132,8 @@ export interface DadosProposta {
     geracaoMedia: number;
     producaoAno: number;
     irradiacaoDia: number;
+    /** Consumo somado das unidades, de janeiro a dezembro (propostas de 23/11 em diante). */
+    consumoMes?: number[];
   };
   financeiro: {
     investimento: number;
@@ -136,7 +154,27 @@ export interface DadosProposta {
     degradacaoAnual: number;
     fioBPercentual: number;
     simultaneidade: number;
+    /** "ANEEL, Resolução Homologatória nº 3.575/2026 (Energisa Sergipe)" — de onde veio a tarifa. */
+    fonteTarifa?: string | null;
+    /** "Atlas Brasileiro de Energia Solar (INPE, 2017), Itabaiana/SE". */
+    fonteIrradiacao?: string | null;
   };
+  /** As unidades que recebem a energia, quando há mais de uma (ou o rateio importa). */
+  ucs?: UcDaProposta[];
+  rateio?: "percentual" | "prioridade";
+  /** Indicadores do investimento (propostas de 23/11 em diante). */
+  metricas?: {
+    tir: number | null;
+    vpl: number;
+    paybackDescontadoMeses: number | null;
+    /** R$ por kWh gerado em 25 anos, a valor presente. */
+    custoKwh: number | null;
+    tma: number;
+  };
+  /** As formas de pagamento com as parcelas calculadas (propostas de 23/11 em diante). */
+  formas?: FormasDePagamento;
+  /** Um recado de quem vende, que sai na página do investimento. */
+  observacoes?: string | null;
 }
 
 const FUSO = "America/Sao_Paulo";
@@ -235,4 +273,136 @@ export function mensagemDaProposta(d: { cliente: string; empresa: string; link: 
 export function nomeDaProposta(d: Pick<DadosProposta, "numero" | "cliente">): string {
   const nome = d.cliente.nome.replace(/[\\/:*?"<>|]/g, " ").replace(/\s+/g, " ").trim();
   return `Proposta ${d.numero} - ${nome}.pdf`;
+}
+
+// ------------------------------------------- a proposta montada no assistente
+
+/** "6 placas Jinko JKM585N-72HL4-V (585 W)". */
+function linhaDeModulos(l: LinhaDoKit): string {
+  return `${l.qtd} ${l.qtd === 1 ? "placa" : "placas"} ${rotuloDoModelo({ ...l, potenciaW: l.potenciaW })}`;
+}
+
+/** "1 inversor Growatt MIN 5000TL-X (5 kW)" ou "3 microinversores Deye SUN-M225G4 (2,25 kW)". */
+function linhaDeInversor(l: LinhaDoKit): string {
+  const nome = l.tipo === "microinversor" ? (l.qtd === 1 ? "microinversor" : "microinversores") : l.qtd === 1 ? "inversor" : "inversores";
+  return `${l.qtd} ${nome} ${rotuloDoModelo({ ...l, potenciaW: l.potenciaW })}`;
+}
+
+/**
+ * A fotografia da proposta feita no assistente (23/11 em diante): o mesmo
+ * formato de `montarProposta`, mais as unidades, as métricas e as parcelas.
+ * Quem chama confere `resultado.falta` antes; aqui, falta de dado é erro.
+ */
+export function montarPropostaDoAssistente(
+  e: EstadoDaProposta,
+  r: ResultadoDoAssistente,
+  x: {
+    numero: number;
+    hoje?: Date;
+    empresa: EmpresaDaProposta;
+    cliente: { nome: string };
+    responsavel: { nome: string; contato: string | null } | null;
+    premissas: Premissas;
+    fonteIrradiacao: string | null;
+    /** Nome da distribuidora de cada unidade, na ordem do estado. */
+    fontesDeTarifa?: (string | null)[];
+  },
+): DadosProposta {
+  const s = r.simulacao;
+  if (!s || !r.precoFinal || !e.modulo || !e.cidade) throw new Error("Faltam dados para montar a proposta.");
+  const hoje = x.hoje ?? new Date();
+  const p = x.premissas;
+  const anoBase = anoDe(hoje);
+  const validade = e.validadeDias ?? p.validadeDias;
+  const valida = new Date(hoje.getTime() + validade * 86_400_000);
+  const iGer = Math.max(0, e.ucs.findIndex((u) => u.geradora));
+  const tGer = r.tarifas[iGer];
+  const resolucao = tGer?.origem === "aneel" ? tGer.aneel?.resolucao : null;
+  const consumoMedio = s.consumoAno / 12;
+  const inversores = e.inversores.filter((i) => i.qtd > 0);
+  const cartaoFin = p.pagamento.financiamentos[0];
+
+  const ucsComConsumo = e.ucs.filter((_, i) => r.consumos[i] !== null);
+  return {
+    numero: x.numero,
+    criadaEm: dataCurta(hoje),
+    validaAte: dataCurta(valida),
+    empresa: { ...x.empresa },
+    cliente: { nome: x.cliente.nome, cidade: e.cidade, uf: e.uf || null },
+    responsavel: x.responsavel,
+    sistema: {
+      kwp: r.kwp,
+      modulos: linhaDeModulos(e.modulo),
+      inversores: inversores.map(linhaDeInversor).join(" + ") || null,
+      equipamentosTexto: null,
+      areaM2: r.areaM2,
+      estrutura: estruturaDaProposta(e.telhado),
+    },
+    garantias: p.garantias,
+    energia: {
+      consumoMedio,
+      geracaoMes: s.geracaoMes,
+      geracaoMedia: s.geracaoMediaMes,
+      producaoAno: s.producaoAno,
+      irradiacaoDia: r.irradiacaoAnual,
+      consumoMes: s.consumoMes,
+    },
+    financeiro: {
+      investimento: r.precoFinal,
+      contaSemMes: s.contaSemMes,
+      contaComMes: s.contaComMes,
+      economiaMes: s.economiaMes,
+      economiaAno1: s.economiaAno1,
+      economia5: s.economia5,
+      economia25: s.economia25,
+      paybackMeses: s.paybackMeses,
+      fluxo: s.fluxo,
+    },
+    pagamento: {
+      parcelas: p.cartao.parcelas,
+      taxaMes: p.cartao.taxaMes,
+      carenciaDias: cartaoFin?.carenciaDias ?? p.carenciaFinanciamentoDias,
+    },
+    premissas: {
+      tarifaKwh: tGer?.tarifa ?? p.tarifaKwh,
+      desempenho: e.desempenho,
+      reajusteAnual: p.reajusteAnual,
+      degradacaoAnual: p.degradacaoAnual,
+      fioBPercentual: percentualFioB(anoBase),
+      simultaneidade: e.simultaneidade,
+      fonteTarifa: resolucao
+        ? `ANEEL, ${resolucao.replace(/^RESOLUÇÃO HOMOLOGATÓRIA/i, "Resolução Homologatória").replace(/,? DE .*$/i, "")}${x.fontesDeTarifa?.[iGer] ? ` (${x.fontesDeTarifa[iGer]})` : ""}, com ICMS e PIS/COFINS`
+        : tGer?.origem === "manual"
+          ? "tarifa informada pela conta de luz"
+          : null,
+      fonteIrradiacao: x.fonteIrradiacao,
+    },
+    ucs:
+      ucsComConsumo.length > 1
+        ? s.ucs.map((u) => {
+            const uc = e.ucs.find((v) => v.id === u.id)!;
+            return {
+              nome: u.nome,
+              codigo: uc.codigo || null,
+              geradora: u.geradora,
+              distribuidora: uc.distribuidoraNome || null,
+              consumoMedio: u.consumoAno / 12,
+              contaSemMes: u.contaSemMes,
+              contaComMes: u.contaComMes,
+              economiaMes: u.economiaMes,
+              percentual: e.rateio === "percentual" && !u.geradora ? (uc.percentual ?? 0) : null,
+            };
+          })
+        : undefined,
+    rateio: ucsComConsumo.length > 1 ? e.rateio : undefined,
+    metricas: {
+      tir: s.tir,
+      vpl: s.vpl,
+      paybackDescontadoMeses: s.paybackDescontadoMeses,
+      custoKwh: s.custoKwh,
+      tma: p.tma,
+    },
+    formas: r.formas ?? undefined,
+    observacoes: e.observacoes || null,
+  };
 }

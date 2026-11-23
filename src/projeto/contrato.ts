@@ -2,14 +2,17 @@
  * O contrato de prestação de serviços, sem banco e sem PDF: quais dados ele
  * precisa, o que falta, e os textos que mudam de um cliente para outro.
  *
- * O modelo é o contrato que a BB Soluções já usa (o do David Bruno, de 12/11).
- * Muda só o que é de cada cliente: quem contrata, o kit, o valor e a forma de
- * pagamento. O resto do texto é o do modelo, em `contrato-pdf.tsx`.
+ * O modelo é o "CONTRATO MODELO (CONTRATADO)" que a BB Soluções usa desde
+ * 21/11 (o anterior era o do David Bruno, de 12/11). Muda só o que é de cada
+ * cliente: quem contrata, o kit, o valor, a entrada e as parcelas, e as
+ * garantias (as das premissas da proposta). O resto do texto é o do modelo,
+ * em `contrato-pdf.tsx`.
  *
  * Conferido pelo `testar-regras.ts`.
  */
 
-import { FORMAS_PAGAMENTO, ehFormaPagamento } from "./pagamento";
+import { lerNumeroBr } from "../proposta/proposta";
+import { ehFormaPagamento, type FormaPagamento } from "./pagamento";
 
 // ---------------------------------------------------------------- formatação
 
@@ -107,6 +110,29 @@ export function reaisPorExtenso(valor: number): string {
 
 // ---------------------------------------------------------------- o contrato
 
+export interface Garantias {
+  inversor: number;
+  placas: number;
+  estrutura: number;
+  eficiencia: number;
+}
+
+/**
+ * As garantias escritas no modelo de contrato da empresa. Valem só quando as
+ * premissas da proposta ainda não foram salvas (e para os contratos gerados
+ * antes de 21/11, que não guardavam as garantias).
+ */
+export const GARANTIAS_DO_MODELO: Garantias = { inversor: 10, placas: 12, estrutura: 10, eficiencia: 25 };
+
+/** A entrada e o saldo, quando a venda foi com entrada (preenchidos ao gerar o contrato). */
+export interface PagamentoCombinado {
+  entrada: number;
+  /** Em quantas parcelas o saldo é pago (1 = de uma vez). */
+  parcelas: number;
+  /** "após a finalização do projeto", como no modelo, se ninguém escrever outra coisa. */
+  quando: string | null;
+}
+
 export interface EntradaContrato {
   cliente: {
     nome: string;
@@ -134,13 +160,17 @@ export interface EntradaContrato {
     email: string | null;
   };
   representante: { nome: string; cpf: string | null } | null;
+  /** Entrada e parcelas do saldo; nulo quando não houve entrada. */
+  pagamento?: PagamentoCombinado | null;
+  /** As garantias das premissas da proposta; nulo usa as do modelo. */
+  garantias?: Garantias | null;
 }
 
 /** A fotografia do contrato, guardada em `contrato.dados` e lida pelo PDF. */
 export interface DadosContrato {
   contratante: {
     nome: string;
-    /** "brasileiro(a), inscrito(a) no CPF sob o nº 000.000.000-00" */
+    /** "brasileiro(a), inscrito(a) sob o nº CPF 000.000.000-00" */
     qualificacao: string;
     documento: string;
     endereco: string;
@@ -151,13 +181,18 @@ export interface DadosContrato {
     cnpj: string;
     endereco: string;
     email: string;
+    /** Quem assina pela empresa. Desde 21/11 não sai escrito no contrato (o modelo não traz). */
     representante: string;
     representanteCpf: string | null;
   };
   equipamentos: string;
   valor: number;
-  /** A frase inteira do pagamento, como entra na cláusula 4. */
+  /** A frase inteira do pagamento, como entra na cláusula "Do pagamento". */
   pagamento: string;
+  /** Guardado para o próximo "Gerar de novo" já vir preenchido. Ausente antes de 21/11. */
+  combinado?: PagamentoCombinado | null;
+  /** Ausente nos contratos de antes de 21/11: o PDF usa as do modelo. */
+  garantias?: Garantias;
   geradoEm: string;
 }
 
@@ -203,20 +238,97 @@ export function faltaDaEmpresa(falta: string[]): string[] {
   return falta.filter((f) => f.endsWith("da empresa"));
 }
 
-/** "Rua X nº 62, Apto 802 - Jardins, Aracaju/SE, CEP 49025-180", como no modelo. */
+/** "Rua X, nº 62, Apto 802 - Centro, Itabaiana - SE, CEP: 49500-000", como no modelo. */
 export function enderecoDoContratante(c: EntradaContrato["cliente"]): string {
-  const rua = `${c.logradouro!.trim()} nº ${c.numero!.trim()}`;
+  const rua = `${c.logradouro!.trim()}, nº ${c.numero!.trim()}`;
   const comComplemento = vazio(c.complemento) ? rua : `${rua}, ${c.complemento!.trim()}`;
-  const cidade = vazio(c.uf) ? c.cidade!.trim() : `${c.cidade!.trim()}/${c.uf!.trim().toUpperCase()}`;
-  return `${comComplemento} - ${c.bairro!.trim()}, ${cidade}, CEP ${formatarCep((c.cep ?? "").replace(/\D/g, ""))}`;
+  const cidade = vazio(c.uf) ? c.cidade!.trim() : `${c.cidade!.trim()} - ${c.uf!.trim().toUpperCase()}`;
+  return `${comComplemento} - ${c.bairro!.trim()}, ${cidade}, CEP: ${formatarCep((c.cep ?? "").replace(/\D/g, ""))}`;
 }
 
-/** A cláusula 4: "R$ 50.000,00 (cinquenta mil reais), cartão de crédito: 6x sem juros." */
-export function fraseDoPagamento(valor: number, forma: string, condicoes: string | null): string {
-  const rotulo = ehFormaPagamento(forma) ? FORMAS_PAGAMENTO[forma] : forma;
-  const formaTexto = rotulo.charAt(0).toLowerCase() + rotulo.slice(1);
+/** Como cada forma entra no meio da frase do pagamento. */
+const FORMA_NA_FRASE: Record<FormaPagamento, string> = {
+  a_vista: "à vista, por PIX ou transferência",
+  financiamento: "por financiamento bancário",
+  cartao: "no cartão de crédito",
+  boleto: "por boleto comercial",
+  cheque: "em cheque",
+  misto: "com entrada e o saldo parcelado",
+};
+
+/** "R$ 2.800,00 (dois mil e oitocentos reais)" */
+function reais(v: number): string {
+  return `${formatarReais(v)} (${reaisPorExtenso(v)})`;
+}
+
+/** Contagem no feminino, para "parcelas": "duas", "vinte e uma". */
+function parcelasPorExtenso(n: number): string {
+  return inteiroPorExtenso(n).replace(/\bum\b/g, "uma").replace(/\bdois\b/g, "duas");
+}
+
+/**
+ * A cláusula "Do pagamento", no texto do modelo.
+ *
+ * Com entrada: "O(A) CONTRATANTE efetuará o pagamento de entrada no valor de
+ * R$ 2.800,00 (…), referente ao valor total do projeto, fixado em R$ 14.000,00
+ * (…), ficando o saldo remanescente de R$ 11.200,00 (…) dividido em duas
+ * parcelas de R$ 5.600,00 (…), a serem pagas após a finalização do projeto."
+ *
+ * Sem entrada: o valor total, a forma e as condições combinadas.
+ */
+export function fraseDoPagamento(
+  valor: number,
+  forma: string,
+  condicoes: string | null,
+  combinado: PagamentoCombinado | null = null,
+): string {
+  const modo = ehFormaPagamento(forma) ? FORMA_NA_FRASE[forma] : `por ${forma}`;
+  if (combinado) {
+    const saldoCent = Math.round(valor * 100) - Math.round(combinado.entrada * 100);
+    const n = combinado.parcelas;
+    const quando = vazio(combinado.quando)
+      ? "após a finalização do projeto"
+      : combinado.quando!.trim().replace(/[.;\s]+$/, "");
+    // Forma que não é "entrada + parcelado" diz como o saldo é pago (financiamento, cartão…).
+    const como = ehFormaPagamento(forma) && forma !== "misto" ? `, ${modo}` : "";
+    let saldo: string;
+    if (n <= 1) saldo = `a ser pago${como}${como ? "," : ""} ${quando}`;
+    else {
+      const parcela = Math.floor(saldoCent / n);
+      const ultima = saldoCent - parcela * (n - 1);
+      saldo =
+        `dividido em ${parcelasPorExtenso(n)} parcelas de ${reais(parcela / 100)}` +
+        (ultima !== parcela ? `, sendo a última de ${reais(ultima / 100)}` : "") +
+        `${como}, a serem pagas ${quando}`;
+    }
+    return (
+      `O(A) CONTRATANTE efetuará o pagamento de entrada no valor de ${reais(combinado.entrada)}, ` +
+      `referente ao valor total do projeto, fixado em ${reais(valor)}, ` +
+      `ficando o saldo remanescente de ${reais(saldoCent / 100)} ${saldo}.`
+    );
+  }
   const resto = vazio(condicoes) ? "" : `: ${condicoes!.trim().replace(/[.;\s]+$/, "")}`;
-  return `O(a) CONTRATANTE efetuará o pagamento de ${formatarReais(valor)} (${reaisPorExtenso(valor)}), ${formaTexto}${resto}.`;
+  return `O(A) CONTRATANTE efetuará o pagamento no valor de ${reais(valor)}, referente ao valor total do projeto, ${modo}${resto}.`;
+}
+
+/**
+ * Lê a entrada e as parcelas do formulário "Gerar contrato". Entrada em branco
+ * = sem entrada (vale a frase com a forma e as condições do projeto).
+ */
+export function lerPagamentoCombinado(
+  campos: { entrada: string; parcelas: string; quando: string },
+  valor: number,
+): { combinado: PagamentoCombinado | null } | { erro: string } {
+  if (!campos.entrada.trim()) return { combinado: null };
+  const entrada = lerNumeroBr(campos.entrada);
+  if (entrada === null) return { erro: "Entrada inválida: escreva o valor em reais, como 2.800,00." };
+  if (!(valor > 0) || Math.round(entrada * 100) >= Math.round(valor * 100)) {
+    return { erro: `A entrada precisa ser menor que o valor total do projeto (${formatarReais(valor)}).` };
+  }
+  const p = campos.parcelas.trim() ? Number(campos.parcelas.trim()) : 1;
+  if (!Number.isInteger(p) || p < 1 || p > 120) return { erro: "Número de parcelas do saldo inválido: de 1 a 120." };
+  const quando = campos.quando.trim().slice(0, 200) || null;
+  return { combinado: { entrada: Math.round(entrada * 100) / 100, parcelas: p, quando } };
 }
 
 /**
@@ -233,8 +345,8 @@ export function montarContrato(e: EntradaContrato, agora = new Date()): DadosCon
     contratante: {
       nome: c.nome.trim(),
       qualificacao: pj
-        ? `pessoa jurídica inscrita no CNPJ sob o nº ${documento}`
-        : `brasileiro(a), inscrito(a) no CPF sob o nº ${documento}`,
+        ? `pessoa jurídica inscrita sob o nº CNPJ ${documento}`
+        : `brasileiro(a), inscrito(a) sob o nº CPF ${documento}`,
       documento,
       endereco: enderecoDoContratante(c),
     },
@@ -249,7 +361,9 @@ export function montarContrato(e: EntradaContrato, agora = new Date()): DadosCon
     },
     equipamentos: e.projeto.equipamentos!.trim().replace(/\.+$/, ""),
     valor,
-    pagamento: fraseDoPagamento(valor, e.projeto.formaPagamento!, e.projeto.pagamentoCondicoes),
+    pagamento: fraseDoPagamento(valor, e.projeto.formaPagamento!, e.projeto.pagamentoCondicoes, e.pagamento ?? null),
+    combinado: e.pagamento ?? null,
+    garantias: e.garantias ?? GARANTIAS_DO_MODELO,
     geradoEm: agora.toISOString(),
   };
 }

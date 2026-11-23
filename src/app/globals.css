@@ -8256,6 +8256,40 @@ a.funil-rotulo:hover {
   display: grid;
   gap: 0.6rem;
 }
+/* Entrada e parcelas no "Gerar contrato". */
+.contrato-pagamento {
+  margin: 0;
+  border: 1px solid var(--line-soft);
+  border-radius: var(--raio);
+  padding: 0.75rem 0.9rem 0.85rem;
+  min-width: 0;
+  gap: 0.6rem;
+}
+.contrato-pagamento legend {
+  padding: 0 0.3rem;
+}
+.contrato-pagamento .dupla {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.6rem;
+}
+.contrato-pagamento label {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  font-size: 0.8rem;
+  color: var(--ink-2);
+  min-width: 0;
+}
+.contrato-pagamento input {
+  width: 100%;
+  min-height: 38px;
+}
+@media (max-width: 480px) {
+  .contrato-pagamento .dupla {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
 .contrato-falta ul {
   margin: 0;
   padding-left: 1.1rem;
@@ -10554,4 +10588,436 @@ textarea {
 
 .erro-pagina .barra-enviar {
   justify-content: center;
+}
+
+/* =====================================================================
+   Assistente da proposta comercial (/projeto/<id>/proposta), 23/11.
+   As sete etapas na lateral, como no Solarz; o resumo vivo embaixo delas.
+   Só variáveis de cor do tema: vale no claro e no escuro sem repetir paleta.
+   ===================================================================== */
+.ap {
+  display: grid;
+  grid-template-columns: 236px minmax(0, 1fr);
+  gap: 1.25rem;
+  align-items: start;
+  padding: 0 1.5rem 2rem;
+}
+.ap-lateral {
+  position: sticky;
+  top: calc(var(--altura-topo) + 0.75rem);
+  display: grid;
+  gap: 0.9rem;
+  min-width: 0;
+}
+.ap-passos {
+  display: grid;
+  gap: 0.2rem;
+  padding: 0.6rem;
+  background: var(--surface);
+  border: 1px solid var(--line-soft);
+  border-radius: var(--raio);
+}
+.ap-passo {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  width: 100%;
+  padding: 0.5rem 0.55rem;
+  border: 0;
+  border-radius: var(--raio-p);
+  background: transparent;
+  color: var(--ink-3);
+  font: inherit;
+  font-size: 0.86rem;
+  text-align: left;
+  cursor: pointer;
+}
+.ap-passo:hover {
+  background: var(--surface-2);
+  color: var(--ink);
+}
+.ap-passo-num {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  border: 1.5px solid var(--line);
+  font-size: 0.75rem;
+  font-weight: 700;
+}
+.ap-passo-ativo {
+  background: var(--accent-soft);
+  color: var(--accent);
+  font-weight: 600;
+}
+.ap-passo-ativo .ap-passo-num {
+  border-color: var(--accent);
+  background: var(--accent);
+  color: #fff;
+}
+.ap-passo-feito .ap-passo-num {
+  border-color: var(--ok);
+  color: var(--ok);
+}
+.ap-vivo {
+  display: grid;
+  gap: 0.45rem;
+  padding: 0.85rem 0.9rem;
+  background: var(--surface);
+  border: 1px solid var(--line-soft);
+  border-radius: var(--raio);
+  font-size: 0.82rem;
+}
+.ap-vivo-linha {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.5rem;
+  color: var(--ink-3);
+}
+.ap-vivo-linha strong {
+  color: var(--ink);
+  text-align: right;
+}
+.ap-vivo-titulo {
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--accent);
+}
+.ap-salvo {
+  font-size: 0.75rem;
+  color: var(--ink-3);
+}
+.ap-conteudo {
+  display: grid;
+  gap: 1rem;
+  min-width: 0;
+}
+.ap-secao {
+  display: grid;
+  gap: 0.85rem;
+  padding: 1.1rem 1.2rem 1.2rem;
+  background: var(--surface);
+  border: 1px solid var(--line-soft);
+  border-radius: var(--raio);
+  min-width: 0;
+}
+.ap-secao > h2 {
+  margin: 0;
+  font-size: 1.05rem;
+}
+.ap-secao > h3 {
+  margin: 0;
+  font-size: 0.92rem;
+}
+.ap-secao-topo {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.6rem;
+}
+.ap-explica {
+  margin: 0;
+  font-size: 0.84rem;
+  line-height: 1.5;
+  color: var(--ink-3);
+}
+.ap-grade {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(190px, 1fr));
+  gap: 0.75rem;
+}
+.ap-campo {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  min-width: 0;
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: var(--ink-2);
+}
+.ap-campo input,
+.ap-campo select,
+.ap-campo textarea {
+  width: 100%;
+  min-height: 38px;
+  font-weight: 400;
+}
+.ap-campo small {
+  font-weight: 400;
+  color: var(--ink-3);
+  line-height: 1.4;
+}
+.ap-req {
+  color: var(--crit);
+}
+.ap-uc {
+  display: grid;
+  gap: 0.75rem;
+  padding: 0.9rem 1rem;
+  border: 1px solid var(--line-soft);
+  border-radius: var(--raio);
+  background: var(--surface-2);
+}
+.ap-uc-geradora {
+  border-color: color-mix(in srgb, var(--accent) 45%, var(--line-soft));
+}
+.ap-uc-topo {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+  justify-content: space-between;
+}
+.ap-meses {
+  display: grid;
+  grid-template-columns: repeat(12, minmax(0, 1fr));
+  gap: 0.35rem;
+}
+.ap-meses label {
+  display: grid;
+  gap: 0.15rem;
+  font-size: 0.7rem;
+  color: var(--ink-3);
+  text-align: center;
+}
+.ap-meses input {
+  width: 100%;
+  min-width: 0;
+  padding-inline: 0.25rem;
+  text-align: center;
+}
+.ap-alternar {
+  display: inline-flex;
+  padding: 3px;
+  border-radius: 999px;
+  background: var(--surface-3);
+  gap: 2px;
+}
+.ap-alternar button {
+  border: 0;
+  border-radius: 999px;
+  padding: 0.3rem 0.8rem;
+  background: transparent;
+  color: var(--ink-3);
+  font: inherit;
+  font-size: 0.8rem;
+  cursor: pointer;
+}
+.ap-alternar button[aria-pressed="true"] {
+  background: var(--surface);
+  color: var(--ink);
+  font-weight: 600;
+  box-shadow: var(--shadow);
+}
+.ap-tarifa {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.4rem 0.9rem;
+  font-size: 0.8rem;
+  color: var(--ink-3);
+}
+.ap-tarifa strong {
+  color: var(--ink);
+}
+.ap-escolha {
+  position: relative;
+  display: grid;
+  gap: 0.4rem;
+}
+.ap-escolha-lista {
+  display: grid;
+  max-height: 320px;
+  overflow-y: auto;
+  border: 1px solid var(--line-soft);
+  border-radius: var(--raio-p);
+  background: var(--surface);
+}
+.ap-escolha-item {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 0.15rem 0.75rem;
+  align-items: center;
+  padding: 0.5rem 0.7rem;
+  border: 0;
+  border-bottom: 1px solid var(--line-soft);
+  background: transparent;
+  font: inherit;
+  text-align: left;
+  color: var(--ink);
+  cursor: pointer;
+}
+.ap-escolha-item:last-child {
+  border-bottom: 0;
+}
+.ap-escolha-item:hover,
+.ap-escolha-item:focus-visible {
+  background: var(--accent-soft);
+}
+.ap-escolha-item small {
+  grid-column: 1 / -1;
+  color: var(--ink-3);
+  font-size: 0.74rem;
+}
+.ap-selo {
+  display: inline-block;
+  padding: 0.05rem 0.45rem;
+  border-radius: 999px;
+  font-size: 0.68rem;
+  font-weight: 700;
+  background: var(--surface-3);
+  color: var(--ink-2);
+  white-space: nowrap;
+}
+.ap-selo-catalogo {
+  background: var(--ok-soft);
+  color: var(--ok);
+}
+.ap-kit-linha {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 110px 140px auto;
+  gap: 0.6rem;
+  align-items: end;
+  padding: 0.75rem 0.85rem;
+  border: 1px solid var(--line-soft);
+  border-radius: var(--raio-p);
+  background: var(--surface-2);
+}
+.ap-kit-nome {
+  display: grid;
+  gap: 0.1rem;
+  min-width: 0;
+}
+.ap-kit-nome strong {
+  overflow-wrap: anywhere;
+}
+.ap-kit-nome small {
+  color: var(--ink-3);
+}
+.ap-avisos {
+  display: grid;
+  gap: 0.4rem;
+}
+.ap-aviso {
+  padding: 0.55rem 0.75rem;
+  border-radius: var(--raio-p);
+  font-size: 0.84rem;
+  line-height: 1.45;
+  border-left: 3px solid var(--line);
+  background: var(--surface-2);
+}
+.ap-aviso-erro {
+  border-left-color: var(--crit);
+  background: var(--crit-soft);
+}
+.ap-aviso-atencao {
+  border-left-color: var(--warn);
+  background: var(--warn-soft);
+}
+.ap-aviso-ok {
+  border-left-color: var(--ok);
+  background: var(--ok-soft);
+}
+.ap-numeros {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: 0.6rem;
+}
+.ap-numero {
+  display: grid;
+  gap: 0.2rem;
+  padding: 0.75rem 0.85rem;
+  border-radius: var(--raio-p);
+  background: var(--surface-2);
+  border: 1px solid var(--line-soft);
+}
+.ap-numero span {
+  font-size: 0.74rem;
+  color: var(--ink-3);
+}
+.ap-numero strong {
+  font-size: 1.05rem;
+}
+.ap-grafico {
+  width: 100%;
+  height: auto;
+}
+.ap-grafico text {
+  fill: var(--ink-3);
+  font-size: 10px;
+}
+.ap-barra-geracao {
+  fill: var(--energia);
+}
+.ap-barra-consumo {
+  fill: var(--line);
+}
+.ap-rodape {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.6rem;
+}
+.ap-rodape .grupo-botoes {
+  display: flex;
+  gap: 0.5rem;
+}
+.ap-custos td:last-child,
+.ap-custos th:last-child {
+  text-align: right;
+}
+.ap-custos input {
+  width: 120px;
+  text-align: right;
+}
+.ap-total {
+  font-weight: 700;
+}
+.ap-icone-botao {
+  display: inline-grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  border: 1px solid var(--line-soft);
+  border-radius: var(--raio-p);
+  background: var(--surface);
+  color: var(--ink-2);
+  cursor: pointer;
+}
+.ap-icone-botao:hover {
+  color: var(--crit);
+  border-color: var(--crit);
+}
+.proposta-aberta {
+  color: var(--ok);
+  font-weight: 600;
+}
+@media (max-width: 900px) {
+  .ap {
+    grid-template-columns: minmax(0, 1fr);
+    padding: 0 0.75rem 1.5rem;
+  }
+  .ap-lateral {
+    position: static;
+  }
+  .ap-passos {
+    display: flex;
+    overflow-x: auto;
+  }
+  .ap-passo {
+    width: auto;
+    white-space: nowrap;
+  }
+  .ap-meses {
+    grid-template-columns: repeat(6, minmax(0, 1fr));
+  }
+  .ap-kit-linha {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  }
 }

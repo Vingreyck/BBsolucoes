@@ -10,6 +10,7 @@ import {
   History,
   Lightbulb,
   MapPin,
+  Calculator,
   MessageSquare,
   Plus,
   ScanSearch,
@@ -227,6 +228,7 @@ export default async function DetalheProjeto({
           chave={`p|${ok ?? ""}|${erro ?? ""}`}
           responsaveis={ctxProposta.responsaveis}
           responsavelPadrao={responsavelPadrao(ctxProposta.responsaveis, usuario.id, projeto.responsavelId)}
+          temRascunho={Boolean(projeto.propostaRascunho)}
         />
         <form action={aprovarProposta.bind(null, projeto.id, "projeto")}>
           <button type="submit" className="botao">
@@ -359,6 +361,11 @@ export default async function DetalheProjeto({
             {ator.gestao && (
               <Link href={`/os/nova?projeto=${projeto.id}`} className="botao secundario">
                 <Plus size={15} aria-hidden /> Nova OS
+              </Link>
+            )}
+            {ator.gestao && (
+              <Link href={`/projeto/${projeto.id}/proposta`} className="botao secundario">
+                <Calculator size={15} aria-hidden /> Proposta
               </Link>
             )}
             {ator.gestao && (

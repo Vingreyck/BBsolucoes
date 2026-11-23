@@ -66,7 +66,17 @@ fi
 # versão nova dele (ver abaixo) — a cópia e o pull já foram feitos.
 if [[ "${1:-}" != "--continuar" ]]; then
   echo "== 1/8 Cópia de segurança"
-  docker compose exec -T coletor npm run backup
+  # Código 2: a cópia local foi gravada e só a cifrada do Drive falhou (rede,
+  # Google fora do ar). O deploy precisa da local; segue com aviso, e o coletor
+  # tenta mandar ao Drive de novo na próxima rodada. Qualquer outra falha para.
+  codigo=0
+  docker compose exec -T coletor npm run backup || codigo=$?
+  if [[ $codigo -eq 2 ]]; then
+    echo "Aviso: a cópia cifrada não subiu para o Drive agora; a cópia local foi gravada e o deploy segue." >&2
+  elif [[ $codigo -ne 0 ]]; then
+    echo "A cópia de segurança falhou — o deploy parou antes de mexer em qualquer coisa." >&2
+    exit 1
+  fi
 
   echo "== 2/8 Código novo"
   if [[ -n "$(git status --porcelain --untracked-files=no)" ]]; then
@@ -113,10 +123,16 @@ docker compose run --rm --no-deps -T site npm run migrar
 echo "== 6/8 Subindo"
 mkdir -p backups estado mapeamentos anexos-pendentes
 docker compose up -d
-# O Caddyfile entra no container por um arquivo montado: o `up` não percebe
-# quando ele muda. Recarregar aplica a configuração nova sem derrubar ninguém
-# (e, se o arquivo tiver erro, o Caddy recusa e segue com a antiga).
-docker compose exec -T caddy caddy reload --config /etc/caddy/Caddyfile || echo "Aviso: o Caddy não recarregou o Caddyfile (veja: docker compose logs caddy)." >&2
+# O Caddyfile entra no container como um arquivo montado sozinho, e o `git pull`
+# troca o arquivo por outro: o container continua preso ao antigo (o `caddy
+# reload` lia a versão velha e dizia "config is unchanged" — foi o que manteve o
+# limite de 2 MB na administração em 20/11). Se o de dentro do container é
+# diferente do que está no disco, recria só o Caddy: uns segundos fora do ar,
+# o certificado fica no volume e não é pedido de novo.
+if ! docker compose exec -T caddy cat /etc/caddy/Caddyfile | cmp -s - Caddyfile; then
+  echo "O Caddyfile mudou: recriando o Caddy."
+  docker compose up -d --force-recreate --no-deps caddy
+fi
 
 echo "== 7/8 Limpando o cache do Docker"
 docker builder prune -af >/dev/null

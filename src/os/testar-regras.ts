@@ -107,7 +107,9 @@ import {
   faltaDaEmpresa,
   faltaParaContrato,
   fraseDoPagamento,
+  GARANTIAS_DO_MODELO,
   inteiroPorExtenso,
+  lerPagamentoCombinado,
   mensagemDeDadosDoCliente,
   mensagemDoContrato,
   montarContrato,
@@ -127,6 +129,7 @@ import {
   OPCOES_DE_TELHADO,
 } from "../projeto/da-vistoria";
 import { readFileSync } from "node:fs";
+import { testarPdfDoAssistente, testarPropostaCompleta } from "../proposta/testar-proposta-completa";
 
 let falhas = 0;
 let total = 0;
@@ -818,25 +821,62 @@ confere(
 const montado = montarContrato(entradaOk, new Date("2026-11-13T12:00:00Z"));
 igual(
   montado.contratante.qualificacao,
-  "brasileiro(a), inscrito(a) no CPF sob o nº 529.982.247-25",
+  "brasileiro(a), inscrito(a) sob o nº CPF 529.982.247-25",
   "qualificação do contratante como no modelo",
 );
 igual(
   montado.contratante.endereco,
-  "Rua das Flores nº 62, Apto 802 - Centro, Itabaiana/SE, CEP 49500-000",
+  "Rua das Flores, nº 62, Apto 802 - Centro, Itabaiana - SE, CEP: 49500-000",
   "endereço do contratante como no modelo",
 );
 igual(montado.contratado.cnpj, "11.222.333/0001-81", "CNPJ da empresa formatado");
 igual(montado.equipamentos, "2 inversores Growatt 10K, 40 módulos 625W / estrutura fibrocimento", "ponto final do kit sai (o PDF põe o dele)");
 igual(
   montado.pagamento,
-  "O(a) CONTRATANTE efetuará o pagamento de R$ 50.000,00 (cinquenta mil reais), cartão de crédito: 6x (seis vezes) sem juros.",
+  "O(A) CONTRATANTE efetuará o pagamento no valor de R$ 50.000,00 (cinquenta mil reais), referente ao valor total do projeto, no cartão de crédito: 6x (seis vezes) sem juros.",
   "cláusula do pagamento com valor, extenso, forma e condições",
 );
 igual(
   fraseDoPagamento(18500.5, "a_vista", null),
-  "O(a) CONTRATANTE efetuará o pagamento de R$ 18.500,50 (dezoito mil e quinhentos reais e cinquenta centavos), à vista (PIX ou transferência).",
+  "O(A) CONTRATANTE efetuará o pagamento no valor de R$ 18.500,50 (dezoito mil e quinhentos reais e cinquenta centavos), referente ao valor total do projeto, à vista, por PIX ou transferência.",
   "pagamento sem condições",
+);
+// A cláusula do modelo da empresa: entrada, total, saldo e parcelas por extenso.
+igual(
+  fraseDoPagamento(14000, "misto", "qualquer coisa", { entrada: 2800, parcelas: 2, quando: null }),
+  "O(A) CONTRATANTE efetuará o pagamento de entrada no valor de R$ 2.800,00 (dois mil e oitocentos reais), referente ao valor total do projeto, fixado em R$ 14.000,00 (quatorze mil reais), ficando o saldo remanescente de R$ 11.200,00 (onze mil e duzentos reais) dividido em duas parcelas de R$ 5.600,00 (cinco mil e seiscentos reais), a serem pagas após a finalização do projeto.",
+  "pagamento com entrada igual ao do modelo",
+);
+igual(
+  fraseDoPagamento(10000, "financiamento", null, { entrada: 1000, parcelas: 1, quando: "na liberação do banco." }),
+  "O(A) CONTRATANTE efetuará o pagamento de entrada no valor de R$ 1.000,00 (mil reais), referente ao valor total do projeto, fixado em R$ 10.000,00 (dez mil reais), ficando o saldo remanescente de R$ 9.000,00 (nove mil reais) a ser pago, por financiamento bancário, na liberação do banco.",
+  "entrada com o saldo de uma vez pelo banco",
+);
+confere(
+  fraseDoPagamento(10000, "misto", null, { entrada: 1000, parcelas: 7, quando: null }).includes(
+    "sete parcelas de R$ 1.285,71 (mil duzentos e oitenta e cinco reais e setenta e um centavos), sendo a última de R$ 1.285,74",
+  ),
+  "saldo que não divide em partes iguais: a última parcela leva os centavos",
+);
+igual(
+  fraseDoPagamento(30000, "misto", null, { entrada: 9000, parcelas: 21, quando: null }).includes("vinte e uma parcelas"),
+  true,
+  "parcelas no feminino (vinte e uma)",
+);
+igual(
+  JSON.stringify(lerPagamentoCombinado({ entrada: "2.800,00", parcelas: "2", quando: "" }, 14000)),
+  JSON.stringify({ combinado: { entrada: 2800, parcelas: 2, quando: null } }),
+  "lê a entrada como se digita no Brasil",
+);
+igual(JSON.stringify(lerPagamentoCombinado({ entrada: " ", parcelas: "3", quando: "x" }, 14000)), JSON.stringify({ combinado: null }), "entrada em branco: sem entrada");
+confere("erro" in lerPagamentoCombinado({ entrada: "14.000", parcelas: "", quando: "" }, 14000), "entrada igual ao total: recusa");
+confere("erro" in lerPagamentoCombinado({ entrada: "500", parcelas: "0", quando: "" }, 14000), "zero parcelas: recusa");
+confere("erro" in lerPagamentoCombinado({ entrada: "abc", parcelas: "", quando: "" }, 14000), "entrada que não é número: recusa");
+igual(JSON.stringify(montado.garantias), JSON.stringify(GARANTIAS_DO_MODELO), "sem premissas, as garantias do modelo");
+igual(
+  montarContrato({ ...entradaOk, garantias: { inversor: 12, placas: 15, estrutura: 10, eficiencia: 25 } }).garantias?.placas,
+  15,
+  "com premissas salvas, as garantias da proposta",
 );
 const msgContrato = mensagemDoContrato({ cliente: "ANA MARIA LIMA", empresa: "Empresa Exemplo", link: "https://x/r/c/abc" });
 confere(msgContrato.startsWith("Olá, Ana!") && msgContrato.includes("https://x/r/c/abc"), "mensagem do contrato com o primeiro nome e o link");
@@ -1180,6 +1220,9 @@ const entradaDaPropostaTeste: EntradaProposta = {
   igual(premissasDoFormulario({ tarifaKwh: "abc" }), null, "campo que não é número anula o formulário");
 }
 
+// --- Proposta completa (23/11): base, municípios, tarifa, simulação, kit, preço ---------
+testarPropostaCompleta(confere, igual);
+
 // --- Destino e rota no Google Maps ------------------------------------------------------
 {
   const casa = { logradouro: "Rua das Flores", numero: "123", bairro: "Centro", cidade: "Itabaiana", uf: "se", cep: "49500000" };
@@ -1287,11 +1330,20 @@ async function testarContratoPdf(): Promise<void> {
     const texto = pdf.subarray(0, 8).toString("latin1");
     confere(texto.startsWith("%PDF-"), `contrato em PDF ${comLogo ? "com" : "sem"} logo`);
     const paginas = (pdf.toString("latin1").match(/\/Type\s*\/Page[^s]/g) ?? []).length;
-    confere(paginas >= 2 && paginas <= 4, `contrato ${comLogo ? "com" : "sem"} logo tem de 2 a 4 páginas (${paginas})`);
-    if (process.env.CONTRATO_AMOSTRA && comLogo === null) {
-      const { writeFileSync } = await import("node:fs");
-      writeFileSync(process.env.CONTRATO_AMOSTRA, pdf);
-    }
+    confere(paginas >= 3 && paginas <= 5, `contrato ${comLogo ? "com" : "sem"} logo tem de 3 a 5 páginas (${paginas})`);
+  }
+  // Um contrato de antes de 21/11 (sem garantias nem entrada guardadas) ainda abre.
+  const { garantias: _g, combinado: _c, ...antigo } = montado;
+  confere((await gerarContratoPdf(antigo, null)).subarray(0, 5).toString("latin1") === "%PDF-", "contrato antigo, sem garantias guardadas, ainda gera");
+  if (process.env.CONTRATO_AMOSTRA) {
+    // Amostra com dados inventados e o pagamento com entrada, para conferir o visual.
+    const { writeFileSync } = await import("node:fs");
+    const amostra = montarContrato({
+      ...entradaOk,
+      projeto: { ...entradaOk.projeto, valor: "14000", formaPagamento: "misto" },
+      pagamento: { entrada: 2800, parcelas: 2, quando: null },
+    });
+    writeFileSync(process.env.CONTRATO_AMOSTRA, await gerarContratoPdf(amostra, process.env.CONTRATO_LOGO ?? null));
   }
 }
 
@@ -1299,6 +1351,7 @@ testarRetrace()
   .then(testarSenha)
   .then(testarContratoPdf)
   .then(testarPropostaPdf)
+  .then(() => testarPdfDoAssistente(confere, igual))
   .then(() => {
     console.log(falhas === 0 ? `✓ ${total} conferências, nenhuma falha.` : `✗ ${falhas} de ${total} falharam.`);
     process.exit(falhas === 0 ? 0 : 1);

@@ -381,6 +381,7 @@ export default async function Esteira({
                           chave={`p|${p.id}|${ok ?? ""}|${erro ?? ""}`}
                           responsaveis={ctxProposta.responsaveis}
                           responsavelPadrao={responsavelPadrao(ctxProposta.responsaveis, usuario.id, p.responsavelId)}
+                          temRascunho={Boolean(p.propostaRascunho)}
                         />
                       </div>
                     )}

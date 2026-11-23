@@ -2,7 +2,7 @@
 
 import { randomBytes } from "node:crypto";
 
-import { and, eq, inArray, sql } from "drizzle-orm";
+import { and, eq, inArray } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 
@@ -12,12 +12,10 @@ import { exigirGestaoWeb } from "@/os/acesso";
 import { criarOs } from "@/os/fluxo";
 import { formatarRelogio, relogioDoCampo } from "@/os/relogio";
 import { numeroOs } from "@/os/tipos";
-import { faltaParaContrato, montarContrato } from "@/projeto/contrato";
+import { faltaParaContrato, lerPagamentoCombinado, montarContrato } from "@/projeto/contrato";
 import { entradaDe, representantesDaEmpresa } from "@/projeto/contrato-dados";
 import { moverNaEsteira } from "@/projeto/esteira";
-import { ehLigacao } from "@/proposta/calculo";
-import { faltaParaProposta, lerNumeroBr, montarProposta } from "@/proposta/proposta";
-import { entradaDaProposta, projetoParaProposta, responsaveisPossiveis } from "@/proposta/proposta-dados";
+import { lerPremissas } from "@/proposta/premissas";
 
 const ABERTAS = ["aberta", "agendada", "em_deslocamento", "em_andamento", "aguardando_peca"] as const;
 
@@ -249,7 +247,7 @@ export async function gerarContrato(projetoId: string, origem: Origem, form: For
   const representante = (await representantesDaEmpresa(ator.empresaId)).find((r) => r.id === representanteId) ?? null;
   const empresa = await db.query.empresa.findFirst({
     where: eq(schema.empresa.id, ator.empresaId),
-    columns: { nome: true, razaoSocial: true, cnpj: true, endereco: true, email: true },
+    columns: { nome: true, razaoSocial: true, cnpj: true, endereco: true, email: true, propostaConfig: true },
   });
   if (!empresa) voltar({ erro: "Empresa não encontrada." }, para);
 
@@ -258,6 +256,20 @@ export async function gerarContrato(projetoId: string, origem: Origem, form: For
   if (falta.length) {
     voltar({ erro: `Não dá para gerar o contrato de ${projeto.cliente.nome}: falta ${falta.join(", ")}.` }, para);
   }
+
+  // Entrada e parcelas do saldo, quando a venda foi assim (em branco = sem entrada).
+  const lido = lerPagamentoCombinado(
+    {
+      entrada: String(form.get("entrada") ?? ""),
+      parcelas: String(form.get("parcelas") ?? ""),
+      quando: String(form.get("saldoQuando") ?? ""),
+    },
+    Number(projeto.valor),
+  );
+  if ("erro" in lido) voltar({ erro: lido.erro }, para);
+  entrada.pagamento = lido.combinado;
+  // As garantias são as mesmas da proposta que o cliente recebeu.
+  entrada.garantias = lerPremissas(empresa.propostaConfig)?.garantias ?? null;
 
   await db.insert(schema.contrato).values({
     empresaId: ator.empresaId,
@@ -272,89 +284,6 @@ export async function gerarContrato(projetoId: string, origem: Origem, form: For
   revalidatePath(`/projeto/${projeto.id}`);
   voltar(
     { ok: `Contrato de ${projeto.cliente.nome} gerado. Agora é enviar pelo WhatsApp: quando a via assinada subir no dossiê, o projeto anda sozinho.` },
-    para,
-  );
-}
-
-/** O próximo número de proposta da empresa: continua o maior que existe, ou começa no `inicial`. */
-async function proximoNumeroDeProposta(empresaId: string, inicial: number | null): Promise<number> {
-  const [linha] = await db
-    .select({ maior: sql<number | null>`max(${schema.proposta.numero})` })
-    .from(schema.proposta)
-    .where(eq(schema.proposta.empresaId, empresaId));
-  return Math.max(linha?.maior ?? 0, (inicial ?? 1) - 1) + 1;
-}
-
-/**
- * "Gerar proposta", no cartão do Lead: monta a proposta comercial (PDF no modelo
- * da BB) com os dados do cliente, do kit e da vistoria, e deixa o link pronto
- * para o WhatsApp.
- *
- * Quem clica confere o valor, o consumo médio e a potência; o que mudou volta
- * para o projeto, que continua sendo a fonte única (o contrato lê dali também).
- * Falta qualquer dado, a resposta diz qual: o PDF nunca sai com campo vazio.
- * Gerar de novo cria outra proposta, com outro número e outro link; vale a última.
- */
-export async function gerarProposta(projetoId: string, origem: Origem, form: FormData): Promise<void> {
-  const ator = await exigirGestaoWeb();
-  const para = origem === "projeto" ? `/projeto/${projetoId}` : "/esteira";
-
-  const projeto = await projetoParaProposta(ator.empresaId, projetoId);
-  if (!projeto) voltar({ erro: "Projeto não encontrado." }, para);
-
-  const potencia = lerNumeroBr(form.get("potenciaKwp"));
-  const valor = lerNumeroBr(form.get("valor"));
-  const consumo = lerNumeroBr(form.get("consumoMedioKwh"));
-  const ligacaoCampo = String(form.get("ligacao") ?? "");
-  const ligacao = ehLigacao(ligacaoCampo) ? ligacaoCampo : null;
-  const mudar: Partial<typeof schema.projeto.$inferInsert> = {};
-  if (potencia) mudar.potenciaKwp = potencia.toFixed(3);
-  if (valor) mudar.valor = valor.toFixed(2);
-  if (consumo) mudar.consumoMedioKwh = consumo.toFixed(2);
-  if (ligacao) mudar.ligacao = ligacao;
-  if (Object.keys(mudar).length) {
-    await db
-      .update(schema.projeto)
-      .set({ ...mudar, atualizadoEm: new Date() })
-      .where(eq(schema.projeto.id, projeto.id));
-    Object.assign(projeto, mudar);
-  }
-
-  // O responsável vem da janela. O id é palpite do navegador: só vale quem é da
-  // empresa, está ativo e pode assinar proposta (administração e vendedores).
-  const escolhido = String(form.get("responsavelId") ?? "");
-  const responsavel = (await responsaveisPossiveis(ator.empresaId)).find((r) => r.id === escolhido);
-  if (!responsavel) voltar({ erro: "Escolha quem é o responsável pela proposta." }, para);
-
-  const entrada = await entradaDaProposta(ator.empresaId, projeto, responsavel, ligacao);
-  const falta = faltaParaProposta(entrada);
-  if (falta.length) {
-    voltar({ erro: `Não dá para gerar a proposta de ${projeto.cliente.nome}: falta ${falta.join(", ")}.` }, para);
-  }
-
-  let numero = 0;
-  for (let tentativa = 0; tentativa < 3; tentativa++) {
-    numero = await proximoNumeroDeProposta(ator.empresaId, entrada.premissas!.numeroInicial);
-    try {
-      await db.insert(schema.proposta).values({
-        empresaId: ator.empresaId,
-        projetoId: projeto.id,
-        numero,
-        token: randomBytes(24).toString("base64url"),
-        dados: montarProposta(entrada, numero),
-        criadoPorId: ator.id,
-      });
-      break;
-    } catch (e) {
-      // Duas propostas ao mesmo tempo pegaram o mesmo número: tenta o seguinte.
-      if ((e as { code?: string })?.code !== "23505" || tentativa === 2) throw e;
-    }
-  }
-
-  revalidatePath("/esteira");
-  revalidatePath(`/projeto/${projeto.id}`);
-  voltar(
-    { ok: `Proposta ${numero} de ${projeto.cliente.nome} gerada. Agora é enviar pelo WhatsApp; com o “sim” do cliente, é só clicar em Aprovada.` },
     para,
   );
 }

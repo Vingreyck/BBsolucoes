@@ -2,7 +2,7 @@ import { and, desc, eq, inArray, isNotNull, isNull, like, not, or } from "drizzl
 
 import { db, schema } from "@/db";
 
-import type { EntradaContrato } from "./contrato";
+import type { DadosContrato, EntradaContrato, PagamentoCombinado } from "./contrato";
 
 /**
  * O que o contrato precisa do banco: quem pode assinar pela empresa, o último
@@ -34,7 +34,15 @@ export type Representante = Awaited<ReturnType<typeof representantesDaEmpresa>>[
 export async function ultimosContratos(empresaId: string, projetoIds: string[]) {
   const mapa = new Map<
     string,
-    { id: string; token: string; criadoEm: Date; enviadoEm: Date | null; representante: string | null }
+    {
+      id: string;
+      token: string;
+      criadoEm: Date;
+      enviadoEm: Date | null;
+      representante: string | null;
+      /** A entrada e as parcelas do último contrato: o "Gerar de novo" já vem com elas. */
+      combinado: PagamentoCombinado | null;
+    }
   >();
   if (!projetoIds.length) return mapa;
   const linhas = await db
@@ -45,13 +53,14 @@ export async function ultimosContratos(empresaId: string, projetoIds: string[]) 
       criadoEm: schema.contrato.criadoEm,
       enviadoEm: schema.contrato.enviadoEm,
       representante: schema.usuario.nome,
+      dados: schema.contrato.dados,
     })
     .from(schema.contrato)
     .leftJoin(schema.usuario, eq(schema.usuario.id, schema.contrato.representanteId))
     .where(and(eq(schema.contrato.empresaId, empresaId), inArray(schema.contrato.projetoId, projetoIds)))
     .orderBy(desc(schema.contrato.criadoEm));
-  for (const l of linhas) {
-    if (!mapa.has(l.projetoId)) mapa.set(l.projetoId, l);
+  for (const { dados, ...l } of linhas) {
+    if (!mapa.has(l.projetoId)) mapa.set(l.projetoId, { ...l, combinado: (dados as DadosContrato | null)?.combinado ?? null });
   }
   return mapa;
 }

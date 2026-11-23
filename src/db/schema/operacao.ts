@@ -1,6 +1,7 @@
 import { sql } from "drizzle-orm";
 import {
   boolean,
+  date,
   index,
   integer,
   jsonb,
@@ -155,6 +156,12 @@ export const projeto = pgTable(
     concessionaria: text("concessionaria"),
     /** O que o cliente pediu, incluindo aparelhos que pretende acrescentar. */
     observacoes: text("observacoes"),
+    /**
+     * O assistente da proposta comercial pela metade (migração 0030): unidades
+     * consumidoras, kit, custos e pagamento. Gerar a proposta tira daqui a
+     * fotografia que vai para `proposta.dados`. Ver `@/proposta/assistente`.
+     */
+    propostaRascunho: jsonb("proposta_rascunho"),
 
     /**
      * Etapa 5, vistoria técnica — feita pelo técnico, antes de vender.
@@ -204,6 +211,15 @@ export const modeloEquipamento = pgTable(
     fabricante: text("fabricante").notNull(),
     modelo: text("modelo").notNull(),
     potenciaW: numeric("potencia_w", { precision: 12, scale: 2 }),
+    /**
+     * O item da base pública de equipamentos (ANEEL) de onde o modelo veio
+     * (migração 0030), como "modulo:JAM72S30550MR". Nulo no cadastrado à mão.
+     */
+    baseId: text("base_id"),
+    /** Quanto a empresa paga por unidade (distribuidor), para o custo do kit. */
+    precoCusto: numeric("preco_custo", { precision: 12, scale: 2 }),
+    /** Dados técnicos: tensão e corrente do módulo, entradas do micro, fases… */
+    especificacoes: jsonb("especificacoes").$type<Record<string, unknown>>(),
     datasheetLink: text("datasheet_link"),
     datasheetNome: text("datasheet_nome"),
     inmetroLink: text("inmetro_link"),
@@ -211,7 +227,10 @@ export const modeloEquipamento = pgTable(
     ativo: boolean("ativo").notNull().default(true),
     criadoEm: timestamp("criado_em", { withTimezone: true }).notNull().defaultNow(),
   },
-  (t) => [index("modelo_equipamento_empresa_idx").on(t.empresaId, t.tipo)],
+  (t) => [
+    index("modelo_equipamento_empresa_idx").on(t.empresaId, t.tipo),
+    uniqueIndex("modelo_equipamento_base_uq").on(t.empresaId, t.baseId).where(sql`${t.baseId} is not null`),
+  ],
 );
 
 /**
@@ -265,6 +284,10 @@ export const proposta = pgTable(
     dados: jsonb("dados").notNull(),
     criadoPorId: uuid("criado_por_id").references(() => usuario.id, { onDelete: "set null" }),
     enviadoEm: timestamp("enviado_em", { withTimezone: true }),
+    /** Quantas vezes o link público foi aberto (migração 0030). */
+    visualizacoes: integer("visualizacoes").notNull().default(0),
+    primeiraVisualizacaoEm: timestamp("primeira_visualizacao_em", { withTimezone: true }),
+    ultimaVisualizacaoEm: timestamp("ultima_visualizacao_em", { withTimezone: true }),
     criadoEm: timestamp("criado_em", { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [
@@ -272,6 +295,29 @@ export const proposta = pgTable(
     uniqueIndex("proposta_numero_uq").on(t.empresaId, t.numero),
     index("proposta_projeto_idx").on(t.projetoId, t.criadoEm),
   ],
+);
+
+/**
+ * A tarifa homologada de cada distribuidora, como a ANEEL publica nos dados
+ * abertos (migração 0030): TE, TUSD e o Fio B da TUSD, sem impostos, em R$/kWh.
+ * É cache — ver `@/proposta/tarifas-aneel`. Não é por empresa: a tarifa da
+ * Energisa Sergipe é a mesma para todo mundo.
+ */
+export const tarifaDistribuidora = pgTable(
+  "tarifa_distribuidora",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    cnpj: varchar("cnpj", { length: 14 }).notNull(),
+    subgrupo: varchar("subgrupo", { length: 4 }).notNull(),
+    te: numeric("te", { precision: 10, scale: 6 }).notNull(),
+    tusd: numeric("tusd", { precision: 10, scale: 6 }).notNull(),
+    fioB: numeric("fio_b", { precision: 10, scale: 6 }),
+    vigenciaInicio: date("vigencia_inicio").notNull(),
+    vigenciaFim: date("vigencia_fim"),
+    resolucao: text("resolucao"),
+    buscadoEm: timestamp("buscado_em", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [uniqueIndex("tarifa_distribuidora_uq").on(t.cnpj, t.subgrupo, t.vigenciaInicio)],
 );
 
 /**

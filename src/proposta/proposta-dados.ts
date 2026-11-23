@@ -1,4 +1,4 @@
-import { and, asc, count, desc, eq, inArray, isNotNull, isNull } from "drizzle-orm";
+import { and, asc, count, desc, eq, inArray, isNotNull, isNull, sql } from "drizzle-orm";
 
 import { db, schema } from "@/db";
 import { dadosTecnicosDosProjetos } from "@/projeto/aproveitar-vistoria";
@@ -27,6 +27,9 @@ export interface PropostaDoProjeto {
   criadoEm: Date;
   enviadoEm: Date | null;
   validaAte: string | null;
+  /** Quantas vezes o cliente abriu o link, e quando foi a última. */
+  visualizacoes: number;
+  ultimaVisualizacaoEm: Date | null;
 }
 
 /** A proposta mais recente de cada projeto (gerar de novo cria outra; vale a última). */
@@ -41,6 +44,8 @@ export async function ultimasPropostas(empresaId: string, projetoIds: string[]):
       token: schema.proposta.token,
       criadoEm: schema.proposta.criadoEm,
       enviadoEm: schema.proposta.enviadoEm,
+      visualizacoes: schema.proposta.visualizacoes,
+      ultimaVisualizacaoEm: schema.proposta.ultimaVisualizacaoEm,
       dados: schema.proposta.dados,
     })
     .from(schema.proposta)
@@ -217,4 +222,13 @@ export async function entradaDaProposta(
   ]);
   const ligacao = ligacaoEscolhida ?? ligacaoDoProjeto(projeto.ligacao, tecnicos?.get(projeto.id)?.dados.polos);
   return montarEntrada(projeto, ctx, ligacao);
+}
+
+/** O próximo número de proposta da empresa: continua o maior que existe, ou começa no `inicial`. */
+export async function proximoNumeroDeProposta(empresaId: string, inicial: number | null): Promise<number> {
+  const [linha] = await db
+    .select({ maior: sql<number | null>`max(${schema.proposta.numero})` })
+    .from(schema.proposta)
+    .where(eq(schema.proposta.empresaId, empresaId));
+  return Math.max(Number(linha?.maior ?? 0), (inicial ?? 1) - 1) + 1;
 }

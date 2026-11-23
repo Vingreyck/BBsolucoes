@@ -243,8 +243,10 @@ async function main() {
         : `  gunzip -c ${destino} | docker compose exec -T db psql -U ${USUARIO} -d ${BANCO}`),
   );
   // A cópia local foi gravada; se a externa falhou, a etapa conta como falha —
-  // é o que faz o alerta do coletor disparar.
-  process.exit(externaOk ? 0 : 1);
+  // é o que faz o alerta do coletor disparar. O código **2** (e não 1) diz "a
+  // local está boa, só a do Drive falhou": o deploy segue com aviso, porque o
+  // que ele precisa antes de mexer no sistema é a cópia local.
+  process.exit(externaOk ? 0 : 2);
 }
 
 /**
