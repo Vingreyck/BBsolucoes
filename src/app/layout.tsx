@@ -6,6 +6,7 @@ import { headers } from "next/headers";
 import { podeVerDocumentos } from "@/auth/permissao";
 import { usuarioAtual } from "@/auth/sessao";
 import { db, schema } from "@/db";
+import { podeVerEstoque } from "@/estoque/estoque";
 import { contarPendenciasDeUsina } from "@/geracao/pendencias-de-usina";
 import { ehGestaoWeb } from "@/os/acesso";
 
@@ -53,6 +54,15 @@ async function alertasAbertos(empresaId: string): Promise<number> {
   return Number(linha?.n ?? 0);
 }
 
+/** Entradas do estoque lidas e ainda não conferidas — o número ao lado de Entradas. */
+async function entradasParaConferir(empresaId: string): Promise<number> {
+  const [linha] = await db
+    .select({ n: count() })
+    .from(schema.entradaEstoque)
+    .where(and(eq(schema.entradaEstoque.empresaId, empresaId), eq(schema.entradaEstoque.situacao, "rascunho")));
+  return Number(linha?.n ?? 0);
+}
+
 /** Pedidos de acesso esperando o administrador — o número ao lado de Usuários. */
 async function pedidosPendentes(empresaId: string): Promise<number> {
   const [linha] = await db
@@ -86,12 +96,14 @@ export default async function RootLayout({
     );
   }
 
-  const [temDocumentos, alertas, pedidos, semDono] = await Promise.all([
+  const temEstoque = podeVerEstoque(usuario.papel);
+  const [temDocumentos, alertas, pedidos, semDono, paraConferir] = await Promise.all([
     podeVerDocumentos(usuario.empresaId, usuario.papel),
     alertasAbertos(usuario.empresaId),
     usuario.papel === "adm" ? pedidosPendentes(usuario.empresaId) : Promise.resolve(0),
     // Usinas sem dono e instalações que ainda não apareceram no portal: o número ao lado de "Sem dono".
     contarPendenciasDeUsina(usuario.empresaId),
+    temEstoque ? entradasParaConferir(usuario.empresaId) : Promise.resolve(0),
   ]);
   const gestao = ehGestaoWeb(usuario.papel);
   const temOs = usuario.papel !== "estoque";
@@ -121,6 +133,18 @@ export default async function RootLayout({
               { href: "/os", rotulo: "Ordens de serviço", icone: "os" as const },
               { href: "/os/agenda", rotulo: "Agenda", icone: "agenda" as const },
               ...(gestao ? [{ href: "/os/acompanhamento", rotulo: "Em campo", icone: "campo" as const }] : []),
+            ],
+          },
+        ]
+      : []),
+    ...(temEstoque
+      ? [
+          {
+            titulo: "Estoque",
+            itens: [
+              { href: "/estoque", rotulo: "Saldo", icone: "estoque" as const },
+              { href: "/estoque/entradas", rotulo: "Entradas", icone: "entradas" as const, contador: paraConferir },
+              { href: "/estoque/movimentos", rotulo: "Movimentos", icone: "movimentos" as const },
             ],
           },
         ]

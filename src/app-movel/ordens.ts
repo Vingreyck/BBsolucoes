@@ -2,6 +2,7 @@ import { and, asc, desc, eq, gte, notInArray, or, type SQL } from "drizzle-orm";
 
 import type { UsuarioApp } from "@/auth/sessao-app";
 import { db, schema } from "@/db";
+import { materiaisDasOs, serializarMaterial, type MaterialDaOs } from "@/estoque/baixa";
 import { ordemServico as osTable } from "@/db/schema";
 import { detalheDoEvento } from "@/os/formatar";
 import { notasDasOs } from "@/os/notas";
@@ -134,7 +135,7 @@ type Nota = Awaited<ReturnType<typeof notasDasOs>>[number];
  * escritório reagendou "a pedido do cliente" e que "o portão é pelo lado da
  * padaria" tanto quanto o endereço.
  */
-export function serializarOrdem(o: OsCompleta, modelo?: RegraDoModelo, notas: Nota[] = []) {
+export function serializarOrdem(o: OsCompleta, modelo?: RegraDoModelo, notas: Nota[] = [], materiais: MaterialDaOs[] = []) {
   return {
     id: o.id,
     numero: o.numero,
@@ -221,6 +222,12 @@ export function serializarOrdem(o: OsCompleta, modelo?: RegraDoModelo, notas: No
       autor: n.autor?.nome ?? null,
       criadoEm: instante(n.criadoEm),
     })),
+    /**
+     * O material e o equipamento usados (migração 0031). Cada registro desconta
+     * do estoque na hora; corrigir ou remover devolve. Campo novo: o app antigo
+     * ignora (ignoreUnknownKeys).
+     */
+    materiais: materiais.map(serializarMaterial),
   };
 }
 
@@ -232,13 +239,22 @@ function porOs(notas: Nota[]): Map<string, Nota[]> {
   return mapa;
 }
 
+function materiaisPorOs(materiais: MaterialDaOs[]): Map<string, MaterialDaOs[]> {
+  const mapa = new Map<string, MaterialDaOs[]>();
+  for (const m of materiais) mapa.set(m.ordemServicoId, [...(mapa.get(m.ordemServicoId) ?? []), m]);
+  return mapa;
+}
+
 export async function ordensDoUsuario(usuario: UsuarioApp): Promise<OrdemApp[]> {
   const [ordens, modelos] = await Promise.all([
     buscar(and(eq(osTable.empresaId, usuario.empresaId), escopo(usuario), janela())),
     modelosDa(usuario.empresaId),
   ]);
-  const notas = porOs(await notasDasOs(usuario.empresaId, ordens.map((o) => o.id)));
-  return ordens.map((o) => serializarOrdem(o, modelos.get(o.tipo), notas.get(o.id)));
+  const ids = ordens.map((o) => o.id);
+  const [notasLidas, materiaisLidos] = await Promise.all([notasDasOs(usuario.empresaId, ids), materiaisDasOs(usuario.empresaId, ids)]);
+  const notas = porOs(notasLidas);
+  const materiais = materiaisPorOs(materiaisLidos);
+  return ordens.map((o) => serializarOrdem(o, modelos.get(o.tipo), notas.get(o.id), materiais.get(o.id)));
 }
 
 /** Uma OS, só se estiver no escopo de quem pede — senão, como se não existisse. */
@@ -251,6 +267,9 @@ export async function ordemDoUsuario(
     modelosDa(usuario.empresaId),
   ]);
   if (!ordem) return null;
-  const notas = await notasDasOs(usuario.empresaId, [ordem.id]);
-  return serializarOrdem(ordem, modelos.get(ordem.tipo), notas);
+  const [notas, materiais] = await Promise.all([
+    notasDasOs(usuario.empresaId, [ordem.id]),
+    materiaisDasOs(usuario.empresaId, [ordem.id]),
+  ]);
+  return serializarOrdem(ordem, modelos.get(ordem.tipo), notas, materiais);
 }

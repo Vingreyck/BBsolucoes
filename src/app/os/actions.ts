@@ -6,6 +6,7 @@ import { redirect } from "next/navigation";
 
 import { datasIsoNoTexto } from "@/datas";
 import { db, schema } from "@/db";
+import { corrigirMaterial, registrarMaterial, removerMaterial } from "@/estoque/baixa";
 import { ErroOs, exigirAtorWeb, exigirGestaoWeb } from "@/os/acesso";
 import { anexar, removerAnexo, type CategoriaAnexo } from "@/os/anexos";
 import {
@@ -384,4 +385,44 @@ export async function agendarVisitaDeVoltaAction(osId: string, form: FormData): 
   revalidatePath(`/os/${osId}`);
   revalidatePath("/os");
   redirect(destino(novaId ? `/os/${novaId}` : `/os/${osId}`, m));
+}
+
+// ---------------------------------------------------------------------------
+// Material usado (estoque, migração 0031): registrar desconta na hora;
+// corrigir e tirar devolvem a diferença.
+
+export async function registrarMaterialAction(osId: string, form: FormData): Promise<void> {
+  const ator = await exigirAtorWeb();
+  const m = await tentar(async () => {
+    const itemId = texto(form, "itemId");
+    if (!itemId) throw new ErroOs("validacao", "Escolha o item do estoque.");
+    await registrarMaterial(ator, osId, {
+      itemId,
+      quantidade: texto(form, "quantidade"),
+      observacao: nuloSeVazio(form, "observacao"),
+    });
+    return "Material registrado e descontado do estoque.";
+  });
+  revalidatePath(`/os/${osId}`);
+  redirect(destino(`/os/${osId}`, m) + "#material");
+}
+
+export async function corrigirMaterialAction(osId: string, materialId: string, form: FormData): Promise<void> {
+  const ator = await exigirAtorWeb();
+  const m = await tentar(async () => {
+    await corrigirMaterial(ator, osId, materialId, { quantidade: texto(form, "quantidade") });
+    return "Quantidade corrigida; o estoque acompanhou.";
+  });
+  revalidatePath(`/os/${osId}`);
+  redirect(destino(`/os/${osId}`, m) + "#material");
+}
+
+export async function removerMaterialAction(osId: string, materialId: string): Promise<void> {
+  const ator = await exigirAtorWeb();
+  const m = await tentar(async () => {
+    await removerMaterial(ator, osId, materialId);
+    return "Material tirado da OS; voltou para o estoque.";
+  });
+  revalidatePath(`/os/${osId}`);
+  redirect(destino(`/os/${osId}`, m) + "#material");
 }

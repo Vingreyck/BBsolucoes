@@ -3,6 +3,7 @@ import { randomBytes } from "node:crypto";
 import { and, eq, like, notInArray, sql } from "drizzle-orm";
 
 import { db, schema } from "@/db";
+import { sincronizarBaixa } from "@/estoque/baixa";
 import { aproveitarVistoria } from "@/projeto/aproveitar-vistoria";
 import { avancarPorDocumentos } from "@/projeto/automatico";
 import { ETAPA_DA_OS, ETAPA_ESPERA_VISTORIA, moverNaEsteira } from "@/projeto/esteira";
@@ -903,6 +904,10 @@ const APLICAR: { [T in TipoAcao]: Aplicador<T> } = {
     await atualizar(c, { status: "cancelada", canceladaEm: new Date() });
     await evento(c, "cancelada", { motivo });
     avisarResponsavel(c, c.os.responsavelId, "cancelada");
+    // O material registrado nesta OS volta para o estoque (estorno no livro).
+    if (await sincronizarBaixa(c.tx, { ...c.os, status: "cancelada" }, c.ator)) {
+      c.avisos.push("O material registrado nesta OS voltou para o estoque.");
+    }
     // O alerta volta a ficar em aberto, para alguém abrir outra OS se precisar.
     await c.tx
       .update(schema.alerta)
@@ -921,6 +926,10 @@ const APLICAR: { [T in TipoAcao]: Aplicador<T> } = {
       resultado: null,
     });
     await evento(c, "reaberta", { motivo, estava: c.os.status });
+    // Reabrir uma cancelada tira de novo do estoque o material que ela tinha.
+    if (await sincronizarBaixa(c.tx, { ...c.os, status: "aberta" }, c.ator)) {
+      c.avisos.push("O material desta OS saiu de novo do estoque.");
+    }
   },
 
   async editar(c, acao) {

@@ -1,6 +1,7 @@
 "use client";
 
 import {
+  ArrowLeftRight,
   BellRing,
   CalendarDays,
   ClipboardList,
@@ -16,6 +17,8 @@ import {
   MapPinned,
   MessageCircle,
   Menu,
+  Package,
+  PackagePlus,
   PanelLeftClose,
   PanelLeftOpen,
   Plus,
@@ -65,7 +68,10 @@ export type IconeMenu =
   | "empresa"
   | "proposta"
   | "propostas"
-  | "equipamentos";
+  | "equipamentos"
+  | "estoque"
+  | "entradas"
+  | "movimentos";
 
 const ICONES: Record<IconeMenu, LucideIcon> = {
   inicio: House,
@@ -88,6 +94,9 @@ const ICONES: Record<IconeMenu, LucideIcon> = {
   proposta: SlidersHorizontal,
   propostas: FileText,
   equipamentos: Cpu,
+  estoque: Package,
+  entradas: PackagePlus,
+  movimentos: ArrowLeftRight,
 };
 
 export interface ItemMenu {

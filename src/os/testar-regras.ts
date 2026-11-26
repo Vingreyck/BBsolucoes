@@ -131,6 +131,7 @@ import {
 } from "../projeto/da-vistoria";
 import { readFileSync } from "node:fs";
 import { testarPdfDoAssistente, testarPropostaCompleta } from "../proposta/testar-proposta-completa";
+import { testarEstoque } from "../estoque/testar-estoque";
 
 let falhas = 0;
 let total = 0;
@@ -1378,6 +1379,7 @@ testarRetrace()
   .then(testarContratoPdf)
   .then(testarPropostaPdf)
   .then(() => testarPdfDoAssistente(confere, igual))
+  .then(() => testarEstoque(confere, igual))
   .then(() => {
     console.log(falhas === 0 ? `✓ ${total} conferências, nenhuma falha.` : `✗ ${falhas} de ${total} falharam.`);
     process.exit(falhas === 0 ? 0 : 1);

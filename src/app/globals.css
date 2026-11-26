@@ -11793,3 +11793,702 @@ textarea {
     display: none;
   }
 }
+
+/* ==== Estoque (26/11/2026) =================================================
+ * Saldo, entradas pela nota/pedido ou à mão, conferência e material da OS.
+ * Só tokens da paleta: vale nos dois temas sem repetir cor no modo escuro.
+ * Cor só quando significa estado, e sempre com texto junto.
+ * ========================================================================= */
+
+/* ---- saldo */
+.es-item {
+  display: grid;
+  gap: 0.15rem;
+  min-width: 0;
+}
+.es-item strong {
+  font-weight: 600;
+  color: var(--ink);
+}
+.es-item-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.2rem 0.6rem;
+  font-size: 0.74rem;
+  color: var(--ink-3);
+}
+.es-item-meta span + span::before {
+  content: "·";
+  margin-right: 0.6rem;
+  color: var(--ink-3);
+}
+.es-saldo {
+  display: inline-grid;
+  justify-items: end;
+  gap: 0.3rem;
+  min-width: 7.5rem;
+}
+.es-saldo-linha {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 0.3rem;
+  white-space: nowrap;
+}
+.es-saldo-valor {
+  font-size: 1.02rem;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.01em;
+}
+.es-saldo-un {
+  font-size: 0.76rem;
+  color: var(--ink-3);
+}
+.es-saldo.negativo .es-saldo-valor {
+  color: var(--crit);
+}
+.es-medidor {
+  width: 7rem;
+  height: 4px;
+  border-radius: 999px;
+  background: var(--surface-3);
+  overflow: hidden;
+}
+.es-medidor > span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--ok);
+}
+.es-medidor.baixo > span {
+  background: var(--warn);
+}
+.es-medidor.vazio > span {
+  background: var(--crit);
+}
+.es-acoes-linha {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.25rem;
+  white-space: nowrap;
+}
+.es-acoes-linha .botao {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  min-height: 30px;
+  padding: 0.25rem 0.6rem;
+  font-size: 0.78rem;
+}
+.lista .tabela.es-tabela-saldo {
+  min-width: 640px;
+}
+
+/* ---- nova entrada: dois caminhos lado a lado */
+/* Lado a lado quando cada um cabe com folga; senão, um embaixo do outro. */
+.es-caminhos {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 380px), 1fr));
+  gap: 1rem;
+  align-items: start;
+}
+.es-caminho {
+  display: grid;
+  gap: 1rem;
+  padding: 1.15rem 1.25rem 1.25rem;
+  border: 1px solid var(--line-soft);
+  border-radius: var(--raio);
+  background: var(--surface);
+  box-shadow: var(--shadow);
+}
+.es-caminho-topo {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.75rem;
+}
+.es-caminho-icone {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 38px;
+  height: 38px;
+  border-radius: 11px;
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+.es-caminho-topo h2 {
+  margin: 0;
+  font-family: var(--fonte-titulo);
+  font-size: 1.05rem;
+  font-weight: 600;
+}
+.es-caminho-topo p {
+  margin: 0.15rem 0 0;
+  font-size: 0.84rem;
+  line-height: 1.5;
+  color: var(--ink-3);
+}
+.es-soltar-grade {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 0.75rem;
+}
+.es-soltar {
+  position: relative;
+  display: grid;
+  justify-items: center;
+  align-content: center;
+  gap: 0.35rem;
+  min-height: 150px;
+  padding: 1rem;
+  border: 1.5px dashed color-mix(in srgb, var(--accent) 40%, var(--line));
+  border-radius: calc(var(--raio) + 2px);
+  background: linear-gradient(180deg, var(--accent-soft), transparent 140%), var(--surface);
+  text-align: center;
+  cursor: pointer;
+  transition: border-color 0.15s var(--ease), background-color 0.15s var(--ease), transform 0.15s var(--ease);
+}
+.es-soltar:hover,
+.es-soltar:focus-within {
+  border-color: var(--accent);
+}
+.es-soltar:focus-within {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+.es-soltar-arrastando {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+  transform: scale(1.01);
+}
+.es-soltar input[type="file"] {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  opacity: 0;
+  cursor: pointer;
+}
+.es-soltar-icone {
+  display: grid;
+  place-items: center;
+  width: 42px;
+  height: 42px;
+  border-radius: 12px;
+  background: var(--accent);
+  color: #fff;
+}
+.es-soltar strong {
+  font-size: 0.92rem;
+  color: var(--ink);
+}
+.es-soltar small {
+  font-size: 0.76rem;
+  color: var(--ink-3);
+  line-height: 1.45;
+}
+.es-soltar-opcional {
+  font-weight: 500;
+  color: var(--ink-3);
+}
+.es-soltar.escolhido {
+  border-style: solid;
+  border-color: color-mix(in srgb, var(--ok) 55%, var(--line));
+  background: var(--ok-soft);
+}
+.es-soltar.escolhido .es-soltar-icone {
+  background: var(--ok);
+}
+.es-soltar-arquivo {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  max-width: 100%;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--ink);
+}
+.es-soltar-arquivo span {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.es-soltar-limpar {
+  position: relative;
+  z-index: 1;
+  font: inherit;
+  font-size: 0.74rem;
+  color: var(--ink-3);
+  background: none;
+  border: 0;
+  text-decoration: underline;
+  cursor: pointer;
+}
+.es-dicas {
+  display: grid;
+  gap: 0.4rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-size: 0.8rem;
+  color: var(--ink-2);
+}
+.es-dicas li {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.45rem;
+  line-height: 1.45;
+}
+.es-dicas li svg {
+  flex: none;
+  margin-top: 0.15rem;
+  color: var(--ok);
+}
+.es-rodape {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.6rem 1rem;
+}
+.es-rodape .nota {
+  margin: 0;
+}
+.es-rodape .botao {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+.es-lendo {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  margin: 0;
+  font-size: 0.85rem;
+  color: var(--ink-2);
+}
+.es-desligado {
+  margin: 0;
+  padding: 0.6rem 0.75rem;
+  border-radius: var(--raio-p);
+  background: var(--warn-soft);
+  color: var(--ink);
+  font-size: 0.8rem;
+  line-height: 1.5;
+}
+
+/* ---- linhas editáveis (à mão e conferência) */
+.es-campo {
+  font: inherit;
+  font-size: 0.86rem;
+  width: 100%;
+  min-height: 36px;
+  padding: 0.38rem 0.55rem;
+  color: var(--ink);
+  background: var(--surface-2);
+  border: 1px solid var(--line);
+  border-radius: var(--raio-p);
+}
+.es-campo:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -1px;
+  border-color: var(--accent);
+}
+.es-campo.num {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+.es-linhas {
+  display: grid;
+  gap: 0.5rem;
+}
+.es-linhas-topo,
+.es-linha {
+  display: grid;
+  grid-template-columns: minmax(9rem, 1fr) 6rem 5.25rem 2rem;
+  gap: 0.5rem;
+  align-items: center;
+}
+.es-linhas-topo {
+  font-size: 0.68rem;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+}
+.es-linhas-topo .num {
+  text-align: right;
+}
+.es-linha-novo {
+  grid-column: 1 / -1;
+  margin-top: -0.25rem;
+  font-size: 0.72rem;
+  color: var(--accent);
+}
+.es-linha-novo.existe {
+  color: var(--ok);
+}
+@media (max-width: 560px) {
+  .es-linhas-topo {
+    display: none;
+  }
+  /* No celular o nome ocupa a linha; quantidade e unidade vão embaixo. */
+  .es-linha {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) 2rem;
+    padding-bottom: 0.5rem;
+    border-bottom: 1px solid var(--line-soft);
+  }
+  .es-linha > input:first-child {
+    grid-column: 1 / -1;
+  }
+}
+.es-adicionar {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
+  width: 100%;
+  min-height: 38px;
+  font: inherit;
+  font-size: 0.84rem;
+  font-weight: 600;
+  color: var(--accent);
+  background: transparent;
+  border: 1.5px dashed color-mix(in srgb, var(--accent) 35%, var(--line));
+  border-radius: var(--raio-p);
+  cursor: pointer;
+  transition: background-color 0.15s var(--ease), border-color 0.15s var(--ease);
+}
+.es-adicionar:hover {
+  background: var(--accent-soft);
+  border-color: var(--accent);
+}
+.es-cabecalho-form {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(10rem, 1fr));
+  gap: 0.6rem;
+}
+.es-cabecalho-form label {
+  display: grid;
+  gap: 0.25rem;
+  font-size: 0.74rem;
+  font-weight: 600;
+  color: var(--ink-2);
+}
+.es-dobra summary {
+  cursor: pointer;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--ink-2);
+}
+.es-dobra[open] summary {
+  margin-bottom: 0.6rem;
+}
+
+/* ---- conferência */
+.es-resumo {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+.es-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.3rem 0.7rem;
+  border: 1px solid var(--line-soft);
+  border-radius: 999px;
+  background: var(--surface);
+  font-size: 0.8rem;
+  color: var(--ink-2);
+}
+.es-chip strong {
+  font-variant-numeric: tabular-nums;
+  color: var(--ink);
+}
+.es-chip.atencao::before,
+.es-chip.ok::before {
+  content: "";
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--warn);
+}
+.es-chip.ok::before {
+  background: var(--ok);
+}
+.es-explica {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.6rem;
+  margin: 0;
+  padding: 0.75rem 0.9rem;
+  border: 1px solid color-mix(in srgb, var(--accent) 25%, var(--line-soft));
+  border-radius: var(--raio-p);
+  background: var(--accent-soft);
+  font-size: 0.84rem;
+  line-height: 1.5;
+  color: var(--ink);
+}
+.es-explica > svg {
+  flex: none;
+  margin-top: 0.15rem;
+  color: var(--accent);
+}
+.es-conf-wrap {
+  overflow-x: auto;
+  border: 1px solid var(--line-soft);
+  border-radius: var(--raio);
+}
+.es-conf {
+  width: 100%;
+  min-width: 940px;
+  border-collapse: collapse;
+  font-size: 0.85rem;
+}
+.es-conf th {
+  padding: 0.55rem 0.6rem;
+  background: var(--surface-2);
+  border-bottom: 1px solid var(--line-soft);
+  font-size: 0.68rem;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  text-align: left;
+  color: var(--ink-3);
+}
+.es-conf th.num {
+  text-align: right;
+}
+.es-conf td {
+  padding: 0.5rem 0.6rem;
+  border-bottom: 1px solid var(--line-soft);
+  vertical-align: top;
+}
+.es-conf tr:last-child td {
+  border-bottom: 0;
+}
+.es-conf tr.fora td {
+  background: var(--surface-2);
+}
+.es-conf tr.fora .es-campo {
+  color: var(--ink-3);
+  text-decoration: line-through;
+}
+.es-conf .col-entra {
+  width: 3rem;
+  text-align: center;
+}
+.es-conf .col-qtd {
+  width: 6.5rem;
+}
+.es-conf .col-un {
+  width: 5.5rem;
+}
+.es-conf .col-x {
+  width: 2.5rem;
+}
+.es-check {
+  width: 18px;
+  height: 18px;
+  margin-top: 0.5rem;
+  accent-color: var(--accent);
+  cursor: pointer;
+}
+.es-origem {
+  display: inline-flex;
+  align-items: center;
+  margin-top: 0.4rem;
+  padding: 0.1rem 0.5rem;
+  border-radius: 999px;
+  background: var(--surface-3);
+  font-size: 0.7rem;
+  font-weight: 600;
+  color: var(--ink-2);
+  white-space: nowrap;
+}
+.es-origem.observacao {
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+.es-origem.pedido {
+  background: var(--ok-soft);
+  color: var(--ok);
+}
+.es-motivo {
+  display: block;
+  margin-top: 0.3rem;
+  font-size: 0.72rem;
+  line-height: 1.4;
+  color: var(--ink-3);
+}
+.es-ligacao {
+  display: grid;
+  gap: 0.35rem;
+}
+.es-ligacao small {
+  font-size: 0.72rem;
+  color: var(--ink-3);
+}
+.es-ligacao small.novo {
+  color: var(--accent);
+}
+.es-remover {
+  display: inline-grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  margin-top: 0.2rem;
+  border: 1px solid transparent;
+  border-radius: var(--raio-p);
+  background: none;
+  color: var(--ink-3);
+  cursor: pointer;
+}
+.es-remover:hover {
+  background: var(--crit-soft);
+  color: var(--crit);
+}
+.es-barra-fixa {
+  position: sticky;
+  bottom: 0.75rem;
+  z-index: 5;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.6rem 1rem;
+  margin-top: 1rem;
+  padding: 0.75rem 1rem;
+  border: 1px solid var(--line-soft);
+  border-radius: var(--raio);
+  background: color-mix(in srgb, var(--surface) 92%, transparent);
+  backdrop-filter: blur(8px);
+  box-shadow: var(--shadow-alta);
+}
+.es-barra-fixa p {
+  margin: 0;
+  font-size: 0.86rem;
+  color: var(--ink-2);
+}
+.es-barra-fixa p strong {
+  color: var(--ink);
+}
+.es-barra-botoes {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+.es-barra-botoes .botao {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+/* ---- material na OS */
+.es-material-form {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 6.5rem auto;
+  gap: 0.5rem;
+  align-items: end;
+  margin-top: 0.75rem;
+  padding-top: 0.85rem;
+  border-top: 1px solid var(--line-soft);
+}
+.es-material-form label {
+  display: grid;
+  gap: 0.25rem;
+  font-size: 0.74rem;
+  font-weight: 600;
+  color: var(--ink-2);
+}
+.es-material-form .es-material-obs {
+  grid-column: 1 / -1;
+}
+.es-material-form .botao {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  min-height: 36px;
+}
+@media (max-width: 560px) {
+  .es-material-form {
+    grid-template-columns: minmax(0, 1fr) 5.5rem;
+  }
+  .es-material-form .botao {
+    grid-column: 1 / -1;
+    justify-content: center;
+  }
+}
+.es-material-lista {
+  display: grid;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.es-material-lista li {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.6rem 0;
+  border-bottom: 1px solid var(--line-soft);
+}
+.es-material-lista li:last-child {
+  border-bottom: 0;
+}
+.es-material-qtd {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+.es-material-qtd .es-campo {
+  width: 5.5rem;
+}
+.es-material-qtd .botao-icone {
+  width: 30px;
+  height: 30px;
+}
+.es-material-qtd .es-saldo-un {
+  width: 2.2rem;
+}
+.es-item-link,
+.tabela a.es-item-link {
+  font-weight: 600;
+  color: var(--ink);
+  text-decoration: none;
+}
+.es-item-link:hover,
+.tabela a.es-item-link:hover {
+  color: var(--accent);
+  text-decoration: underline;
+}
+.es-tipo {
+  margin: 0 0.35rem 0 0;
+}
+.es-tipo.entrada {
+  background: var(--ok-soft);
+  color: var(--ok);
+}
+.es-tipo.os {
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+.es-tipo.estorno,
+.es-tipo.ajuste {
+  background: var(--surface-3);
+  color: var(--ink-2);
+}
+.tabela a.es-meta-link,
+.es-meta-link {
+  color: inherit;
+  text-decoration: none;
+}
+.tabela a.es-meta-link:hover,
+.es-meta-link:hover {
+  color: var(--accent);
+  text-decoration: underline;
+}
+.lista .tabela.es-tabela-saldo {
+  min-width: 520px;
+}

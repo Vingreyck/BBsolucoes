@@ -2,6 +2,7 @@ import { headers } from "next/headers";
 import {
   CalendarClock,
   Camera,
+  Check,
   CheckCircle2,
   ClipboardList,
   FileDown,
@@ -13,12 +14,15 @@ import {
   MessageCircle,
   MessageSquare,
   Navigation,
+  Package,
   PauseCircle,
   Pencil,
   Phone,
   PlayCircle,
+  Plus,
   RotateCcw,
   Route,
+  Trash2,
   UserRound,
   UserX,
   XCircle,
@@ -27,6 +31,9 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 
 import { datasIsoNoTexto } from "@/datas";
+import { materiaisDasOs } from "@/estoque/baixa";
+import { itensComSaldo } from "@/estoque/estoque";
+import { quantidadeLegivel } from "@/estoque/regras";
 import { ErroOs, exigirAtorWeb, podeExecutar } from "@/os/acesso";
 import { carregarOs, comentariosDaOs, nomeDeQuemRecebe, quemUsaOApp, tempoEmCampo } from "@/os/consultas";
 import { destinoDaOs, linkDaRota } from "@/os/destino";
@@ -57,6 +64,9 @@ import {
   agendarVisitaDeVoltaAction,
   anexarAction,
   comentarOsAction,
+  corrigirMaterialAction,
+  registrarMaterialAction,
+  removerMaterialAction,
   removerAnexoAction,
   renovarLinkAction,
 } from "../actions";
@@ -101,10 +111,12 @@ export default async function DetalheOs({
     throw e;
   }
 
-  const [comentarios, daApp] = await Promise.all([
+  const [comentarios, daApp, materiais, estoque] = await Promise.all([
     comentariosDaOs(ator.empresaId, os.id),
     // Quem pode voltar na visita de volta também precisa da lista, mesmo sem ser gestão.
     ator.gestao || os.checklist.some((i) => i.agendar) ? quemUsaOApp(ator.empresaId) : Promise.resolve([]),
+    materiaisDasOs(ator.empresaId, [os.id]),
+    itensComSaldo(ator.empresaId),
   ]);
   // Quem já responde pela OS continua na lista, mesmo que a conta tenha mudado de papel.
   const pessoas: { id: string; nome: string; papel: string; usaApp: boolean }[] = [...daApp];
@@ -117,6 +129,9 @@ export default async function DetalheOs({
   const gestao = ator.gestao;
   const podeResponder = executa && !fechada;
   const podeRemoverDe = (enviadoPorId: string | null) => gestao || enviadoPorId === ator.id;
+  // Material: quem executa mexe enquanto a OS está aberta; concluída, só a gestão corrige.
+  const podeMaterial = executa && os.status !== "cancelada" && (os.status !== "concluida" || gestao);
+  const itensAtivos = estoque.filter((i) => i.ativo);
 
   const tempo = tempoEmCampo(os.eventos);
   // O mapa só aparece quando há o que mostrar: a OS está em campo, ou alguma
@@ -767,6 +782,100 @@ export default async function DetalheOs({
                 </button>
               </form>
             )}
+          </Cartao>
+
+          <Cartao
+            id="material"
+            titulo="Material usado"
+            icone={<Package size={16} />}
+            contador={materiais.length || undefined}
+            ajuda="Cada material ou equipamento registrado aqui (ou no app) sai do estoque na hora. Corrigir a quantidade ou tirar o item devolve a diferença; cancelar a OS devolve tudo."
+          >
+            {materiais.length === 0 ? (
+              <p className="nota">
+                {os.status === "cancelada"
+                  ? "OS cancelada: nada saiu do estoque."
+                  : podeMaterial
+                    ? "Nada registrado ainda. O que for usado aqui sai do estoque na hora."
+                    : "Nenhum material registrado nesta OS."}
+              </p>
+            ) : (
+              <ul className="es-material-lista">
+                {materiais.map((m) => (
+                  <li key={m.id}>
+                    <div className="es-item">
+                      <strong>{m.item.nome}</strong>
+                      <span className="es-item-meta">
+                        <span>{m.registrador?.nome ?? "—"}</span>
+                        <span>{formatarInstante(m.registradoEm, false)}</span>
+                        {m.observacao && <span>{m.observacao}</span>}
+                      </span>
+                    </div>
+                    {podeMaterial ? (
+                      <div className="es-material-qtd">
+                        <form action={corrigirMaterialAction.bind(null, os.id, m.id)} className="es-material-qtd">
+                          <input
+                            className="es-campo num"
+                            name="quantidade"
+                            inputMode="decimal"
+                            defaultValue={quantidadeLegivel(m.quantidade)}
+                            aria-label={`Quantidade de ${m.item.nome}`}
+                            required
+                          />
+                          <span className="es-saldo-un">{m.item.unidade}</span>
+                          <button type="submit" className="botao-icone" title="Salvar a quantidade" aria-label={`Salvar a quantidade de ${m.item.nome}`}>
+                            <Check size={15} aria-hidden />
+                          </button>
+                        </form>
+                        <form action={removerMaterialAction.bind(null, os.id, m.id)}>
+                          <button type="submit" className="botao-icone perigo" title="Tirar da OS (volta para o estoque)" aria-label={`Tirar ${m.item.nome} da OS`}>
+                            <Trash2 size={15} aria-hidden />
+                          </button>
+                        </form>
+                      </div>
+                    ) : (
+                      <span className="es-saldo-linha">
+                        <span className="es-saldo-valor">{quantidadeLegivel(m.quantidade)}</span>
+                        <span className="es-saldo-un">{m.item.unidade}</span>
+                      </span>
+                    )}
+                  </li>
+                ))}
+              </ul>
+            )}
+            {podeMaterial &&
+              (itensAtivos.length === 0 ? (
+                <p className="nota">
+                  O estoque ainda não tem itens. <Link href="/estoque/entradas/nova">Lance uma nota ou adicione à mão</Link>.
+                </p>
+              ) : (
+                <form action={registrarMaterialAction.bind(null, os.id)} className="es-material-form">
+                  <label>
+                    Item do estoque
+                    <select className="es-campo" name="itemId" required defaultValue="">
+                      <option value="" disabled>
+                        Escolha o item…
+                      </option>
+                      {itensAtivos.map((i) => (
+                        <option key={i.id} value={i.id}>
+                          {i.nome} — {quantidadeLegivel(i.saldo)} {i.unidade} no estoque
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  <label>
+                    Quantidade
+                    <input className="es-campo num" name="quantidade" inputMode="decimal" placeholder="0" required />
+                  </label>
+                  <button type="submit" className="botao">
+                    <Plus size={15} aria-hidden /> Registrar
+                  </button>
+                  <label className="es-material-obs">
+                    Observação (opcional)
+                    <input className="es-campo" name="observacao" maxLength={500} placeholder="Ex.: sobrou 1 módulo, voltou para o estoque" />
+                  </label>
+                </form>
+              ))}
           </Cartao>
 
           <Cartao id="comentarios" titulo="Comentários" icone={<MessageSquare size={16} />} contador={comentarios.length || undefined}>

@@ -47,6 +47,7 @@
     "demo:revisao": "tsx src/empresa/preparar-demonstracao.ts",
     "testar:app": "tsx src/app-movel/testar-fluxo.ts",
     "testar:os": "tsx src/os/testar-os.ts",
+    "testar:estoque": "tsx src/estoque/testar-estoque-banco.ts",
     "os:automaticas": "tsx src/os/abrir-os-automaticas.ts",
     "potencia:corrigir": "tsx src/geracao/corrigir-potencia.ts",
     "relatorio:conferir": "tsx src/geracao/conferir.ts",
